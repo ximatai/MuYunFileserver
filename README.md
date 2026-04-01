@@ -1,6 +1,8 @@
 # MuYunFileServer
 
-`MuYunFileServer` 一期定位为独立的文件资产服务，聚焦以下正式能力：
+`MuYunFileServer` 是一个基于 `Quarkus` 构建的轻量文件资产服务。
+
+一期聚焦以下正式能力：
 
 - 文件上传
 - 单文件元数据查询
@@ -8,7 +10,41 @@
 - 文件删除
 - 健康检查
 
-当前仓库仍处于一期骨架搭建阶段，正式业务实现将以设计文档和开发大纲为准。
+当前实现采用：
+
+- `Quarkus REST`
+- `SQLite + Flyway`
+- 本地文件系统存储
+- `JDBC + 手写 SQL`
+- 多租户隔离
+- 软删 + 后台物理清理
+
+仓库已配置 GitHub Actions CI，在 `main` 提交和 Pull Request 上自动执行测试与构建。
+
+## 特性概览
+
+- 单次多文件上传
+- 整单成功 / 整单失败语义
+- 流式落盘与 `SHA-256` 计算
+- MIME 白名单校验
+- 单文件元数据查询
+- 附件下载
+- 软删与定时物理清理
+- `liveness / readiness` 健康检查
+- 首批单元测试和集成测试
+
+## 设计边界
+
+一期明确不包含：
+
+- 分片上传
+- 断点续传
+- HTTP `Range`
+- 文件预览
+- 公开分享链接
+- 列表搜索
+- 业务对象引用治理
+- 对象存储直传
 
 ## 项目文档
 
@@ -18,7 +54,7 @@
 - [技术方案](./docs/技术方案.md)
 - [当前风险与后续事项](./docs/当前风险与后续事项.md)
 
-## 本地开发
+## 快速开始
 
 默认配置见 [application.properties](./src/main/resources/application.properties)，一期关键配置包括：
 
@@ -88,6 +124,10 @@ java -jar build/quarkus-app/quarkus-run.jar
 - MIME 拒绝 `415`
 - 显式 `file_id` 冲突 `409`
 - 健康检查基础可用性
+
+## 开源协议
+
+本项目采用 [MIT License](./LICENSE)。
 
 ## 当前状态
 
