@@ -9,6 +9,7 @@ import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -25,8 +26,17 @@ public class LocalStorageProvider implements StorageProvider {
         try {
             Files.createDirectories(config.storage().rootDir());
             Files.createDirectories(config.storage().tempDir());
+            cleanupTempDirectory();
         } catch (IOException exception) {
             throw new IllegalStateException("failed to initialize storage directories", exception);
+        }
+    }
+
+    private void cleanupTempDirectory() throws IOException {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(config.storage().tempDir())) {
+            for (Path path : stream) {
+                Files.deleteIfExists(path);
+            }
         }
     }
 
