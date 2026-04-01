@@ -1,4 +1,4 @@
-# MuYunFileServer 整体设计
+# MuYunFileServer Overview Design
 
 ## 1. 文档目标
 
@@ -216,6 +216,7 @@ tenant/{tenantId}/yyyy/MM/dd/{ulid}
 - 不支持业务标签体系，仅保留 `remark` 作为轻量备注字段
 - 原始文件名允许重复，仅作为展示属性，不参与唯一性约束
 - 服务端保留最终 MIME type 判定权，并将最终值写入元数据
+- `storage_provider`、`storage_key`、本地路径等存储实现字段不作为对外接口正式契约
 - 一期不预留预览相关字段
 - 一期不提取和保存内容摘要信息，如图片尺寸、PDF 页数、视频时长等
 

@@ -10,7 +10,6 @@ public record FileMetadataResponse(
         String mimeType,
         long sizeBytes,
         String sha256,
-        String storageProvider,
         String status,
         String remark,
         String uploadedBy,

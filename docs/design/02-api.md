@@ -1,4 +1,4 @@
-# MuYunFileServer 接口设计
+# MuYunFileServer API Design
 
 ## 1. 文档范围
 
@@ -123,7 +123,6 @@
   "mime_type": "application/pdf",
   "size_bytes": 102400,
   "sha256": "abcdef123456...",
-  "storage_provider": "local",
   "status": "ACTIVE",
   "remark": "imported by crm",
   "uploaded_by": "u123",
@@ -135,6 +134,7 @@
 说明：
 
 - 一期不对外暴露 `storage_key`
+- 一期不对外暴露 `storage_provider`
 - 一期不对外暴露本地路径
 - 一期不返回预览相关字段
 
@@ -310,7 +310,6 @@ curl "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF" \
     "mime_type": "application/pdf",
     "size_bytes": 102400,
     "sha256": "abcdef123456...",
-    "storage_provider": "local",
     "status": "ACTIVE",
     "remark": "crm upload",
     "uploaded_by": "u123",

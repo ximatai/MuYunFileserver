@@ -48,11 +48,12 @@
 
 ## 项目文档
 
-- [整体设计](./整体设计.md)
-- [接口设计](./接口设计.md)
-- [一期开发大纲](./docs/一期开发大纲.md)
-- [技术方案](./docs/技术方案.md)
-- [当前风险与后续事项](./docs/当前风险与后续事项.md)
+- [文档导航](./docs/README.md)
+- [Overview Design](./docs/design/01-overview.md)
+- [API Design](./docs/design/02-api.md)
+- [Technical Solution](./docs/project/03-technical-solution.md)
+- [Development Plan](./docs/project/04-development-plan.md)
+- [Risks And Next Steps](./docs/project/05-risks-and-next-steps.md)
 
 ## 快速开始
 

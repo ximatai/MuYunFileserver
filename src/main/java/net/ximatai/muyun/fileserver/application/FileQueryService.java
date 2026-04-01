@@ -47,7 +47,6 @@ public class FileQueryService {
                 metadata.mimeType(),
                 metadata.sizeBytes(),
                 metadata.sha256(),
-                metadata.storageProvider(),
                 metadata.status().name(),
                 metadata.remark(),
                 metadata.uploadedBy(),

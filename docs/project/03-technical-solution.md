@@ -1,12 +1,12 @@
-# MuYunFileServer 一期技术方案
+# MuYunFileServer Technical Solution
 
 本文档用于固化一期实现阶段的主要技术选型、依赖建议和取舍依据。
 
 相关文档：
 
-- [整体设计](../整体设计.md)
-- [接口设计](../接口设计.md)
-- [一期开发大纲](./一期开发大纲.md)
+- [Overview Design](../design/01-overview.md)
+- [API Design](../design/02-api.md)
+- [Development Plan](./04-development-plan.md)
 
 ---
 
