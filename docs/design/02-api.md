@@ -209,7 +209,7 @@
 | `GET` | `/api/v1/public/files/{fileId}?access_token=...` | 使用短时只读 token 查询单文件元数据 |
 | `GET` | `/api/v1/public/files/{fileId}/download?access_token=...` | 使用短时下载 token 下载文件 |
 | `DELETE` | `/api/v1/files/{fileId}` | 软删文件 |
-| `POST` | `/api/v1/public/files/{fileId}/delete?access_token=...` | 使用短时删除 token 软删文件 |
+| `DELETE` | `/api/v1/public/files/{fileId}?access_token=...` | 使用短时删除 token 软删文件 |
 | `GET` | `/q/health/live` | 存活检查 |
 | `GET` | `/q/health/ready` | 就绪检查 |
 
@@ -414,7 +414,7 @@ curl "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF?access
 - 短时 token 只读访问：
   - `GET /api/v1/public/files/{fileId}?access_token=...`
   - `GET /api/v1/public/files/{fileId}/download?access_token=...`
-  - `POST /api/v1/public/files/{fileId}/delete?access_token=...`
+  - `DELETE /api/v1/public/files/{fileId}?access_token=...`
 
 其中：
 
@@ -563,8 +563,8 @@ curl -X DELETE "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF" \
 
 ### 10.6 短时 token 删除接口
 
-- 方法：`POST`
-- 路径：`/api/v1/public/files/{fileId}/delete`
+- 方法：`DELETE`
+- 路径：`/api/v1/public/files/{fileId}`
 - Query 参数：`access_token`
 
 说明：
@@ -577,7 +577,7 @@ curl -X DELETE "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF" \
 ### 10.7 短时 token 删除请求示例
 
 ```bash
-curl -X POST "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF/delete?access_token=eyJ..."
+curl -X DELETE "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF?access_token=eyJ..."
 ```
 
 ### 10.8 短时 token 删除失败场景

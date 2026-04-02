@@ -2,8 +2,8 @@ package net.ximatai.muyun.fileserver.api;
 
 import io.smallrye.common.annotation.Blocking;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
@@ -44,8 +44,8 @@ public class PublicFilesResource {
         return DownloadResponses.ok(file);
     }
 
-    @POST
-    @Path("/{fileId}/delete")
+    @DELETE
+    @Path("/{fileId}")
     @Produces(MediaType.APPLICATION_JSON)
     public Response delete(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
         DeleteFileResult response = tokenFileCommandService.delete(fileId, accessToken);

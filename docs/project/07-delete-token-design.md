@@ -30,7 +30,7 @@
 5. 删除 token 必须绑定 `tenant_id`
 6. 删除 token 必须绑定 `file_id`
 7. 删除 token 默认有效期按 `30` 秒设计，可配置
-8. 删除入口采用 `POST`，不用 `GET`
+8. 删除入口采用 `DELETE`，不用 `GET`
 9. 同一个删除 token 被再次调用时，如果文件已删，则按现有删除语义返回 `404`
 
 ---
@@ -43,7 +43,7 @@
 - 浏览器预取、代理探测、链接预览都可能触发 `GET`
 - 高风险操作不应通过一个可直接访问的 URL 被误触发
 
-因此删除 token 入口明确采用 `POST`。
+因此删除 token 入口明确采用 `DELETE`。
 
 ---
 
@@ -51,14 +51,14 @@
 
 ### 4.1 新增接口
 
-- 方法：`POST`
-- 路径：`/api/v1/public/files/{fileId}/delete`
+- 方法：`DELETE`
+- 路径：`/api/v1/public/files/{fileId}`
 - Query 参数：`access_token`
 
 请求示例：
 
 ```text
-POST /api/v1/public/files/01JABCDEF1234567890ABCDEF/delete?access_token=eyJ...
+DELETE /api/v1/public/files/01JABCDEF1234567890ABCDEF?access_token=eyJ...
 ```
 
 ### 4.2 行为语义
@@ -185,7 +185,7 @@ POST /api/v1/public/files/01JABCDEF1234567890ABCDEF/delete?access_token=eyJ...
 
 ## 8. 前端交互模式
 
-删除 token 不建议用跳转或 `302` 语义触发，而应由前端显式发起 `POST` 请求。
+删除 token 不建议用跳转或 `302` 语义触发，而应由前端显式发起 `DELETE` 请求。
 
 推荐流程：
 
@@ -195,7 +195,7 @@ POST /api/v1/public/files/01JABCDEF1234567890ABCDEF/delete?access_token=eyJ...
 4. 前端在用户确认后，显式调用：
 
 ```text
-POST /api/v1/public/files/{fileId}/delete?access_token=...
+DELETE /api/v1/public/files/{fileId}?access_token=...
 ```
 
 这样比跳转更清晰，也更符合副作用操作的心智模型。
@@ -301,7 +301,7 @@ mfs:
 
 结合当前项目目标，推荐的删除 token 方案是：
 
-- 新增 `POST /api/v1/public/files/{fileId}/delete?access_token=...`
+- 新增 `DELETE /api/v1/public/files/{fileId}?access_token=...`
 - 删除 token 必须单独签发
 - 删除 token 必须带 `purpose=delete`
 - 删除 token 绑定 `tenant_id` 和 `file_id`

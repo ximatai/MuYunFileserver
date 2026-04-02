@@ -268,6 +268,7 @@ Readiness 在两种模式下的行为：
 - `GET /api/v1/public/files/{fileId}?access_token=...`
 - `GET /api/v1/public/files/{fileId}/download?access_token=...`
 - `DELETE /api/v1/files/{fileId}`
+- `DELETE /api/v1/public/files/{fileId}?access_token=...`
 - `GET /q/health/live`
 - `GET /q/health/ready`
 
@@ -320,7 +321,7 @@ Content-Disposition, Content-Length, Content-Type
 | 上传 | `POST /api/v1/files` | 暂不支持 |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
-| 删除 | `DELETE /api/v1/files/{fileId}` | `POST /api/v1/public/files/{fileId}/delete?access_token=...` |
+| 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
 
 可信身份头模式：
 
@@ -357,7 +358,7 @@ Content-Disposition, Content-Length, Content-Type
 5. 前端最终访问：
    - `GET /api/v1/public/files/{fileId}?access_token=...`
    - 或 `GET /api/v1/public/files/{fileId}/download?access_token=...`
-   - 或 `POST /api/v1/public/files/{fileId}/delete?access_token=...`
+   - 或 `DELETE /api/v1/public/files/{fileId}?access_token=...`
 
 ### 一条完整体验路径
 
@@ -397,7 +398,7 @@ curl -OJ http://127.0.0.1:8080/api/v1/files/$FILE_ID/download \
 ```text
 GET /api/v1/public/files/{fileId}?access_token=...
 GET /api/v1/public/files/{fileId}/download?access_token=...
-POST /api/v1/public/files/{fileId}/delete?access_token=...
+DELETE /api/v1/public/files/{fileId}?access_token=...
 ```
 
 这些入口都不再要求浏览器传 `X-Tenant-Id`、`X-User-Id`。
@@ -413,7 +414,7 @@ curl -X DELETE http://127.0.0.1:8080/api/v1/files/$FILE_ID \
 如果你采用删除 token，业务后端应单独签发带 `purpose=delete` 的 token，再由前端显式发起：
 
 ```text
-POST /api/v1/public/files/{fileId}/delete?access_token=...
+DELETE /api/v1/public/files/{fileId}?access_token=...
 ```
 
 如果你的环境没有 `jq`，也可以直接用固定 `{fileId}` 替换下面这些独立示例。
