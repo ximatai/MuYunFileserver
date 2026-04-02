@@ -39,7 +39,7 @@ class UploadRequestParser {
         if (requestedFileIds.size() > fileValues.size()) {
             throw new ValidationException("file_ids count cannot exceed files count");
         }
-        if (config.storage().rootDir().toFile().getUsableSpace() < config.upload().minFreeSpaceBytes()) {
+        if (config.storage().tempDir().toFile().getUsableSpace() < config.upload().minFreeSpaceBytes()) {
             throw new StorageCapacityException("insufficient storage space");
         }
     }

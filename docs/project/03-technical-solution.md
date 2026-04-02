@@ -156,13 +156,19 @@
 
 ### 5.1 存储抽象
 
-定义 `StorageProvider` 抽象，默认实现为本地文件系统。
+定义 `StorageProvider` 抽象，默认实现为本地文件系统，并支持切换到 `MinIO`。
 
 目的：
 
 - 隔离底层文件读写细节
 - 屏蔽本地路径语义，不向上层和对外协议泄露
 - 为后续迁移 `MinIO/S3` 预留演进点
+
+当前落地方式：
+
+- `local` 模式负责本地正式文件存储
+- `minio` 模式负责对象存储正式文件写入
+- 两种模式统一复用本地临时目录做上传预处理、`sha256` 计算和 MIME 探测
 
 ### 5.2 文件系统实现
 
@@ -180,7 +186,23 @@
 tenant/{tenantId}/yyyy/MM/dd/{ulid}
 ```
 
-### 5.3 MIME 探测
+### 5.3 MinIO 实现
+
+`MinIO` 存储实现负责：
+
+- 启动时校验客户端配置
+- 按配置自动创建 bucket
+- 将临时文件上传为对象
+- 读取、删除和存在性检查
+- 复用统一的 `storageKey` 规则，避免上层区分本地路径与对象 key
+
+取舍：
+
+- 一期不做预签名直传，仍由服务端接收上传并写入对象存储
+- 一期不引入 multipart upload、高级元数据或对象标签
+- 先以 `MinIO` 验证 `S3` 兼容抽象，后续再评估更广义的对象存储差异
+
+### 5.4 MIME 探测
 
 采用：
 
@@ -202,7 +224,7 @@ tenant/{tenantId}/yyyy/MM/dd/{ulid}
 
 - 一期只做基础 MIME 探测，不引入内容分析、预览解析等重能力
 
-### 5.4 哈希计算
+### 5.5 哈希计算
 
 采用 JDK 自带 `MessageDigest` 计算 `SHA-256`。
 
@@ -234,6 +256,13 @@ tenant/{tenantId}/yyyy/MM/dd/{ulid}
 mfs.*
 ```
 
+其中存储相关配置分为：
+
+- `mfs.storage.type=local|minio`
+- `mfs.storage.root-dir`：`local` 模式正式文件目录
+- `mfs.storage.temp-dir`：两种模式共用的上传临时目录
+- `mfs.storage.minio.*`：`minio` 模式连接参数和 bucket 配置
+
 ### 6.2 参数与配置校验
 
 采用：
@@ -258,6 +287,10 @@ mfs.*
 
 原因：
 
+- 统一暴露数据库与存储可用性
+- `local` 模式可检查目录写权限
+- `minio` 模式可检查 bucket 可访问性和临时目录可写性
+
 - 一期已明确需要 `liveness` 和 `readiness`
 - Quarkus 有现成约定路径
 - 只需增加自定义 readiness 检查即可
@@ -265,7 +298,8 @@ mfs.*
 就绪检查建议覆盖：
 
 - `SQLite` 可访问
-- 文件根目录可写
+- `local` 模式下正式文件目录可写
+- `minio` 模式下对象桶可访问
 - 临时目录可写
 
 ### 6.4 定时任务

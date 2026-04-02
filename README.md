@@ -14,7 +14,7 @@
 
 - `Quarkus REST`
 - `SQLite + Flyway`
-- 本地文件系统存储
+- `StorageProvider` 抽象 + 本地文件系统 / `MinIO`
 - `JDBC + 手写 SQL`
 - 多租户隔离
 - 软删 + 后台物理清理
@@ -32,6 +32,7 @@
 - 软删与定时物理清理
 - `liveness / readiness` 健康检查
 - 首批单元测试和集成测试
+- `MinIO` 对象存储适配与 `Testcontainers` 验证
 
 ## 设计边界
 
@@ -59,8 +60,14 @@
 
 默认配置见 [application.properties](./src/main/resources/application.properties)，一期关键配置包括：
 
+- `mfs.storage.type`：存储类型，默认 `local`，可切换为 `minio`
 - `mfs.storage.root-dir`：正式文件根目录
 - `mfs.storage.temp-dir`：上传临时目录
+- `mfs.storage.minio.endpoint`：MinIO / S3 兼容服务地址
+- `mfs.storage.minio.access-key`：MinIO 访问密钥
+- `mfs.storage.minio.secret-key`：MinIO 密钥
+- `mfs.storage.minio.bucket`：对象桶名称
+- `mfs.storage.minio.auto-create-bucket`：启动时自动建桶，默认 `true`
 - `mfs.database.path`：SQLite 文件路径
 - `mfs.upload.max-file-size-bytes`：单文件大小上限，默认 `500MB`
 - `mfs.upload.max-file-count`：单次上传最大文件数，默认 `10`
@@ -72,7 +79,8 @@
 启动前需要保证：
 
 - `SQLite` 文件所在目录可写
-- 正式文件目录和临时目录可写
+- `local` 模式下正式文件目录和临时目录可写
+- `minio` 模式下临时目录可写，且目标对象桶可访问
 
 开发模式运行：
 
@@ -97,6 +105,59 @@
 ```sh
 java -jar build/quarkus-app/quarkus-run.jar
 ```
+
+## 存储模式
+
+### Local
+
+默认模式为 `local`，适合本地开发和单机部署：
+
+```properties
+mfs.storage.type=local
+mfs.storage.root-dir=${user.dir}/var/storage
+mfs.storage.temp-dir=${user.dir}/var/tmp
+```
+
+### MinIO
+
+切换到 `MinIO` 时，服务仍使用本地临时目录做上传预处理，正式文件写入对象存储：
+
+```properties
+mfs.storage.type=minio
+mfs.storage.temp-dir=${user.dir}/var/tmp
+mfs.storage.minio.endpoint=http://127.0.0.1:9000
+mfs.storage.minio.access-key=minioadmin
+mfs.storage.minio.secret-key=minioadmin
+mfs.storage.minio.bucket=muyun-files
+mfs.storage.minio.auto-create-bucket=true
+```
+
+本地可直接用 Docker 启动一个 MinIO：
+
+```sh
+docker run -d \
+  --name muyun-minio \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  -e MINIO_ROOT_USER=minioadmin \
+  -e MINIO_ROOT_PASSWORD=minioadmin \
+  minio/minio:RELEASE.2023-09-04T19-57-37Z \
+  server /data --console-address ":9001"
+```
+
+启动后可通过以下配置运行服务：
+
+```sh
+MFS_STORAGE_TYPE=minio \
+MFS_STORAGE_TEMP_DIR=$(pwd)/var/tmp \
+MFS_STORAGE_MINIO_ENDPOINT=http://127.0.0.1:9000 \
+MFS_STORAGE_MINIO_ACCESS_KEY=minioadmin \
+MFS_STORAGE_MINIO_SECRET_KEY=minioadmin \
+MFS_STORAGE_MINIO_BUCKET=muyun-files \
+./gradlew quarkusDev
+```
+
+Readiness 在 `local` 模式下检查目录可写性，在 `minio` 模式下检查临时目录和对象桶可访问性。
 
 ## 已实现接口
 
@@ -125,6 +186,7 @@ java -jar build/quarkus-app/quarkus-run.jar
 - MIME 拒绝 `415`
 - 显式 `file_id` 冲突 `409`
 - 健康检查基础可用性
+- `MinIO` provider 的上传、读取、删除和自动建桶验证
 
 ## 开源协议
 

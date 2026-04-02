@@ -2,6 +2,7 @@ package net.ximatai.muyun.fileserver.infrastructure.storage;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Typed;
 import jakarta.inject.Inject;
 import io.quarkus.runtime.StartupEvent;
 import net.ximatai.muyun.fileserver.common.exception.StorageException;
@@ -15,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 @ApplicationScoped
+@Typed(LocalStorageProvider.class)
 public class LocalStorageProvider implements StorageProvider {
 
     private static final String STORAGE_PROVIDER = "local";
@@ -23,6 +25,9 @@ public class LocalStorageProvider implements StorageProvider {
     FileServiceConfig config;
 
     public void onStart(@Observes StartupEvent ignored) {
+        if (!"local".equalsIgnoreCase(config.storage().type())) {
+            return;
+        }
         try {
             Files.createDirectories(config.storage().rootDir());
             Files.createDirectories(config.storage().tempDir());
@@ -43,6 +48,21 @@ public class LocalStorageProvider implements StorageProvider {
     @Override
     public String providerName() {
         return STORAGE_PROVIDER;
+    }
+
+    @Override
+    public String storageBucket() {
+        return null;
+    }
+
+    @Override
+    public void verifyReadiness() {
+        if (!Files.isDirectory(config.storage().rootDir()) || !Files.isWritable(config.storage().rootDir())) {
+            throw new StorageException("storage root is not writable");
+        }
+        if (!Files.isDirectory(config.storage().tempDir()) || !Files.isWritable(config.storage().tempDir())) {
+            throw new StorageException("temp directory is not writable");
+        }
     }
 
     @Override
@@ -100,8 +120,7 @@ public class LocalStorageProvider implements StorageProvider {
         return Files.exists(resolve(storageKey));
     }
 
-    @Override
-    public Path resolve(String storageKey) {
+    private Path resolve(String storageKey) {
         return config.storage().rootDir().resolve(storageKey);
     }
 }

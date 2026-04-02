@@ -14,6 +14,7 @@ record PreparedUpload(
         String mimeType,
         long sizeBytes,
         String sha256,
+        String storageBucket,
         String storageKey,
         Instant uploadedAt,
         Path tempFile
@@ -28,7 +29,7 @@ record PreparedUpload(
                 sizeBytes,
                 sha256,
                 storageProvider,
-                null,
+                storageBucket,
                 storageKey,
                 FileStatus.ACTIVE,
                 uploadedBy,

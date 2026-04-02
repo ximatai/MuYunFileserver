@@ -3,18 +3,49 @@ package net.ximatai.muyun.fileserver.application;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 
 import java.lang.reflect.Proxy;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
-final class TestConfigs {
+public final class TestConfigs {
 
     private TestConfigs() {
     }
 
-    static FileServiceConfig fileServiceConfig() {
+    public static FileServiceConfig fileServiceConfig() {
+        return fileServiceConfig("local", null, null, null, null);
+    }
+
+    public static FileServiceConfig minioFileServiceConfig(String endpoint, String accessKey, String secretKey, String bucket) {
+        return fileServiceConfig("minio", endpoint, accessKey, secretKey, bucket);
+    }
+
+    private static FileServiceConfig fileServiceConfig(
+            String storageType,
+            String endpoint,
+            String accessKey,
+            String secretKey,
+            String bucket
+    ) {
+        Path testRoot = Path.of(System.getProperty("user.dir"), "build", "test-config-storage");
+        Path testTemp = Path.of(System.getProperty("user.dir"), "build", "test-config-tmp");
+        ensureDirectory(testRoot);
+        ensureDirectory(testTemp);
+
         FileServiceConfig.Storage storage = proxy(FileServiceConfig.Storage.class, methodName -> switch (methodName) {
-            case "rootDir", "tempDir" -> Path.of(System.getProperty("java.io.tmpdir"));
+            case "type" -> storageType;
+            case "rootDir" -> testRoot;
+            case "tempDir" -> testTemp;
+            case "minio" -> proxy(FileServiceConfig.Minio.class, minioMethod -> switch (minioMethod) {
+                case "endpoint" -> java.util.Optional.ofNullable(endpoint);
+                case "accessKey" -> java.util.Optional.ofNullable(accessKey);
+                case "secretKey" -> java.util.Optional.ofNullable(secretKey);
+                case "bucket" -> java.util.Optional.ofNullable(bucket);
+                case "autoCreateBucket" -> true;
+                default -> throw new UnsupportedOperationException(minioMethod);
+            });
             default -> throw new UnsupportedOperationException(methodName);
         });
 
@@ -64,6 +95,14 @@ final class TestConfigs {
                     default -> resolver.resolve(method.getName());
                 }
         );
+    }
+
+    private static void ensureDirectory(Path path) {
+        try {
+            Files.createDirectories(path);
+        } catch (IOException exception) {
+            throw new IllegalStateException("failed to create test directory " + path, exception);
+        }
     }
 
     @FunctionalInterface

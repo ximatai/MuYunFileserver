@@ -7,6 +7,10 @@ public interface StorageProvider {
 
     String providerName();
 
+    String storageBucket();
+
+    void verifyReadiness();
+
     Path createTempFile();
 
     void moveToPermanent(Path tempFile, String storageKey);
@@ -18,6 +22,4 @@ public interface StorageProvider {
     void deleteTempFile(Path tempFile);
 
     boolean exists(String storageKey);
-
-    Path resolve(String storageKey);
 }

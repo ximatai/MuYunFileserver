@@ -1,6 +1,7 @@
 package net.ximatai.muyun.fileserver.config;
 
 import io.smallrye.config.ConfigMapping;
+import io.smallrye.config.WithDefault;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -8,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 
 @ConfigMapping(prefix = "mfs")
 public interface FileServiceConfig {
@@ -23,11 +25,29 @@ public interface FileServiceConfig {
     Security security();
 
     interface Storage {
+        @WithDefault("local")
+        String type();
+
         @NotNull
         Path rootDir();
 
         @NotNull
         Path tempDir();
+
+        Minio minio();
+    }
+
+    interface Minio {
+        Optional<String> endpoint();
+
+        Optional<String> accessKey();
+
+        Optional<String> secretKey();
+
+        Optional<String> bucket();
+
+        @WithDefault("true")
+        boolean autoCreateBucket();
     }
 
     interface Upload {

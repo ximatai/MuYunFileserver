@@ -200,6 +200,15 @@ class UploadFilePreparerTest {
         }
 
         @Override
+        public String storageBucket() {
+            return null;
+        }
+
+        @Override
+        public void verifyReadiness() {
+        }
+
+        @Override
         public Path createTempFile() {
             try {
                 return Files.createTempFile(tempDir, "upload-", ".tmp");
@@ -230,11 +239,6 @@ class UploadFilePreparerTest {
         @Override
         public boolean exists(String storageKey) {
             return false;
-        }
-
-        @Override
-        public Path resolve(String storageKey) {
-            return tempDir.resolve(storageKey);
         }
     }
 

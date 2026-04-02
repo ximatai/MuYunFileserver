@@ -3,13 +3,14 @@ package net.ximatai.muyun.fileserver.health;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
+import net.ximatai.muyun.fileserver.common.exception.StorageException;
+import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.HealthCheckResponseBuilder;
 import org.eclipse.microprofile.health.Readiness;
 
 import javax.sql.DataSource;
-import java.nio.file.Files;
 import java.sql.Connection;
 
 @Readiness
@@ -21,6 +22,9 @@ public class StorageReadinessCheck implements HealthCheck {
 
     @Inject
     FileServiceConfig config;
+
+    @Inject
+    StorageProvider storageProvider;
 
     @Override
     public HealthCheckResponse call() {
@@ -34,15 +38,12 @@ public class StorageReadinessCheck implements HealthCheck {
                     .build();
         }
 
-        if (!Files.isDirectory(config.storage().rootDir()) || !Files.isWritable(config.storage().rootDir())) {
+        try {
+            storageProvider.verifyReadiness();
+        } catch (StorageException exception) {
             return builder.down()
-                    .withData("storageRoot", config.storage().rootDir().toString())
-                    .build();
-        }
-
-        if (!Files.isDirectory(config.storage().tempDir()) || !Files.isWritable(config.storage().tempDir())) {
-            return builder.down()
-                    .withData("tempDir", config.storage().tempDir().toString())
+                    .withData("storageType", config.storage().type())
+                    .withData("storage", exception.getMessage())
                     .build();
         }
 

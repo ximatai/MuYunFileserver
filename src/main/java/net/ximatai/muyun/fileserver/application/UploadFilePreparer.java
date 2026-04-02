@@ -82,6 +82,7 @@ class UploadFilePreparer {
                 mimeType,
                 fileDigest.sizeBytes(),
                 fileDigest.sha256(),
+                storageProvider.storageBucket(),
                 storageKeyFactory.build(requestContext.tenantId(), fileId),
                 Instant.now(),
                 tempFile
