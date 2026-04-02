@@ -33,24 +33,6 @@
 - 业务对象引用治理
 - 对象存储直传
 
-## 版本与发布
-
-当前发布版本采用项目内约定：
-
-- `v0.YY.N`
-- `0`：表示仍处于未定稿阶段
-- `YY`：年份短码，例如 `26` 表示 `2026`
-- `N`：当年发布序号，例如 `1` 表示当年第一个版本
-- 例如首个发布版本为 `v0.26.1`
-- `main` 分支日常开发版本保持 `-SNAPSHOT`
-
-当推送类似 `v0.26.1` 的 Git tag 时，GitHub Actions 会自动：
-
-- 构建应用
-- 打包可下载 release 包
-- 生成 GitHub Release
-- 附带 `zip`、`tar.gz` 和 `sha256`
-
 ## 使用 Release 包
 
 如果你只是想部署或试用服务，优先使用 GitHub Releases，而不是源码构建。
@@ -66,6 +48,8 @@
 
 - `quarkus-app/`
 - `application.yml`
+- `application.local.example.yml`
+- `application.minio.example.yml`
 - `compose.yaml`
 - `README.md`
 - `RUN.md`
@@ -74,6 +58,11 @@
 
 默认配置文件是 [application.yml](./src/main/resources/application.yml)。
 如果你使用 release 包，则编辑解压目录里的同名 `application.yml`。
+
+如果你不想从零开始写配置，可以直接参考：
+
+- `application.local.example.yml`
+- `application.minio.example.yml`
 
 ### 3. 启动
 
@@ -97,6 +86,12 @@ java -jar quarkus-app/quarkus-run.jar
 curl http://127.0.0.1:8080/q/health/ready
 ```
 
+期望看到的关键结果是：
+
+```json
+{"status":"UP"}
+```
+
 试传一个文件：
 
 ```sh
@@ -104,6 +99,21 @@ curl -X POST http://127.0.0.1:8080/api/v1/files \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123' \
   -F 'files=@/path/to/contract.pdf'
+```
+
+成功响应至少会包含：
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "01..."
+      }
+    ]
+  }
+}
 ```
 
 如果你只想快速验证项目，到这里就够了。
@@ -197,7 +207,15 @@ mfs:
 本地启动 MinIO：
 
 ```sh
-docker compose up -d minio
+docker run -d \
+  --name muyun-minio \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  -e MINIO_ROOT_USER=minioadmin \
+  -e MINIO_ROOT_PASSWORD=minioadmin \
+  -v $(pwd)/.data/minio:/data \
+  minio/minio:RELEASE.2023-09-04T19-57-37Z \
+  server /data --console-address ":9001"
 ```
 
 如果你想直接用环境变量启动服务：

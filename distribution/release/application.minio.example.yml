@@ -1,0 +1,12 @@
+mfs:
+  storage:
+    type: minio
+    temp-dir: ${user.dir}/var/tmp
+    minio:
+      endpoint: http://127.0.0.1:9000
+      access-key: minioadmin
+      secret-key: minioadmin
+      bucket: muyun-files
+      auto-create-bucket: true
+  database:
+    path: ${user.dir}/var/data/muyun-fileserver.db

@@ -44,25 +44,11 @@ jobs:
           mkdir -p "${RELEASE_DIR}"
           cp -R build/quarkus-app "${RELEASE_DIR}/quarkus-app"
           cp src/main/resources/application.yml "${RELEASE_DIR}/application.yml"
+          cp distribution/release/application.local.example.yml "${RELEASE_DIR}/application.local.example.yml"
+          cp distribution/release/application.minio.example.yml "${RELEASE_DIR}/application.minio.example.yml"
           cp compose.yaml "${RELEASE_DIR}/compose.yaml"
           cp README.md "${RELEASE_DIR}/README.md"
-          cat > "${RELEASE_DIR}/RUN.md" <<'EOF'
-          # Run
-
-          1. Edit `application.yml` as needed.
-          2. Prepare writable directories such as `var/storage`, `var/tmp`, `var/data`.
-          3. Start the service:
-
-          ```sh
-          java -jar quarkus-app/quarkus-run.jar
-          ```
-
-          For MinIO local development:
-
-          ```sh
-          docker compose up -d minio
-          ```
-          EOF
+          cp distribution/release/RUN.md "${RELEASE_DIR}/RUN.md"
           (
             cd dist
             zip -r "${APP_NAME}-${VERSION}.zip" "${APP_NAME}-${VERSION}"

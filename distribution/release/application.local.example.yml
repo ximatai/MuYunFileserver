@@ -1,0 +1,7 @@
+mfs:
+  storage:
+    type: local
+    root-dir: ${user.dir}/var/storage
+    temp-dir: ${user.dir}/var/tmp
+  database:
+    path: ${user.dir}/var/data/muyun-fileserver.db
