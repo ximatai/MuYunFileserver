@@ -7,9 +7,15 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.Base64;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
@@ -23,6 +29,7 @@ class FileResourceTest {
     private static final String USER_ID = "u123";
     private static final Path STORAGE_ROOT = Path.of(System.getProperty("user.dir"), "build", "test-storage");
     private static final int MAX_FILE_SIZE_BYTES = 1024 * 1024;
+    private static final String DOWNLOAD_TOKEN_SECRET = "test-download-token-secret";
 
     @Test
     void shouldUploadQueryDownloadAndDeleteFile() {
@@ -252,6 +259,62 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldDownloadFileWithValidAccessToken() throws Exception {
+        String fileId = uploadSingleFile("public.txt", "token download".getBytes(), "text/plain");
+        String accessToken = signDownloadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.id", equalTo(fileId))
+                .body("data.mimeType", equalTo("text/plain"));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("text/plain"))
+                .body(equalTo("token download"));
+    }
+
+    @Test
+    void shouldRejectExpiredAccessToken() throws Exception {
+        String fileId = uploadSingleFile("expired.txt", "expired".getBytes(), "text/plain");
+        String accessToken = signDownloadToken(TENANT_ID, fileId, Instant.now().minusSeconds(5));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(401)
+                .body("success", equalTo(false))
+                .body("message", equalTo("download token expired"));
+    }
+
+    @Test
+    void shouldRejectAccessTokenForDifferentFile() throws Exception {
+        String fileId = uploadSingleFile("mismatch.txt", "mismatch".getBytes(), "text/plain");
+        String otherFileId = ULID_GENERATOR.nextULID();
+        String accessToken = signDownloadToken(TENANT_ID, otherFileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("download token does not match requested file"));
+    }
+
+    @Test
     void readinessShouldBeUp() {
         given()
                 .when()
@@ -286,5 +349,18 @@ class FileResourceTest {
                 .resolve("%02d".formatted(today.getMonthValue()))
                 .resolve("%02d".formatted(today.getDayOfMonth()))
                 .resolve(fileId);
+    }
+
+    private String signDownloadToken(String tenantId, String fileId, Instant expiresAt) throws Exception {
+        String payload = """
+                {"iss":"biz-app","sub":"%s","tenant_id":"%s","file_id":"%s","exp":%d}
+                """.formatted(USER_ID, tenantId, fileId, expiresAt.getEpochSecond()).trim();
+        byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(DOWNLOAD_TOKEN_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        byte[] signature = mac.doFinal(payloadBytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(payloadBytes)
+                + "."
+                + Base64.getUrlEncoder().withoutPadding().encodeToString(signature);
     }
 }

@@ -10,6 +10,11 @@ mfs:
     min-free-space-bytes: 1
   cleanup:
     deleted-sweep-interval: 24H
+  download-token:
+    enabled: true
+    algorithm: hmac-sha256
+    secret: test-download-token-secret
+    allowed-clock-skew: 1S
 
 quarkus:
   datasource:

@@ -19,13 +19,9 @@ import net.ximatai.muyun.fileserver.application.FileCommandService;
 import net.ximatai.muyun.fileserver.application.FileQueryService;
 import net.ximatai.muyun.fileserver.application.UploadService;
 import net.ximatai.muyun.fileserver.common.api.ApiResponses;
+import net.ximatai.muyun.fileserver.common.api.DownloadResponses;
 import org.jboss.resteasy.reactive.RestPath;
 import org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 @Path("/api/v1/files")
 @Produces(MediaType.APPLICATION_JSON)
@@ -62,11 +58,7 @@ public class FilesResource {
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     public Response download(@RestPath String fileId) {
         DownloadFile file = fileQueryService.openDownload(fileId);
-        return Response.ok((jakarta.ws.rs.core.StreamingOutput) output -> transfer(file.inputStream(), output))
-                .type(file.mimeType())
-                .header("Content-Length", file.sizeBytes())
-                .header("Content-Disposition", contentDisposition(file.originalFilename()))
-                .build();
+        return DownloadResponses.ok(file);
     }
 
     @DELETE
@@ -74,23 +66,5 @@ public class FilesResource {
     public Response delete(@RestPath String fileId) {
         DeleteFileResult response = fileCommandService.delete(fileId);
         return Response.ok(ApiResponses.ok(response)).build();
-    }
-
-    private void transfer(InputStream inputStream, java.io.OutputStream outputStream) throws IOException {
-        try (InputStream in = inputStream) {
-            in.transferTo(outputStream);
-        } catch (IOException exception) {
-            throw new WebApplicationException(exception);
-        }
-    }
-
-    private String contentDisposition(String originalFilename) {
-        String sanitized = originalFilename
-                .replace("\\", "_")
-                .replace("\"", "_")
-                .replace("\r", "_")
-                .replace("\n", "_");
-        String encoded = URLEncoder.encode(sanitized, StandardCharsets.UTF_8).replace("+", "%20");
-        return "attachment; filename=\"" + sanitized + "\"; filename*=UTF-8''" + encoded;
     }
 }

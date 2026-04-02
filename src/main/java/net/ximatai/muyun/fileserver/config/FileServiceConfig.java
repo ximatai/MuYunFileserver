@@ -24,6 +24,8 @@ public interface FileServiceConfig {
 
     Security security();
 
+    DownloadToken downloadToken();
+
     interface Storage {
         @WithDefault("local")
         String type();
@@ -78,5 +80,20 @@ public interface FileServiceConfig {
     interface Security {
         @NotEmpty
         List<String> allowedMimeTypes();
+    }
+
+    interface DownloadToken {
+        @WithDefault("false")
+        boolean enabled();
+
+        @WithDefault("hmac-sha256")
+        String algorithm();
+
+        Optional<String> issuer();
+
+        Optional<String> secret();
+
+        @WithDefault("5S")
+        Duration allowedClockSkew();
     }
 }

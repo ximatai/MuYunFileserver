@@ -34,6 +34,12 @@
 - 文件对外标识使用 `ULID`。
 - 文件服务一期不定义独立业务错误码体系，优先使用标准 HTTP 状态码。
 
+面向浏览器前端的补充约束：
+
+- 浏览器前端不应直接携带 `X-Tenant-Id`、`X-User-Id` 调用文件服务。
+- 推荐接入拓扑为：浏览器 -> 业务网关 / BFF -> 文件服务。
+- 若浏览器需要访问统一网关域名，也应由网关在服务端补齐可信身份头后再转发给文件服务。
+
 ---
 
 ## 3. 通用请求头
@@ -52,6 +58,7 @@
 - `X-Tenant-Id` 和 `X-User-Id` 缺失时，请求应被拒绝。
 - 文件服务不接受调用方通过查询参数或 URL 路径传递租户和用户身份。
 - 文件服务应在日志中记录上述上下文字段。
+- 一期不把浏览器跨域直连作为正式默认接入方式。
 
 ---
 
@@ -83,7 +90,8 @@
 说明：
 
 - 一期不引入独立 `error_code` 字段作为正式契约。
-- `message` 应可直接用于日志和排查。
+- `message` 应可直接用于日志、展示和排查，但不承诺可稳定枚举。
+- 客户端程序分支应优先依赖 HTTP 状态码，而不是依赖 `message` 文案。
 - `request_id` 若上游已传入则原样返回；若无则可省略。
 
 ### 4.2 常用 HTTP 状态码
@@ -173,6 +181,24 @@
 
 ## 6. 接口列表
 
+### 6.1 能力矩阵
+
+同一套文件能力按访问模式划分如下：
+
+| 能力 | 可信身份头模式 | 短时 token 模式 |
+|---|---|---|
+| 上传 | `POST /api/v1/files` | 不支持 |
+| 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
+| 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
+| 删除 | `DELETE /api/v1/files/{fileId}` | 不支持 |
+
+说明：
+
+- 可信身份头模式依赖统一网关或受控上游注入身份上下文
+- 短时 token 模式当前只覆盖“读取类能力”，不覆盖上传和删除
+
+### 6.2 接口明细
+
 一期接口列表如下：
 
 | 方法 | 路径 | 说明 |
@@ -180,6 +206,8 @@
 | `POST` | `/api/v1/files` | 上传一个或多个文件 |
 | `GET` | `/api/v1/files/{fileId}` | 查询单文件元数据 |
 | `GET` | `/api/v1/files/{fileId}/download` | 下载文件 |
+| `GET` | `/api/v1/public/files/{fileId}?access_token=...` | 使用短时只读 token 查询单文件元数据 |
+| `GET` | `/api/v1/public/files/{fileId}/download?access_token=...` | 使用短时下载 token 下载文件 |
 | `DELETE` | `/api/v1/files/{fileId}` | 软删文件 |
 | `GET` | `/q/health/live` | 存活检查 |
 | `GET` | `/q/health/ready` | 就绪检查 |
@@ -206,6 +234,8 @@
 
 - 一期允许单次请求上传多个文件。
 - 单次请求最多 10 个文件。
+- 默认单文件大小上限为 `524288000` 字节，也就是 `500 MB`。
+- 默认允许的 MIME 类型为 `application/pdf`、`image/png`、`image/jpeg`、`text/plain`。
 - 若提供 `file_ids`，则每个值必须为合法 `ULID`。
 - 若部分文件未提供 `file_id`，则由服务端生成。
 - `file_ids` 按出现顺序与 `files` 一一对应。
@@ -329,22 +359,77 @@ curl "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF" \
 | 文件不存在或已删除 | `404` |
 | 内部错误 | `500` |
 
+### 8.6 短时 token 查询接口
+
+- 方法：`GET`
+- 路径：`/api/v1/public/files/{fileId}`
+- Query 参数：`access_token`
+
+说明：
+
+- 该入口不要求 `X-Tenant-Id`、`X-User-Id`
+- 文件服务依赖 `access_token` 做只读放行
+- 业务后端负责业务授权和 token 签发
+- 文件服务只校验 token 是否允许读取目标文件
+
+### 8.7 短时 token 查询请求示例
+
+```bash
+curl "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF?access_token=eyJ..."
+```
+
+### 8.8 短时 token 查询失败场景
+
+| 场景 | 状态码 |
+|---|---|
+| 缺少 `access_token` | `401` |
+| token 非法或验签失败 | `401` |
+| token 已过期 | `401` |
+| `fileId` 非法 | `400` |
+| token 与目标文件不匹配 | `403` |
+| token 与文件租户不匹配 | `403` |
+| 文件不存在或已删除 | `404` |
+| 内部错误 | `500` |
+
+说明：
+
+- 当前最小实现默认关闭，需通过配置显式开启
+- 第一版仅支持 `HMAC-SHA256`
+- token 至少应包含 `tenant_id`、`file_id`、`exp`
+- 第一版不实现严格一次性消费
+
 ---
 
 ## 9. 下载接口
 
 ### 9.1 接口定义
 
+一期保留两类文件读取入口：
+
+- 可信身份头读取：
+  - `GET /api/v1/files/{fileId}`
+  - `GET /api/v1/files/{fileId}/download`
+- 短时 token 只读访问：
+  - `GET /api/v1/public/files/{fileId}?access_token=...`
+  - `GET /api/v1/public/files/{fileId}/download?access_token=...`
+
+其中：
+
+- 可信身份头读取适用于统一网关或受控上游已经注入身份头的场景
+- 短时 token 只读访问适用于业务后端先完成业务授权，再签发短时读取 URL 的场景
+
+### 9.2 可信身份头下载接口定义
+
 - 方法：`GET`
 - 路径：`/api/v1/files/{fileId}/download`
 
-### 9.2 响应特征
+### 9.3 可信身份头下载响应特征
 
 - 返回文件二进制流
 - 成功时不是 JSON
 - 默认以附件方式下载
 
-### 9.3 成功响应头
+### 9.4 成功响应头
 
 建议至少包含：
 
@@ -354,7 +439,7 @@ curl "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF" \
 | `Content-Length` | 文件大小 |
 | `Content-Disposition` | `attachment; filename=...; filename*=UTF-8''...` |
 
-### 9.4 请求示例
+### 9.5 可信身份头下载请求示例
 
 ```bash
 curl -L "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF/download" \
@@ -363,7 +448,7 @@ curl -L "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF/download" 
   -o contract.pdf
 ```
 
-### 9.5 失败场景
+### 9.6 可信身份头下载失败场景
 
 | 场景 | 状态码 |
 |---|---|
@@ -378,6 +463,49 @@ curl -L "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF/download" 
 
 - 一期不支持 `Range` 请求。
 - 一期不支持 `inline` 下载模式切换。
+- 若浏览器通过网关跨域下载，网关应暴露 `Content-Disposition`、`Content-Length`、`Content-Type` 给前端读取。
+- 推荐网关配置 `Access-Control-Expose-Headers: Content-Disposition, Content-Length, Content-Type`。
+
+### 9.7 短时 token 下载接口定义
+
+- 方法：`GET`
+- 路径：`/api/v1/public/files/{fileId}/download`
+- Query 参数：`access_token`
+
+说明：
+
+- 该入口不要求 `X-Tenant-Id`、`X-User-Id`
+- 文件服务依赖 `access_token` 做下载放行
+- 业务后端负责业务授权和 token 签发
+- 文件服务只校验 token 是否允许读取目标文件
+
+### 9.8 短时 token 下载请求示例
+
+```bash
+curl -L "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF/download?access_token=eyJ..." \
+  -o contract.pdf
+```
+
+### 9.9 短时 token 下载失败场景
+
+| 场景 | 状态码 |
+|---|---|
+| 缺少 `access_token` | `401` |
+| token 非法或验签失败 | `401` |
+| token 已过期 | `401` |
+| `fileId` 非法 | `400` |
+| token 与目标文件不匹配 | `403` |
+| token 与文件租户不匹配 | `403` |
+| 文件不存在或已删除 | `404` |
+| 文件物理内容缺失 | `500` |
+| 内部错误 | `500` |
+
+说明：
+
+- 当前最小实现默认关闭，需通过配置显式开启
+- 第一版仅支持 `HMAC-SHA256`
+- token 至少应包含 `tenant_id`、`file_id`、`exp`
+- 第一版不实现严格一次性消费
 
 ---
 

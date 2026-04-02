@@ -24,7 +24,11 @@ public class RequestContextFilter implements ContainerRequestFilter {
 
     @Override
     public void filter(ContainerRequestContext requestContext) {
-        if (requestContext.getUriInfo().getPath().startsWith("q/")) {
+        String path = requestContext.getUriInfo().getPath();
+        if (path.startsWith("q/")
+                || path.startsWith("/q/")
+                || path.startsWith("api/v1/public/files/")
+                || path.startsWith("/api/v1/public/files/")) {
             return;
         }
 

@@ -265,6 +265,8 @@ Readiness 在两种模式下的行为：
 - `POST /api/v1/files`
 - `GET /api/v1/files/{fileId}`
 - `GET /api/v1/files/{fileId}/download`
+- `GET /api/v1/public/files/{fileId}?access_token=...`
+- `GET /api/v1/public/files/{fileId}/download?access_token=...`
 - `DELETE /api/v1/files/{fileId}`
 - `GET /q/health/live`
 - `GET /q/health/ready`
@@ -275,6 +277,84 @@ Readiness 在两种模式下的行为：
 - `X-User-Id`
 - `X-Request-Id` 可选
 - `X-Client-Id` 可选
+
+### 前端接入说明
+
+如果你是浏览器前端，不要直接把 `X-Tenant-Id`、`X-User-Id` 这类身份头暴露给用户侧代码。
+
+- 推荐接入方式是：浏览器 -> 业务网关 / BFF -> `MuYunFileServer`
+- 这些身份头应由网关、BFF 或受控后端在服务端注入
+- README 里的 `curl` 示例面向联调和服务端接入，不代表浏览器应直接携带同名身份头访问文件服务
+
+如果你的浏览器前端需要下载文件名，请同时确认网关或上游已正确转发并暴露这些响应头：
+
+- `Content-Disposition`
+- `Content-Length`
+- `Content-Type`
+
+若存在跨域访问，网关还应显式配置 `Access-Control-Expose-Headers`，至少包含：
+
+```text
+Content-Disposition, Content-Length, Content-Type
+```
+
+当前默认上传限制如下，前端可以直接据此做表单校验：
+
+- 单次请求最多 `10` 个文件
+- 单文件最大 `524288000` 字节，也就是 `500 MB`
+- 默认允许的 MIME 类型：`application/pdf`、`image/png`、`image/jpeg`、`text/plain`
+
+错误处理建议：
+
+- 分支逻辑优先按 HTTP 状态码处理，不要依赖 `message` 文案做程序分支
+- `message` 更适合直接展示或写入日志
+- `request_id` 用于把前端报错和服务端日志关联起来
+- 多文件上传采用整单成功 / 整单失败语义，不会返回部分成功结果
+
+### 访问模式矩阵
+
+同一套文件能力目前支持两种访问模式：
+
+| 能力 | 可信身份头模式 | 短时 token 模式 |
+|---|---|---|
+| 上传 | `POST /api/v1/files` | 暂不支持 |
+| 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
+| 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
+| 删除 | `DELETE /api/v1/files/{fileId}` | 暂不支持 |
+
+可信身份头模式：
+
+- 适合已有统一网关、BFF 或受控后端注入 `X-Tenant-Id` / `X-User-Id` 的场景
+- 文件流通常经过业务网关或由业务网关代转发
+
+短时 token 模式：
+
+- 适合业务后端先完成权限校验，再给前端一个短时只读地址的场景
+- 当前只覆盖“单文件元数据查询 + 下载”
+- 业务后端负责校验“这个用户能不能读取这个附件”
+- `MuYunFileServer` 只负责校验 token 是否允许读取这个 `fileId`
+
+推荐做法：
+
+- 若业务网关长期转发下载流量太重，或前端只需要临时读取单文件元数据与下载能力，优先考虑短时 token 模式
+- 若现有系统已经稳定依赖网关注入身份头，继续使用可信身份头模式即可
+
+当前最小实现说明：
+
+- token 下载默认关闭，需要显式开启 `mfs.download-token.enabled=true`
+- 第一版只支持 `HMAC-SHA256`
+- token 至少应携带 `tenant_id`、`file_id`、`exp`
+- 第一版不做严格一次性消费
+
+一个典型业务流程是：
+
+1. 前端向业务后端请求下载某个附件
+2. 业务后端校验该用户是否有权访问该业务对象和附件
+3. 业务后端签发短时 `access_token`
+4. 业务后端返回下载 URL，或直接 `302` 跳转到文件服务
+5. 前端最终访问：
+   - `GET /api/v1/public/files/{fileId}?access_token=...`
+   - 或 `GET /api/v1/public/files/{fileId}/download?access_token=...`
 
 ### 一条完整体验路径
 
@@ -308,6 +388,15 @@ curl -OJ http://127.0.0.1:8080/api/v1/files/$FILE_ID/download \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123'
 ```
+
+如果你采用短时 token 模式，业务后端应先签发一个短时地址，再由前端直接访问，例如：
+
+```text
+GET /api/v1/public/files/{fileId}?access_token=...
+GET /api/v1/public/files/{fileId}/download?access_token=...
+```
+
+这两个入口都不再要求浏览器传 `X-Tenant-Id`、`X-User-Id`。
 
 #### 4. 删除文件
 
