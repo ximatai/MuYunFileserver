@@ -1,0 +1,35 @@
+quarkus:
+  http:
+    port: 8080
+  datasource:
+    db-kind: sqlite
+    jdbc:
+      url: jdbc:sqlite:${mfs.database.path}
+      max-size: 8
+  flyway:
+    migrate-at-start: true
+    locations: db/migration
+
+mfs:
+  storage:
+    type: local
+    root-dir: ${user.dir}/var/storage
+    temp-dir: ${user.dir}/var/tmp
+    minio:
+      auto-create-bucket: true
+  upload:
+    max-file-size-bytes: 524288000
+    max-file-count: 10
+    min-free-space-bytes: 1073741824
+  database:
+    path: ${user.dir}/var/data/muyun-fileserver.db
+  cleanup:
+    deleted-retention: 7D
+    deleted-sweep-interval: 1H
+    batch-size: 100
+  security:
+    allowed-mime-types:
+      - application/pdf
+      - image/png
+      - image/jpeg
+      - text/plain

@@ -9,6 +9,7 @@ import net.ximatai.muyun.fileserver.common.exception.ForbiddenException;
 import net.ximatai.muyun.fileserver.common.exception.NotFoundException;
 import net.ximatai.muyun.fileserver.common.exception.StorageException;
 import net.ximatai.muyun.fileserver.common.exception.ValidationException;
+import net.ximatai.muyun.fileserver.common.log.OperationLog;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.domain.file.FileStatus;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
@@ -37,8 +38,15 @@ public class FileQueryService {
         FileMetadata metadata = requireAccessibleFile(fileId);
 
         RequestContext requestContext = requestContextHolder.getRequired();
-        LOG.infof("metadata query success fileId=%s tenantId=%s userId=%s requestId=%s",
-                fileId, requestContext.tenantId(), requestContext.userId(), requestContext.requestId());
+        LOG.info(OperationLog.format(
+                "metadata_query",
+                "success",
+                "file_id", fileId,
+                "tenant_id", requestContext.tenantId(),
+                "user_id", requestContext.userId(),
+                "request_id", requestContext.requestId(),
+                "storage_provider", metadata.storageProvider()
+        ));
         return new FileMetadataResponse(
                 metadata.id(),
                 metadata.tenantId(),
@@ -62,8 +70,15 @@ public class FileQueryService {
         }
 
         RequestContext requestContext = requestContextHolder.getRequired();
-        LOG.infof("download success fileId=%s tenantId=%s userId=%s requestId=%s",
-                fileId, requestContext.tenantId(), requestContext.userId(), requestContext.requestId());
+        LOG.info(OperationLog.format(
+                "download",
+                "success",
+                "file_id", fileId,
+                "tenant_id", requestContext.tenantId(),
+                "user_id", requestContext.userId(),
+                "request_id", requestContext.requestId(),
+                "storage_provider", metadata.storageProvider()
+        ));
 
         return new DownloadFile(
                 metadata.id(),

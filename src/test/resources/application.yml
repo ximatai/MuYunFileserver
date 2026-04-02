@@ -1,0 +1,20 @@
+mfs:
+  storage:
+    type: local
+    root-dir: ${user.dir}/build/test-storage
+    temp-dir: ${user.dir}/build/test-tmp
+  database:
+    path: ${user.dir}/build/test-runtime.db
+  upload:
+    max-file-size-bytes: 1048576
+    min-free-space-bytes: 1
+  cleanup:
+    deleted-sweep-interval: 24H
+
+quarkus:
+  datasource:
+    devservices:
+      enabled: false
+  http:
+    limits:
+      max-body-size: 20M

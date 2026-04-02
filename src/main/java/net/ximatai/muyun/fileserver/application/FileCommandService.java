@@ -8,6 +8,7 @@ import net.ximatai.muyun.fileserver.common.context.RequestContextHolder;
 import net.ximatai.muyun.fileserver.common.exception.ForbiddenException;
 import net.ximatai.muyun.fileserver.common.exception.NotFoundException;
 import net.ximatai.muyun.fileserver.common.exception.ValidationException;
+import net.ximatai.muyun.fileserver.common.log.OperationLog;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.domain.file.FileStatus;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
@@ -49,8 +50,15 @@ public class FileCommandService {
             throw new NotFoundException("file not found");
         }
 
-        LOG.infof("delete success fileId=%s tenantId=%s userId=%s requestId=%s",
-                fileId, requestContext.tenantId(), requestContext.userId(), requestContext.requestId());
+        LOG.info(OperationLog.format(
+                "delete",
+                "success",
+                "file_id", fileId,
+                "tenant_id", requestContext.tenantId(),
+                "user_id", requestContext.userId(),
+                "request_id", requestContext.requestId(),
+                "storage_provider", metadata.storageProvider()
+        ));
         return new DeleteFileResult(fileId, FileStatus.DELETED.name(), deletedAt);
     }
 

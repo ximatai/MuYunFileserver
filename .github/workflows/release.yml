@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compute release version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build application
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: ./gradlew clean build --no-daemon
+
+      - name: Assemble release bundle
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          APP_NAME=MuYunFileServer
+          VERSION="$APP_VERSION"
+          RELEASE_DIR="dist/${APP_NAME}-${VERSION}"
+          mkdir -p "${RELEASE_DIR}"
+          cp -R build/quarkus-app "${RELEASE_DIR}/quarkus-app"
+          cp src/main/resources/application.yml "${RELEASE_DIR}/application.yml"
+          cp compose.yaml "${RELEASE_DIR}/compose.yaml"
+          cp README.md "${RELEASE_DIR}/README.md"
+          cat > "${RELEASE_DIR}/RUN.md" <<'EOF'
+          # Run
+
+          1. Edit `application.yml` as needed.
+          2. Prepare writable directories such as `var/storage`, `var/tmp`, `var/data`.
+          3. Start the service:
+
+          ```sh
+          java -jar quarkus-app/quarkus-run.jar
+          ```
+
+          For MinIO local development:
+
+          ```sh
+          docker compose up -d minio
+          ```
+          EOF
+          (
+            cd dist
+            zip -r "${APP_NAME}-${VERSION}.zip" "${APP_NAME}-${VERSION}"
+            tar -czf "${APP_NAME}-${VERSION}.tar.gz" "${APP_NAME}-${VERSION}"
+            shasum -a 256 "${APP_NAME}-${VERSION}.zip" "${APP_NAME}-${VERSION}.tar.gz" > "${APP_NAME}-${VERSION}.sha256"
+          )
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/MuYunFileServer-${{ steps.version.outputs.version }}.zip
+            dist/MuYunFileServer-${{ steps.version.outputs.version }}.tar.gz
+            dist/MuYunFileServer-${{ steps.version.outputs.version }}.sha256

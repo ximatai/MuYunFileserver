@@ -243,6 +243,7 @@ tenant/{tenantId}/yyyy/MM/dd/{ulid}
 采用：
 
 - `@ConfigMapping`
+- `io.quarkus:quarkus-config-yaml`
 
 原因：
 
@@ -262,6 +263,8 @@ mfs.*
 - `mfs.storage.root-dir`：`local` 模式正式文件目录
 - `mfs.storage.temp-dir`：两种模式共用的上传临时目录
 - `mfs.storage.minio.*`：`minio` 模式连接参数和 bucket 配置
+
+当前配置文件格式采用 `application.yml`，不再维护 `application.properties`。
 
 ### 6.2 参数与配置校验
 

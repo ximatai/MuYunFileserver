@@ -13,6 +13,7 @@ dependencies {
     implementation 'io.quarkus:quarkus-arc'
     implementation 'io.quarkus:quarkus-rest'
     implementation 'io.quarkus:quarkus-rest-jackson'
+    implementation 'io.quarkus:quarkus-config-yaml'
     implementation 'io.quarkus:quarkus-agroal'
     implementation 'io.quarkus:quarkus-flyway'
     implementation 'io.quarkus:quarkus-smallrye-health'
@@ -28,7 +29,7 @@ dependencies {
 }
 
 group = 'net.ximatai'
-version = '1.0.0-SNAPSHOT'
+version = findProperty('appVersion') ?: System.getenv('APP_VERSION') ?: '1.0.0-SNAPSHOT'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21

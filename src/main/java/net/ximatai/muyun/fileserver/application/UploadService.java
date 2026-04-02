@@ -6,6 +6,7 @@ import net.ximatai.muyun.fileserver.api.dto.UploadFileItemResponse;
 import net.ximatai.muyun.fileserver.api.dto.UploadFilesResponse;
 import net.ximatai.muyun.fileserver.common.context.RequestContext;
 import net.ximatai.muyun.fileserver.common.context.RequestContextHolder;
+import net.ximatai.muyun.fileserver.common.log.OperationLog;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
 import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
@@ -54,13 +55,27 @@ public class UploadService {
                     movedStorageKeys
             );
 
-            LOG.infof("upload success fileCount=%d tenantId=%s userId=%s requestId=%s",
-                    responseItems.size(), requestContext.tenantId(), requestContext.userId(), requestContext.requestId());
+            LOG.info(OperationLog.format(
+                    "upload",
+                    "success",
+                    "tenant_id", requestContext.tenantId(),
+                    "user_id", requestContext.userId(),
+                    "request_id", requestContext.requestId(),
+                    "storage_provider", storageProvider.providerName(),
+                    "file_count", String.valueOf(responseItems.size())
+            ));
             return new UploadFilesResponse(List.copyOf(responseItems));
         } catch (RuntimeException exception) {
             rollback(insertedMetadata, movedStorageKeys, preparedUploads);
-            LOG.warnf("upload failed tenantId=%s userId=%s requestId=%s reason=%s",
-                    requestContext.tenantId(), requestContext.userId(), requestContext.requestId(), exception.getMessage());
+            LOG.warn(OperationLog.format(
+                    "upload",
+                    "failure",
+                    "tenant_id", requestContext.tenantId(),
+                    "user_id", requestContext.userId(),
+                    "request_id", requestContext.requestId(),
+                    "storage_provider", storageProvider.providerName(),
+                    "reason", exception.getMessage()
+            ));
             throw exception;
         } finally {
             preparedUploads.forEach(item -> storageProvider.deleteTempFile(item.tempFile()));
@@ -99,7 +114,12 @@ public class UploadService {
             try {
                 repository.deleteById(insertedMetadata.get(index).id());
             } catch (RuntimeException exception) {
-                LOG.errorf(exception, "failed to rollback metadata id=%s", insertedMetadata.get(index).id());
+                LOG.error(OperationLog.format(
+                        "upload_rollback_metadata",
+                        "failure",
+                        "file_id", insertedMetadata.get(index).id(),
+                        "reason", exception.getMessage()
+                ), exception);
             }
         }
 
@@ -107,7 +127,13 @@ public class UploadService {
             try {
                 storageProvider.deleteIfExists(movedStorageKeys.get(index));
             } catch (RuntimeException exception) {
-                LOG.errorf(exception, "failed to rollback storage key=%s", movedStorageKeys.get(index));
+                LOG.error(OperationLog.format(
+                        "upload_rollback_storage",
+                        "failure",
+                        "storage_key", movedStorageKeys.get(index),
+                        "storage_provider", storageProvider.providerName(),
+                        "reason", exception.getMessage()
+                ), exception);
             }
         }
 
@@ -115,7 +141,13 @@ public class UploadService {
             try {
                 storageProvider.deleteTempFile(preparedUpload.tempFile());
             } catch (RuntimeException exception) {
-                LOG.errorf(exception, "failed to cleanup temp upload %s", preparedUpload.tempFile());
+                LOG.error(OperationLog.format(
+                        "temp_cleanup",
+                        "failure",
+                        "file_id", preparedUpload.fileId(),
+                        "storage_provider", storageProvider.providerName(),
+                        "reason", exception.getMessage()
+                ), exception);
             }
         }
     }

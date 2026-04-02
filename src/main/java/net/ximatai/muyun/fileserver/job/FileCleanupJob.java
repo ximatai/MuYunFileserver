@@ -3,6 +3,7 @@ package net.ximatai.muyun.fileserver.job;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import net.ximatai.muyun.fileserver.common.log.OperationLog;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
@@ -30,16 +31,33 @@ public class FileCleanupJob {
     void sweepDeletedFiles() {
         Instant cutoff = Instant.now().minus(config.cleanup().deletedRetention());
         List<FileMetadata> items = fileMetadataRepository.findDeletedBefore(cutoff, config.cleanup().batchSize());
-        LOG.infof("deleted file cleanup tick started: retention=%s, batchSize=%d",
-                config.cleanup().deletedRetention(),
-                config.cleanup().batchSize());
+        LOG.info(OperationLog.format(
+                "file_cleanup",
+                "started",
+                "retention", config.cleanup().deletedRetention().toString(),
+                "batch_size", String.valueOf(config.cleanup().batchSize()),
+                "storage_provider", storageProvider.providerName()
+        ));
         for (FileMetadata item : items) {
             try {
                 storageProvider.deleteIfExists(item.storageKey());
                 fileMetadataRepository.deleteById(item.id());
-                LOG.infof("deleted file cleanup success fileId=%s tenantId=%s", item.id(), item.tenantId());
+                LOG.info(OperationLog.format(
+                        "file_cleanup",
+                        "success",
+                        "file_id", item.id(),
+                        "tenant_id", item.tenantId(),
+                        "storage_provider", item.storageProvider()
+                ));
             } catch (RuntimeException exception) {
-                LOG.errorf(exception, "deleted file cleanup failed fileId=%s tenantId=%s", item.id(), item.tenantId());
+                LOG.error(OperationLog.format(
+                        "file_cleanup",
+                        "failure",
+                        "file_id", item.id(),
+                        "tenant_id", item.tenantId(),
+                        "storage_provider", item.storageProvider(),
+                        "reason", exception.getMessage()
+                ), exception);
             }
         }
     }

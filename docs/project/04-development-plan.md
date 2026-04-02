@@ -32,7 +32,7 @@
   - [x] 1.1 清理 starter 示例接口与测试
   - [x] 1.2 补齐 Quarkus 依赖：`multipart`、`SQLite/JDBC`、`health`、`scheduler`、配置校验
   - [x] 1.3 建立基础包结构：`api / application / domain / infrastructure / job / common`
-  - [x] 1.4 初始化 `application.properties` 与环境变量映射
+  - [x] 1.4 初始化 `application.yml` 与环境变量映射
 
 - [x] 2. 配置与运行时上下文
   - [x] 2.1 定义文件服务配置模型：根目录、临时目录、大小限制、文件数限制、磁盘阈值、保留期、MIME 白名单
