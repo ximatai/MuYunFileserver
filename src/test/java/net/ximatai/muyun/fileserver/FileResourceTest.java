@@ -261,7 +261,7 @@ class FileResourceTest {
     @Test
     void shouldDownloadFileWithValidAccessToken() throws Exception {
         String fileId = uploadSingleFile("public.txt", "token download".getBytes(), "text/plain");
-        String accessToken = signDownloadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
 
         given()
                 .queryParam("access_token", accessToken)
@@ -286,7 +286,7 @@ class FileResourceTest {
     @Test
     void shouldRejectExpiredAccessToken() throws Exception {
         String fileId = uploadSingleFile("expired.txt", "expired".getBytes(), "text/plain");
-        String accessToken = signDownloadToken(TENANT_ID, fileId, Instant.now().minusSeconds(5));
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().minusSeconds(5));
 
         given()
                 .queryParam("access_token", accessToken)
@@ -302,7 +302,7 @@ class FileResourceTest {
     void shouldRejectAccessTokenForDifferentFile() throws Exception {
         String fileId = uploadSingleFile("mismatch.txt", "mismatch".getBytes(), "text/plain");
         String otherFileId = ULID_GENERATOR.nextULID();
-        String accessToken = signDownloadToken(TENANT_ID, otherFileId, Instant.now().plusSeconds(60));
+        String accessToken = signReadToken(TENANT_ID, otherFileId, Instant.now().plusSeconds(60));
 
         given()
                 .queryParam("access_token", accessToken)
@@ -312,6 +312,46 @@ class FileResourceTest {
                 .statusCode(403)
                 .body("success", equalTo(false))
                 .body("message", equalTo("download token does not match requested file"));
+    }
+
+    @Test
+    void shouldDeleteFileWithValidDeleteToken() throws Exception {
+        String fileId = uploadSingleFile("delete.txt", "delete me".getBytes(), "text/plain");
+        String accessToken = signDeleteToken(TENANT_ID, fileId, Instant.now().plusSeconds(30));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .post("/api/v1/public/files/{fileId}/delete", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.id", equalTo(fileId))
+                .body("data.status", equalTo("DELETED"));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .post("/api/v1/public/files/{fileId}/delete", fileId)
+                .then()
+                .statusCode(404)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file not found"));
+    }
+
+    @Test
+    void shouldRejectReadTokenForDelete() throws Exception {
+        String fileId = uploadSingleFile("protected-delete.txt", "delete".getBytes(), "text/plain");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .post("/api/v1/public/files/{fileId}/delete", fileId)
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("download token purpose is not valid for delete"));
     }
 
     @Test
@@ -351,10 +391,19 @@ class FileResourceTest {
                 .resolve(fileId);
     }
 
-    private String signDownloadToken(String tenantId, String fileId, Instant expiresAt) throws Exception {
-        String payload = """
+    private String signReadToken(String tenantId, String fileId, Instant expiresAt) throws Exception {
+        return signToken("""
                 {"iss":"biz-app","sub":"%s","tenant_id":"%s","file_id":"%s","exp":%d}
-                """.formatted(USER_ID, tenantId, fileId, expiresAt.getEpochSecond()).trim();
+                """.formatted(USER_ID, tenantId, fileId, expiresAt.getEpochSecond()).trim());
+    }
+
+    private String signDeleteToken(String tenantId, String fileId, Instant expiresAt) throws Exception {
+        return signToken("""
+                {"iss":"biz-app","sub":"%s","purpose":"delete","tenant_id":"%s","file_id":"%s","exp":%d}
+                """.formatted(USER_ID, tenantId, fileId, expiresAt.getEpochSecond()).trim());
+    }
+
+    private String signToken(String payload) throws Exception {
         byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(DOWNLOAD_TOKEN_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));

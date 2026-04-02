@@ -190,12 +190,12 @@
 | 上传 | `POST /api/v1/files` | 不支持 |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
-| 删除 | `DELETE /api/v1/files/{fileId}` | 不支持 |
+| 删除 | `DELETE /api/v1/files/{fileId}` | `POST /api/v1/public/files/{fileId}/delete?access_token=...` |
 
 说明：
 
 - 可信身份头模式依赖统一网关或受控上游注入身份上下文
-- 短时 token 模式当前只覆盖“读取类能力”，不覆盖上传和删除
+- 短时 token 模式当前覆盖查询、下载、删除，不覆盖上传
 
 ### 6.2 接口明细
 
@@ -209,6 +209,7 @@
 | `GET` | `/api/v1/public/files/{fileId}?access_token=...` | 使用短时只读 token 查询单文件元数据 |
 | `GET` | `/api/v1/public/files/{fileId}/download?access_token=...` | 使用短时下载 token 下载文件 |
 | `DELETE` | `/api/v1/files/{fileId}` | 软删文件 |
+| `POST` | `/api/v1/public/files/{fileId}/delete?access_token=...` | 使用短时删除 token 软删文件 |
 | `GET` | `/q/health/live` | 存活检查 |
 | `GET` | `/q/health/ready` | 就绪检查 |
 
@@ -404,19 +405,21 @@ curl "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF?access
 
 ### 9.1 接口定义
 
-一期保留两类文件读取入口：
+一期保留两类文件访问入口：
 
 - 可信身份头读取：
   - `GET /api/v1/files/{fileId}`
   - `GET /api/v1/files/{fileId}/download`
+  - `DELETE /api/v1/files/{fileId}`
 - 短时 token 只读访问：
   - `GET /api/v1/public/files/{fileId}?access_token=...`
   - `GET /api/v1/public/files/{fileId}/download?access_token=...`
+  - `POST /api/v1/public/files/{fileId}/delete?access_token=...`
 
 其中：
 
-- 可信身份头读取适用于统一网关或受控上游已经注入身份头的场景
-- 短时 token 只读访问适用于业务后端先完成业务授权，再签发短时读取 URL 的场景
+- 可信身份头访问适用于统一网关或受控上游已经注入身份头的场景
+- 短时 token 访问适用于业务后端先完成业务授权，再签发短时访问 URL 的场景
 
 ### 9.2 可信身份头下载接口定义
 
@@ -557,6 +560,45 @@ curl -X DELETE "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF" \
 | 内部错误 | `500` |
 
 说明：
+
+### 10.6 短时 token 删除接口
+
+- 方法：`POST`
+- 路径：`/api/v1/public/files/{fileId}/delete`
+- Query 参数：`access_token`
+
+说明：
+
+- 该入口不要求 `X-Tenant-Id`、`X-User-Id`
+- 文件服务依赖 `access_token` 做删除放行
+- 业务后端负责业务授权和删除 token 签发
+- 删除 token 必须单独签发，并带 `purpose=delete`
+
+### 10.7 短时 token 删除请求示例
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF/delete?access_token=eyJ..."
+```
+
+### 10.8 短时 token 删除失败场景
+
+| 场景 | 状态码 |
+|---|---|
+| 缺少 `access_token` | `401` |
+| token 非法或验签失败 | `401` |
+| token 已过期 | `401` |
+| `fileId` 非法 | `400` |
+| token `purpose` 不为 `delete` | `403` |
+| token 与目标文件不匹配 | `403` |
+| token 与文件租户不匹配 | `403` |
+| 文件不存在或已删除 | `404` |
+| 内部错误 | `500` |
+
+说明：
+
+- 当前最小实现默认关闭，需通过配置显式开启
+- 删除 token 第一版不做严格一次性消费
+- 同一个 token 在有效期内再次调用时，若文件已删除，则返回 `404`
 
 - 一期不提供恢复接口。
 - 一期不提供对外 purge 接口。

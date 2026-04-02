@@ -37,3 +37,5 @@ mfs:
     enabled: false
     algorithm: hmac-sha256
     allowed-clock-skew: 5S
+  delete-token:
+    enabled: false

@@ -16,6 +16,7 @@
 - [04 Development Plan](./project/04-development-plan.md)
 - [05 Risks And Next Steps](./project/05-risks-and-next-steps.md)
 - [06 Signed Download Token Design Draft](./project/06-signed-download-token-design.md)
+- [07 Delete Token Design Draft](./project/07-delete-token-design.md)
 
 ## Document Rules
 

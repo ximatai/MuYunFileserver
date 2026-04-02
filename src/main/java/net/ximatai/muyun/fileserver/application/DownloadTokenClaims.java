@@ -7,6 +7,8 @@ public record DownloadTokenClaims(
         String issuer,
         @JsonProperty("sub")
         String subject,
+        @JsonProperty("purpose")
+        String purpose,
         @JsonProperty("tenant_id")
         String tenantId,
         @JsonProperty("file_id")

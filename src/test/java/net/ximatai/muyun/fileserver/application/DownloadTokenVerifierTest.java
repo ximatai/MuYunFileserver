@@ -31,6 +31,7 @@ class DownloadTokenVerifierTest {
 
         assertEquals("biz-app", claims.issuer());
         assertEquals("u123", claims.subject());
+        assertEquals(null, claims.purpose());
         assertEquals("tenant-a", claims.tenantId());
     }
 

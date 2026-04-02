@@ -26,6 +26,8 @@ public interface FileServiceConfig {
 
     DownloadToken downloadToken();
 
+    DeleteToken deleteToken();
+
     interface Storage {
         @WithDefault("local")
         String type();
@@ -95,5 +97,10 @@ public interface FileServiceConfig {
 
         @WithDefault("5S")
         Duration allowedClockSkew();
+    }
+
+    interface DeleteToken {
+        @WithDefault("false")
+        boolean enabled();
     }
 }

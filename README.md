@@ -320,7 +320,7 @@ Content-Disposition, Content-Length, Content-Type
 | 上传 | `POST /api/v1/files` | 暂不支持 |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
-| 删除 | `DELETE /api/v1/files/{fileId}` | 暂不支持 |
+| 删除 | `DELETE /api/v1/files/{fileId}` | `POST /api/v1/public/files/{fileId}/delete?access_token=...` |
 
 可信身份头模式：
 
@@ -329,32 +329,35 @@ Content-Disposition, Content-Length, Content-Type
 
 短时 token 模式：
 
-- 适合业务后端先完成权限校验，再给前端一个短时只读地址的场景
-- 当前只覆盖“单文件元数据查询 + 下载”
-- 业务后端负责校验“这个用户能不能读取这个附件”
-- `MuYunFileServer` 只负责校验 token 是否允许读取这个 `fileId`
+- 适合业务后端先完成权限校验，再给前端一个短时访问地址的场景
+- 当前覆盖“单文件元数据查询 + 下载 + 删除”
+- 业务后端负责校验“这个用户能不能访问这个附件”
+- `MuYunFileServer` 只负责校验 token 是否允许访问这个 `fileId`
 
 推荐做法：
 
-- 若业务网关长期转发下载流量太重，或前端只需要临时读取单文件元数据与下载能力，优先考虑短时 token 模式
+- 若业务网关长期转发下载流量太重，或前端只需要临时访问单文件能力，优先考虑短时 token 模式
 - 若现有系统已经稳定依赖网关注入身份头，继续使用可信身份头模式即可
 
 当前最小实现说明：
 
-- token 下载默认关闭，需要显式开启 `mfs.download-token.enabled=true`
+- 读取 token 默认关闭，需要显式开启 `mfs.download-token.enabled=true`
+- 删除 token 默认关闭，需要显式开启 `mfs.delete-token.enabled=true`
 - 第一版只支持 `HMAC-SHA256`
 - token 至少应携带 `tenant_id`、`file_id`、`exp`
-- 第一版不做严格一次性消费
+- 删除 token 必须单独签发，并携带 `purpose=delete`
+- 删除 token 第一版不做严格一次性消费
 
 一个典型业务流程是：
 
-1. 前端向业务后端请求下载某个附件
+1. 前端向业务后端请求查询、下载或删除某个附件
 2. 业务后端校验该用户是否有权访问该业务对象和附件
 3. 业务后端签发短时 `access_token`
-4. 业务后端返回下载 URL，或直接 `302` 跳转到文件服务
+4. 业务后端返回可访问的短时 URL
 5. 前端最终访问：
    - `GET /api/v1/public/files/{fileId}?access_token=...`
    - 或 `GET /api/v1/public/files/{fileId}/download?access_token=...`
+   - 或 `POST /api/v1/public/files/{fileId}/delete?access_token=...`
 
 ### 一条完整体验路径
 
@@ -394,9 +397,10 @@ curl -OJ http://127.0.0.1:8080/api/v1/files/$FILE_ID/download \
 ```text
 GET /api/v1/public/files/{fileId}?access_token=...
 GET /api/v1/public/files/{fileId}/download?access_token=...
+POST /api/v1/public/files/{fileId}/delete?access_token=...
 ```
 
-这两个入口都不再要求浏览器传 `X-Tenant-Id`、`X-User-Id`。
+这些入口都不再要求浏览器传 `X-Tenant-Id`、`X-User-Id`。
 
 #### 4. 删除文件
 
@@ -404,6 +408,12 @@ GET /api/v1/public/files/{fileId}/download?access_token=...
 curl -X DELETE http://127.0.0.1:8080/api/v1/files/$FILE_ID \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123'
+```
+
+如果你采用删除 token，业务后端应单独签发带 `purpose=delete` 的 token，再由前端显式发起：
+
+```text
+POST /api/v1/public/files/{fileId}/delete?access_token=...
 ```
 
 如果你的环境没有 `jq`，也可以直接用固定 `{fileId}` 替换下面这些独立示例。
