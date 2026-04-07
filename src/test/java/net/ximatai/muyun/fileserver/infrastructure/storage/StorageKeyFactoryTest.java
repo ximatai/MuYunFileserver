@@ -17,6 +17,6 @@ class StorageKeyFactoryTest {
 
         String storageKey = factory.build("tenant-a", "01JABCDEF1234567890ABCDEF");
 
-        assertEquals("tenant/tenant-a/2026/04/01/01JABCDEF1234567890ABCDEF", storageKey);
+        assertEquals("tenant-a/2026/04/01JABCDEF1234567890ABCDEF", storageKey);
     }
 }

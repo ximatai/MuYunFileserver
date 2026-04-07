@@ -263,6 +263,7 @@ Readiness 在两种模式下的行为：
 当前已实现接口：
 
 - `POST /api/v1/files`
+- `POST /api/v1/public/files?access_token=...`
 - `GET /api/v1/files/{fileId}`
 - `GET /api/v1/files/{fileId}/download`
 - `GET /api/v1/public/files/{fileId}?access_token=...`
@@ -318,7 +319,7 @@ Content-Disposition, Content-Length, Content-Type
 
 | 能力 | 可信身份头模式 | 短时 token 模式 |
 |---|---|---|
-| 上传 | `POST /api/v1/files` | 暂不支持 |
+| 上传 | `POST /api/v1/files` | `POST /api/v1/public/files?access_token=...` |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
@@ -330,10 +331,13 @@ Content-Disposition, Content-Length, Content-Type
 
 短时 token 模式：
 
-- 适合业务后端先完成权限校验，再给前端一个短时访问地址的场景
-- 当前覆盖“单文件元数据查询 + 下载 + 删除”
+- 适合业务后端先完成权限校验，再给前端一个短时访问地址或上传授权的场景
+- 当前覆盖“上传 + 单文件元数据查询 + 下载 + 删除”
 - 业务后端负责校验“这个用户能不能访问这个附件”
-- `MuYunFileServer` 只负责校验 token 是否允许访问这个 `fileId`
+- `MuYunFileServer` 只负责校验 token 是否允许上传或访问这个文件
+- token 上传仍先进入 `MuYunFileServer`，不是对象存储直传
+- token 上传当前不支持 `file_ids`
+- 同一文件一旦删除成功，后续查询和下载都会返回 `404`
 
 推荐做法：
 
@@ -342,20 +346,23 @@ Content-Disposition, Content-Length, Content-Type
 
 当前最小实现说明：
 
-- 读取 token 默认关闭，需要显式开启 `mfs.download-token.enabled=true`
-- 删除 token 默认关闭，需要显式开启 `mfs.delete-token.enabled=true`
+- token 模式默认关闭，需要显式开启 `mfs.token.enabled=true`
 - 第一版只支持 `HMAC-SHA256`
-- token 至少应携带 `tenant_id`、`file_id`、`exp`
+- 上传、查询、下载、删除 token 当前共用同一组 `mfs.token.secret`
+- 上传 token 至少应携带 `tenant_id`、`sub`、`purpose=upload`、`exp`
+- 查询 / 下载 token 至少应携带 `tenant_id`、`file_id`、`exp`
+- 上传 token 必须单独签发，并携带 `purpose=upload`
 - 删除 token 必须单独签发，并携带 `purpose=delete`
 - 删除 token 第一版不做严格一次性消费
 
 一个典型业务流程是：
 
-1. 前端向业务后端请求查询、下载或删除某个附件
+1. 前端向业务后端请求上传、查询、下载或删除某个附件
 2. 业务后端校验该用户是否有权访问该业务对象和附件
 3. 业务后端签发短时 `access_token`
-4. 业务后端返回可访问的短时 URL
+4. 业务后端返回可访问的短时 URL 或公开上传授权
 5. 前端最终访问：
+   - `POST /api/v1/public/files?access_token=...`
    - `GET /api/v1/public/files/{fileId}?access_token=...`
    - 或 `GET /api/v1/public/files/{fileId}/download?access_token=...`
    - 或 `DELETE /api/v1/public/files/{fileId}?access_token=...`
@@ -396,6 +403,7 @@ curl -OJ http://127.0.0.1:8080/api/v1/files/$FILE_ID/download \
 如果你采用短时 token 模式，业务后端应先签发一个短时地址，再由前端直接访问，例如：
 
 ```text
+POST /api/v1/public/files?access_token=...
 GET /api/v1/public/files/{fileId}?access_token=...
 GET /api/v1/public/files/{fileId}/download?access_token=...
 DELETE /api/v1/public/files/{fileId}?access_token=...
@@ -428,6 +436,13 @@ DELETE /api/v1/public/files/{fileId}?access_token=...
 - `sha256` 计算
 - MIME 白名单校验
 - 临时文件落盘与失败回滚
+
+公开 token 上传补充说明：
+
+- 入口为 `POST /api/v1/public/files?access_token=...`
+- 支持多文件整单上传和 `remark`
+- 不支持 `file_ids`
+- 上传成功后仍返回普通 `fileId`，后续可继续走可信身份头模式或短时只读 token 模式查询 / 下载
 
 ## 运行与排查
 
@@ -477,7 +492,7 @@ DELETE /api/v1/public/files/{fileId}?access_token=...
 - 上传链路已完成第一轮职责拆分
 - 默认存储为 `local`，`minio` 通过配置切换
 - 上传在两种模式下都先走本地临时目录
-- `storageKey` 规则统一为 `tenant/{tenantId}/yyyy/MM/dd/{ulid}`
+- `storageKey` 规则统一为 `{tenantId}/yyyy/MM/{ulid}`
 
 ### 测试状态
 
@@ -499,11 +514,12 @@ DELETE /api/v1/public/files/{fileId}?access_token=...
 ### 项目文档
 
 - [文档导航](./docs/README.md)
-- [Overview Design](./docs/design/01-overview.md)
-- [API Design](./docs/design/02-api.md)
-- [Technical Solution](./docs/project/03-technical-solution.md)
-- [Development Plan](./docs/project/04-development-plan.md)
-- [Risks And Next Steps](./docs/project/05-risks-and-next-steps.md)
+- [Overview Design](./docs/design/overview.md)
+- [API Design](./docs/design/api.md)
+- [Server Integration Guide](./docs/design/server-integration.md)
+- [Technical Solution](./docs/project/technical-solution.md)
+- [Development Plan](./docs/project/development-plan.md)
+- [Risks And Next Steps](./docs/project/risks-and-next-steps.md)
 
 ### 当前状态
 

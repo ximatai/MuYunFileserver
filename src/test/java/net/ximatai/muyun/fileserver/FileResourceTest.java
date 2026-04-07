@@ -29,7 +29,7 @@ class FileResourceTest {
     private static final String USER_ID = "u123";
     private static final Path STORAGE_ROOT = Path.of(System.getProperty("user.dir"), "build", "test-storage");
     private static final int MAX_FILE_SIZE_BYTES = 1024 * 1024;
-    private static final String DOWNLOAD_TOKEN_SECRET = "test-download-token-secret";
+    private static final String TOKEN_SECRET = "test-token-secret";
 
     @Test
     void shouldUploadQueryDownloadAndDeleteFile() {
@@ -179,7 +179,7 @@ class FileResourceTest {
     }
 
     @Test
-    void shouldReturnInternalServerErrorWhenStoredFileIsMissing() throws Exception {
+    void shouldReturnNotFoundWhenStoredFileIsMissingForTrustedDownload() throws Exception {
         String fileId = uploadSingleFile("missing.txt", "still tracked".getBytes(), "text/plain");
         Files.delete(storagePath(fileId));
 
@@ -187,9 +187,25 @@ class FileResourceTest {
                 .when()
                 .get("/api/v1/files/{fileId}/download", fileId)
                 .then()
-                .statusCode(500)
+                .statusCode(404)
                 .body("success", equalTo(false))
-                .body("message", equalTo("stored file content is missing"));
+                .body("message", equalTo("file not found"));
+    }
+
+    @Test
+    void shouldReturnNotFoundWhenStoredFileIsMissingForTokenDownload() throws Exception {
+        String fileId = uploadSingleFile("missing-public.txt", "still tracked".getBytes(), "text/plain");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+        Files.delete(storagePath(fileId));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(404)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file not found"));
     }
 
     @Test
@@ -243,6 +259,245 @@ class FileResourceTest {
                 .body("data.items[0].id", equalTo(explicitFileId))
                 .body("data.items[1].id", Matchers.not(equalTo(explicitFileId)))
                 .body("data.items[1].id", notNullValue());
+    }
+
+    @Test
+    void shouldUploadFileWithValidUploadToken() throws Exception {
+        String accessToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().plusSeconds(60));
+
+        String fileId = given()
+                .queryParam("access_token", accessToken)
+                .multiPart("files", "public-upload.txt", "token upload".getBytes(), "text/plain")
+                .multiPart("remark", "public upload")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(201)
+                .body("success", equalTo(true))
+                .body("data.items.size()", equalTo(1))
+                .body("data.items[0].id", notNullValue())
+                .extract()
+                .path("data.items[0].id");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}", fileId)
+                .then()
+                .statusCode(200)
+                .body("data.id", equalTo(fileId))
+                .body("data.remark", equalTo("public upload"))
+                .body("data.uploadedBy", equalTo(USER_ID));
+    }
+
+    @Test
+    void shouldUploadMultipleFilesWithUploadToken() throws Exception {
+        String accessToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .multiPart("files", "first.txt", "first".getBytes(), "text/plain")
+                .multiPart("files", "second.txt", "second".getBytes(), "text/plain")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(201)
+                .body("success", equalTo(true))
+                .body("data.items.size()", equalTo(2));
+    }
+
+    @Test
+    void shouldRejectMissingUploadAccessToken() {
+        given()
+                .multiPart("files", "public-upload.txt", "token upload".getBytes(), "text/plain")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(401)
+                .body("success", equalTo(false))
+                .body("message", equalTo("missing access_token"));
+    }
+
+    @Test
+    void shouldRejectExpiredUploadToken() throws Exception {
+        String accessToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().minusSeconds(5));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .multiPart("files", "expired-upload.txt", "token upload".getBytes(), "text/plain")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(401)
+                .body("success", equalTo(false))
+                .body("message", equalTo("upload token expired"));
+    }
+
+    @Test
+    void shouldRejectInvalidUploadToken() {
+        given()
+                .queryParam("access_token", "invalid-token")
+                .multiPart("files", "public-upload.txt", "token upload".getBytes(), "text/plain")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(401)
+                .body("success", equalTo(false))
+                .body("message", equalTo("invalid upload token"));
+    }
+
+    @Test
+    void shouldRejectUploadTokenWithInvalidPurpose() throws Exception {
+        String accessToken = signUploadToken("""
+                {"iss":"biz-app","sub":"%s","purpose":"delete","tenant_id":"%s","exp":%d}
+                """.formatted(USER_ID, TENANT_ID, Instant.now().plusSeconds(60).getEpochSecond()).trim());
+
+        given()
+                .queryParam("access_token", accessToken)
+                .multiPart("files", "public-upload.txt", "token upload".getBytes(), "text/plain")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("upload token purpose is not valid for upload"));
+    }
+
+    @Test
+    void shouldRejectFileIdsForTokenUpload() throws Exception {
+        String accessToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .multiPart("files", "public-upload.txt", "token upload".getBytes(), "text/plain")
+                .multiPart("file_ids", ULID_GENERATOR.nextULID())
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(400)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file_ids is not supported for token upload"));
+    }
+
+    @Test
+    void shouldRejectMultipartWithoutFilesForTokenUpload() throws Exception {
+        String accessToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .multiPart("remark", "public upload")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(400)
+                .body("success", equalTo(false))
+                .body("message", equalTo("files is required"));
+    }
+
+    @Test
+    void shouldRejectTooManyFilesForTokenUpload() throws Exception {
+        String accessToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .multiPart("files", "1.txt", "1".getBytes(), "text/plain")
+                .multiPart("files", "2.txt", "2".getBytes(), "text/plain")
+                .multiPart("files", "3.txt", "3".getBytes(), "text/plain")
+                .multiPart("files", "4.txt", "4".getBytes(), "text/plain")
+                .multiPart("files", "5.txt", "5".getBytes(), "text/plain")
+                .multiPart("files", "6.txt", "6".getBytes(), "text/plain")
+                .multiPart("files", "7.txt", "7".getBytes(), "text/plain")
+                .multiPart("files", "8.txt", "8".getBytes(), "text/plain")
+                .multiPart("files", "9.txt", "9".getBytes(), "text/plain")
+                .multiPart("files", "10.txt", "10".getBytes(), "text/plain")
+                .multiPart("files", "11.txt", "11".getBytes(), "text/plain")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(400)
+                .body("success", equalTo(false))
+                .body("message", equalTo("too many files in one request"));
+    }
+
+    @Test
+    void shouldRejectOversizedFileForTokenUpload() throws Exception {
+        String accessToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().plusSeconds(60));
+        byte[] oversized = new byte[MAX_FILE_SIZE_BYTES + 1];
+        Arrays.fill(oversized, (byte) 'a');
+
+        given()
+                .queryParam("access_token", accessToken)
+                .multiPart("files", "oversized.txt", oversized, "text/plain")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(413)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file exceeds max size limit"));
+    }
+
+    @Test
+    void shouldRejectUnsupportedMimeTypeForTokenUpload() throws Exception {
+        String accessToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .multiPart("files", "bad.sh", "echo hacked".getBytes(), "application/x-sh")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(415)
+                .body("success", equalTo(false))
+                .body("message", equalTo("unsupported media type"));
+    }
+
+    @Test
+    void shouldRejectReadTokenForUpload() throws Exception {
+        String readToken = signToken("""
+                {"iss":"biz-app","sub":"%s","tenant_id":"%s","file_id":"%s","exp":%d}
+                """.formatted(USER_ID, TENANT_ID, ULID_GENERATOR.nextULID(), Instant.now().plusSeconds(60).getEpochSecond()).trim(), TOKEN_SECRET);
+
+        given()
+                .queryParam("access_token", readToken)
+                .multiPart("files", "public-upload.txt", "token upload".getBytes(), "text/plain")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("upload token purpose is not valid for upload"));
+    }
+
+    @Test
+    void shouldQueryAndDownloadFileUploadedByToken() throws Exception {
+        String uploadToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().plusSeconds(60));
+
+        String fileId = given()
+                .queryParam("access_token", uploadToken)
+                .multiPart("files", "public-roundtrip.txt", "roundtrip".getBytes(), "text/plain")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(201)
+                .extract()
+                .path("data.items[0].id");
+
+        String readToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", readToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(200)
+                .body("data.id", equalTo(fileId));
+
+        given()
+                .queryParam("access_token", readToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(200)
+                .body(equalTo("roundtrip"));
     }
 
     @Test
@@ -315,6 +570,59 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldRejectInvalidFileIdForPublicMetadataQuery() throws Exception {
+        String accessToken = signReadToken(TENANT_ID, ULID_GENERATOR.nextULID(), Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/not-a-ulid")
+                .then()
+                .statusCode(400)
+                .body("success", equalTo(false))
+                .body("message", equalTo("invalid fileId"));
+    }
+
+    @Test
+    void shouldRejectReadTokenForTenantMismatch() throws Exception {
+        String fileId = uploadSingleFile("tenant-mismatch-read.txt", "read".getBytes(), "text/plain");
+        String accessToken = signReadToken("tenant-b", fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("download token is not valid for current tenant"));
+    }
+
+    @Test
+    void shouldReturnNotFoundForPublicMetadataQueryAfterDelete() throws Exception {
+        String fileId = uploadSingleFile("deleted-query.txt", "deleted query".getBytes(), "text/plain");
+        String readToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+        String deleteToken = signDeleteToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", deleteToken)
+                .when()
+                .delete("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true));
+
+        given()
+                .queryParam("access_token", readToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(404)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file not found"));
+    }
+
+    @Test
     void shouldDeleteFileWithValidDeleteToken() throws Exception {
         String fileId = uploadSingleFile("delete.txt", "delete me".getBytes(), "text/plain");
         String accessToken = signDeleteToken(TENANT_ID, fileId, Instant.now().plusSeconds(30));
@@ -333,6 +641,83 @@ class FileResourceTest {
                 .queryParam("access_token", accessToken)
                 .when()
                 .delete("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(404)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file not found"));
+    }
+
+    @Test
+    void shouldRejectExpiredDeleteToken() throws Exception {
+        String fileId = uploadSingleFile("expired-delete.txt", "expired delete".getBytes(), "text/plain");
+        String accessToken = signDeleteToken(TENANT_ID, fileId, Instant.now().minusSeconds(5));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .delete("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(401)
+                .body("success", equalTo(false))
+                .body("message", equalTo("download token expired"));
+    }
+
+    @Test
+    void shouldRejectDeleteTokenForTenantMismatch() throws Exception {
+        String fileId = uploadSingleFile("tenant-mismatch-delete.txt", "delete".getBytes(), "text/plain");
+        String accessToken = signDeleteToken("tenant-b", fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .delete("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("download token is not valid for current tenant"));
+    }
+
+    @Test
+    void shouldRejectInvalidFileIdForPublicDelete() throws Exception {
+        String accessToken = signDeleteToken(TENANT_ID, ULID_GENERATOR.nextULID(), Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .delete("/api/v1/public/files/not-a-ulid")
+                .then()
+                .statusCode(400)
+                .body("success", equalTo(false))
+                .body("message", equalTo("invalid fileId"));
+    }
+
+    @Test
+    void shouldReturnNotFoundForQueryAndDownloadAfterDeleteByToken() throws Exception {
+        String fileId = uploadSingleFile("delete-linked.txt", "delete linked".getBytes(), "text/plain");
+        String readToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+        String deleteToken = signDeleteToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", deleteToken)
+                .when()
+                .delete("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true));
+
+        given()
+                .queryParam("access_token", readToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(404)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file not found"));
+
+        given()
+                .queryParam("access_token", readToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/download", fileId)
                 .then()
                 .statusCode(404)
                 .body("success", equalTo(false))
@@ -383,30 +768,38 @@ class FileResourceTest {
 
     private Path storagePath(String fileId) {
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        return STORAGE_ROOT.resolve("tenant")
-                .resolve(TENANT_ID)
+        return STORAGE_ROOT.resolve(TENANT_ID)
                 .resolve("%04d".formatted(today.getYear()))
                 .resolve("%02d".formatted(today.getMonthValue()))
-                .resolve("%02d".formatted(today.getDayOfMonth()))
                 .resolve(fileId);
     }
 
     private String signReadToken(String tenantId, String fileId, Instant expiresAt) throws Exception {
         return signToken("""
                 {"iss":"biz-app","sub":"%s","tenant_id":"%s","file_id":"%s","exp":%d}
-                """.formatted(USER_ID, tenantId, fileId, expiresAt.getEpochSecond()).trim());
+                """.formatted(USER_ID, tenantId, fileId, expiresAt.getEpochSecond()).trim(), TOKEN_SECRET);
     }
 
     private String signDeleteToken(String tenantId, String fileId, Instant expiresAt) throws Exception {
         return signToken("""
                 {"iss":"biz-app","sub":"%s","purpose":"delete","tenant_id":"%s","file_id":"%s","exp":%d}
-                """.formatted(USER_ID, tenantId, fileId, expiresAt.getEpochSecond()).trim());
+                """.formatted(USER_ID, tenantId, fileId, expiresAt.getEpochSecond()).trim(), TOKEN_SECRET);
     }
 
-    private String signToken(String payload) throws Exception {
+    private String signUploadToken(String tenantId, String userId, Instant expiresAt) throws Exception {
+        return signUploadToken("""
+                {"iss":"biz-app","sub":"%s","purpose":"upload","tenant_id":"%s","exp":%d}
+                """.formatted(userId, tenantId, expiresAt.getEpochSecond()).trim());
+    }
+
+    private String signUploadToken(String payload) throws Exception {
+        return signToken(payload, TOKEN_SECRET);
+    }
+
+    private String signToken(String payload, String secret) throws Exception {
         byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
         Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(DOWNLOAD_TOKEN_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         byte[] signature = mac.doFinal(payloadBytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(payloadBytes)
                 + "."

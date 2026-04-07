@@ -5,7 +5,6 @@ import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.api.dto.FileMetadataResponse;
 import net.ximatai.muyun.fileserver.common.exception.ForbiddenException;
 import net.ximatai.muyun.fileserver.common.exception.NotFoundException;
-import net.ximatai.muyun.fileserver.common.exception.StorageException;
 import net.ximatai.muyun.fileserver.common.exception.ValidationException;
 import net.ximatai.muyun.fileserver.common.log.OperationLog;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
@@ -62,7 +61,7 @@ public class TokenFileQueryService {
     public DownloadFile openDownload(String fileId, String accessToken) {
         FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
         if (!storageProvider.exists(metadata.storageKey())) {
-            throw new StorageException("stored file content is missing");
+            throw new NotFoundException("file not found");
         }
 
         LOG.info(OperationLog.format(

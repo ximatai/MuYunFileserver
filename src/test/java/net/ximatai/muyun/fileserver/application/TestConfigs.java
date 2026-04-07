@@ -73,12 +73,22 @@ public final class TestConfigs {
             default -> throw new UnsupportedOperationException(methodName);
         });
 
+        FileServiceConfig.Token token = proxy(FileServiceConfig.Token.class, methodName -> switch (methodName) {
+            case "enabled" -> false;
+            case "algorithm" -> "hmac-sha256";
+            case "issuer" -> java.util.Optional.empty();
+            case "secret" -> java.util.Optional.empty();
+            case "allowedClockSkew" -> Duration.ofSeconds(5);
+            default -> throw new UnsupportedOperationException(methodName);
+        });
+
         return proxy(FileServiceConfig.class, methodName -> switch (methodName) {
             case "storage" -> storage;
             case "upload" -> upload;
             case "database" -> database;
             case "cleanup" -> cleanup;
             case "security" -> security;
+            case "token" -> token;
             default -> throw new UnsupportedOperationException(methodName);
         });
     }

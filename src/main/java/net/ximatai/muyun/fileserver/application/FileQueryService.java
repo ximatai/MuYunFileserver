@@ -7,7 +7,6 @@ import net.ximatai.muyun.fileserver.common.context.RequestContext;
 import net.ximatai.muyun.fileserver.common.context.RequestContextHolder;
 import net.ximatai.muyun.fileserver.common.exception.ForbiddenException;
 import net.ximatai.muyun.fileserver.common.exception.NotFoundException;
-import net.ximatai.muyun.fileserver.common.exception.StorageException;
 import net.ximatai.muyun.fileserver.common.exception.ValidationException;
 import net.ximatai.muyun.fileserver.common.log.OperationLog;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
@@ -66,7 +65,7 @@ public class FileQueryService {
     public DownloadFile openDownload(String fileId) {
         FileMetadata metadata = requireAccessibleFile(fileId);
         if (!storageProvider.exists(metadata.storageKey())) {
-            throw new StorageException("stored file content is missing");
+            throw new NotFoundException("file not found");
         }
 
         RequestContext requestContext = requestContextHolder.getRequired();

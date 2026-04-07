@@ -57,7 +57,7 @@ class UploadFilePreparerTest {
         assertEquals("txt", preparedUpload.extension());
         assertEquals("text/plain", preparedUpload.mimeType());
         assertEquals(5L, preparedUpload.sizeBytes());
-        assertTrue(preparedUpload.storageKey().startsWith("tenant/tenant-a/"));
+        assertTrue(preparedUpload.storageKey().startsWith("tenant-a/"));
         assertTrue(preparedUpload.storageKey().endsWith("/01JABCDEF1234567890ABCDEF"));
         assertNotNull(preparedUpload.sha256());
         assertTrue(Files.exists(preparedUpload.tempFile()));

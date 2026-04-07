@@ -122,4 +122,4 @@
 - 数据库迁移预案
 - 存储迁移预案
 
-更细的执行项请以 [Development Plan](./04-development-plan.md) 中的 `Next Optimization Backlog` 为准。
+更细的执行项请以 [Development Plan](./development-plan.md) 中的 `Next Optimization Backlog` 为准。

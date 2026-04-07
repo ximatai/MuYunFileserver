@@ -4,9 +4,9 @@
 
 相关文档：
 
-- [Overview Design](../design/01-overview.md)
-- [API Design](../design/02-api.md)
-- [Development Plan](./04-development-plan.md)
+- [Overview Design](../design/overview.md)
+- [API Design](../design/api.md)
+- [Development Plan](./development-plan.md)
 
 ---
 
@@ -183,7 +183,7 @@
 `storageKey` 规则：
 
 ```text
-tenant/{tenantId}/yyyy/MM/dd/{ulid}
+{tenantId}/yyyy/MM/{ulid}
 ```
 
 ### 5.3 MinIO 实现

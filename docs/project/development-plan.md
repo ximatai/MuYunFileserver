@@ -4,8 +4,8 @@
 
 相关文档：
 
-- [Overview Design](../design/01-overview.md)
-- [API Design](../design/02-api.md)
+- [Overview Design](../design/overview.md)
+- [API Design](../design/api.md)
 
 ---
 
@@ -55,7 +55,7 @@
 - [x] 5. 存储抽象与本地文件系统实现
   - [x] 5.1 定义 `StorageProvider` 抽象
   - [x] 5.2 实现本地文件系统存储：临时写入、正式落盘、流式读取、删除
-  - [x] 5.3 实现 `storageKey` 规则：`tenant/{tenantId}/yyyy/MM/dd/{ulid}`
+  - [x] 5.3 实现 `storageKey` 规则：`{tenantId}/yyyy/MM/{ulid}`
   - [x] 5.4 实现启动时残留临时文件清理
 
 - [x] 6. 上传链路

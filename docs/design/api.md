@@ -187,15 +187,15 @@
 
 | 能力 | 可信身份头模式 | 短时 token 模式 |
 |---|---|---|
-| 上传 | `POST /api/v1/files` | 不支持 |
+| 上传 | `POST /api/v1/files` | `POST /api/v1/public/files?access_token=...` |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
-| 删除 | `DELETE /api/v1/files/{fileId}` | `POST /api/v1/public/files/{fileId}/delete?access_token=...` |
+| 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
 
 说明：
 
 - 可信身份头模式依赖统一网关或受控上游注入身份上下文
-- 短时 token 模式当前覆盖查询、下载、删除，不覆盖上传
+- 短时 token 模式当前覆盖上传、查询、下载、删除
 
 ### 6.2 接口明细
 
@@ -204,6 +204,7 @@
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | `POST` | `/api/v1/files` | 上传一个或多个文件 |
+| `POST` | `/api/v1/public/files?access_token=...` | 使用短时上传 token 上传一个或多个文件 |
 | `GET` | `/api/v1/files/{fileId}` | 查询单文件元数据 |
 | `GET` | `/api/v1/files/{fileId}/download` | 下载文件 |
 | `GET` | `/api/v1/public/files/{fileId}?access_token=...` | 使用短时只读 token 查询单文件元数据 |
@@ -302,6 +303,56 @@ curl -X POST "http://localhost:8080/api/v1/files" \
 - 一期多文件上传采用整单成功 / 整单失败语义。
 - 任一文件校验失败、写入失败或回滚失败，整次上传均视为失败。
 - 若请求整体就不成立，例如缺少 `files` 字段、multipart 结构错误或 `file_ids` 数量非法，应直接返回 `400`。
+
+### 7.6 短时 token 上传接口
+
+- 方法：`POST`
+- 路径：`/api/v1/public/files`
+- Query 参数：`access_token`
+- Content-Type：`multipart/form-data`
+
+表单字段：
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `files` | 是 | 文件内容，可重复出现，支持多文件 |
+| `remark` | 否 | 统一备注 |
+
+说明：
+
+- 该入口不要求 `X-Tenant-Id`、`X-User-Id`
+- 业务后端负责业务授权和上传 token 签发
+- 文件服务只校验 token 是否允许在目标租户下执行本次上传
+- 上传 token 至少应包含 `tenant_id`、`sub`、`purpose=upload`、`exp`
+- 上传 token 必须单独签发，并带 `purpose=upload`
+- token 上传仍经过文件服务，不是对象存储直传
+- token 上传不支持 `file_ids`，文件 ID 统一由服务端生成
+- 上传成功后的元数据查询、下载、删除语义与普通上传一致
+
+### 7.7 短时 token 上传请求示例
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/public/files?access_token=eyJ..." \
+  -F "files=@contract.pdf" \
+  -F "files=@image.png" \
+  -F "remark=crm upload"
+```
+
+### 7.8 短时 token 上传失败场景
+
+| 场景 | 状态码 |
+|---|---|
+| 缺少 `access_token` | `401` |
+| token 非法或验签失败 | `401` |
+| token 已过期 | `401` |
+| token 不允许上传 | `403` |
+| multipart 非法 | `400` |
+| 传入 `file_ids` | `400` |
+| 文件数量超限 | `400` |
+| 单文件过大 | `413` |
+| 文件类型不允许 | `415` |
+| 磁盘空间不足 | `507` 或 `503` |
+| 内部写入失败 | `500` |
 
 ---
 
@@ -405,13 +456,13 @@ curl "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF?access
 
 ### 9.1 接口定义
 
-一期保留两类文件访问入口：
+一期保留两类文件访问模式：
 
 - 可信身份头读取：
   - `GET /api/v1/files/{fileId}`
   - `GET /api/v1/files/{fileId}/download`
   - `DELETE /api/v1/files/{fileId}`
-- 短时 token 只读访问：
+- 短时 token 访问：
   - `GET /api/v1/public/files/{fileId}?access_token=...`
   - `GET /api/v1/public/files/{fileId}/download?access_token=...`
   - `DELETE /api/v1/public/files/{fileId}?access_token=...`
@@ -561,6 +612,7 @@ curl -X DELETE "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF" \
 
 说明：
 
+- 成功删除后，同一文件的查询和下载接口都应返回 `404`。
 ### 10.6 短时 token 删除接口
 
 - 方法：`DELETE`
@@ -639,10 +691,12 @@ curl -X DELETE "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABC
 
 ## 12. 关键接口规则汇总
 
-- 所有业务请求必须带可信的 `X-Tenant-Id` 和 `X-User-Id`
+- 可信身份头模式下，业务请求必须带可信的 `X-Tenant-Id` 和 `X-User-Id`
+- 短时 token 模式下，公开上传、查询、下载、删除接口通过 `access_token` 完成授权，不要求身份头
 - 一期只支持单文件查询，不支持列表和搜索
 - 一期支持多文件上传，但单次请求最多 10 个文件
 - 一期允许请求端可选指定 `ULID` 格式的 `file_id`
+- 短时 token 上传接口不支持请求端显式指定 `file_id`
 - 已存在的 `file_id` 返回 `409 Conflict`
 - 下载统一返回附件流，不支持 `Range` 和 `inline`
 - 删除统一为软删，默认保留 7 天后内部物理清理

@@ -14,41 +14,40 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @QuarkusTest
-class DownloadTokenVerifierTest {
+class UploadTokenVerifierTest {
 
     private static final String SECRET = "test-token-secret";
 
     @Inject
-    DownloadTokenVerifier verifier;
+    UploadTokenVerifier verifier;
 
     @Test
     void shouldVerifyValidToken() throws Exception {
         String token = sign("""
-                {"iss":"biz-app","sub":"u123","tenant_id":"tenant-a","file_id":"01ARZ3NDEKTSV4RRFFQ69G5FAV","exp":%d}
+                {"iss":"biz-app","sub":"u123","purpose":"upload","tenant_id":"tenant-a","exp":%d}
                 """.formatted(Instant.now().plusSeconds(60).getEpochSecond()));
 
-        DownloadTokenClaims claims = verifier.verify(token);
+        UploadTokenClaims claims = verifier.verify(token);
 
         assertEquals("biz-app", claims.issuer());
         assertEquals("u123", claims.subject());
-        assertEquals(null, claims.purpose());
         assertEquals("tenant-a", claims.tenantId());
     }
 
     @Test
     void shouldRejectExpiredToken() throws Exception {
         String token = sign("""
-                {"tenant_id":"tenant-a","file_id":"01ARZ3NDEKTSV4RRFFQ69G5FAV","exp":%d}
+                {"sub":"u123","purpose":"upload","tenant_id":"tenant-a","exp":%d}
                 """.formatted(Instant.now().minusSeconds(5).getEpochSecond()));
 
         assertThrows(RuntimeException.class, () -> verifier.verify(token));
     }
 
     @Test
-    void shouldRejectInvalidSignature() throws Exception {
+    void shouldRejectMissingSubject() throws Exception {
         String token = sign("""
-                {"tenant_id":"tenant-a","file_id":"01ARZ3NDEKTSV4RRFFQ69G5FAV","exp":%d}
-                """.formatted(Instant.now().plusSeconds(60).getEpochSecond())) + "tampered";
+                {"tenant_id":"tenant-a","exp":%d}
+                """.formatted(Instant.now().plusSeconds(60).getEpochSecond()));
 
         assertThrows(RuntimeException.class, () -> verifier.verify(token));
     }

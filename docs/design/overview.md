@@ -181,7 +181,7 @@
 建议结构示例：
 
 ```text
-tenant/{tenantId}/yyyy/MM/dd/{ulid}
+{tenantId}/yyyy/MM/{ulid}
 ```
 
 ---

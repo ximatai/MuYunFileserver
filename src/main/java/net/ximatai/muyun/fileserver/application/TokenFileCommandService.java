@@ -35,7 +35,7 @@ public class TokenFileCommandService {
     FileServiceConfig config;
 
     public DeleteFileResult delete(String fileId, String accessToken) {
-        if (!config.deleteToken().enabled()) {
+        if (!config.token().enabled()) {
             throw new NotFoundException("resource not found");
         }
         if (!ulidGenerator.isValid(fileId)) {

@@ -17,7 +17,7 @@ import java.time.Instant;
 import java.util.Base64;
 
 @ApplicationScoped
-public class DownloadTokenVerifier {
+public class UploadTokenVerifier {
 
     private static final String HMAC_SHA256 = "hmac-sha256";
     private static final String HMAC_SHA256_JCA = "HmacSHA256";
@@ -47,9 +47,9 @@ public class DownloadTokenVerifier {
         return config.token().enabled();
     }
 
-    public DownloadTokenClaims verify(String accessToken) {
+    public UploadTokenClaims verify(String accessToken) {
         if (!isEnabled()) {
-            throw new UnauthorizedException("download token is disabled");
+            throw new UnauthorizedException("upload token is disabled");
         }
         if (accessToken == null || accessToken.isBlank()) {
             throw new UnauthorizedException("missing access_token");
@@ -57,47 +57,47 @@ public class DownloadTokenVerifier {
 
         String[] segments = accessToken.split("\\.");
         if (segments.length != 2) {
-            throw new UnauthorizedException("invalid download token");
+            throw new UnauthorizedException("invalid upload token");
         }
 
         byte[] payloadBytes = decode(segments[0]);
         byte[] signatureBytes = decode(segments[1]);
         byte[] expectedSignature = sign(payloadBytes);
         if (!java.security.MessageDigest.isEqual(signatureBytes, expectedSignature)) {
-            throw new UnauthorizedException("invalid download token");
+            throw new UnauthorizedException("invalid upload token");
         }
 
-        DownloadTokenClaims claims = parseClaims(payloadBytes);
+        UploadTokenClaims claims = parseClaims(payloadBytes);
         validateClaims(claims);
         return claims;
     }
 
-    private DownloadTokenClaims parseClaims(byte[] payloadBytes) {
+    private UploadTokenClaims parseClaims(byte[] payloadBytes) {
         try {
-            DownloadTokenClaims claims = objectMapper.readValue(payloadBytes, DownloadTokenClaims.class);
-            if (claims.tenantId() == null || claims.tenantId().isBlank()
-                    || claims.fileId() == null || claims.fileId().isBlank()
+            UploadTokenClaims claims = objectMapper.readValue(payloadBytes, UploadTokenClaims.class);
+            if (claims.subject() == null || claims.subject().isBlank()
+                    || claims.tenantId() == null || claims.tenantId().isBlank()
                     || claims.expiresAtEpochSecond() <= 0) {
-                throw new UnauthorizedException("invalid download token");
+                throw new UnauthorizedException("invalid upload token");
             }
             return claims;
         } catch (IOException exception) {
-            throw new UnauthorizedException("invalid download token");
+            throw new UnauthorizedException("invalid upload token");
         }
     }
 
-    private void validateClaims(DownloadTokenClaims claims) {
+    private void validateClaims(UploadTokenClaims claims) {
         Instant expiresAt = Instant.ofEpochSecond(claims.expiresAtEpochSecond());
         Instant now = clock.instant().minus(config.token().allowedClockSkew());
         if (expiresAt.isBefore(now)) {
-            throw new UnauthorizedException("download token expired");
+            throw new UnauthorizedException("upload token expired");
         }
 
         config.token().issuer()
                 .filter(expectedIssuer -> !expectedIssuer.isBlank())
                 .ifPresent(expectedIssuer -> {
                     if (!expectedIssuer.equals(claims.issuer())) {
-                        throw new UnauthorizedException("invalid download token");
+                        throw new UnauthorizedException("invalid upload token");
                     }
                 });
     }
@@ -106,7 +106,7 @@ public class DownloadTokenVerifier {
         try {
             return Base64.getUrlDecoder().decode(encoded);
         } catch (IllegalArgumentException exception) {
-            throw new UnauthorizedException("invalid download token");
+            throw new UnauthorizedException("invalid upload token");
         }
     }
 
@@ -116,7 +116,7 @@ public class DownloadTokenVerifier {
             mac.init(new SecretKeySpec(config.token().secret().orElseThrow().getBytes(StandardCharsets.UTF_8), HMAC_SHA256_JCA));
             return mac.doFinal(payloadBytes);
         } catch (GeneralSecurityException exception) {
-            throw new IllegalStateException("failed to initialize download token verifier", exception);
+            throw new IllegalStateException("failed to initialize upload token verifier", exception);
         }
     }
 }

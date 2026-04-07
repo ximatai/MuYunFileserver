@@ -33,9 +33,7 @@ mfs:
       - image/png
       - image/jpeg
       - text/plain
-  download-token:
+  token:
     enabled: false
     algorithm: hmac-sha256
     allowed-clock-skew: 5S
-  delete-token:
-    enabled: false

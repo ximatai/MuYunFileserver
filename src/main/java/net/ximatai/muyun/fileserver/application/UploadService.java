@@ -38,7 +38,11 @@ public class UploadService {
 
     public UploadFilesResponse upload(MultipartFormDataInput input) {
         RequestContext requestContext = requestContextHolder.getRequired();
-        UploadRequest uploadRequest = uploadRequestParser.parse(input);
+        return upload(input, requestContext, true);
+    }
+
+    public UploadFilesResponse upload(MultipartFormDataInput input, RequestContext requestContext, boolean allowRequestedFileIds) {
+        UploadRequest uploadRequest = uploadRequestParser.parse(input, allowRequestedFileIds);
 
         List<PreparedUpload> preparedUploads = new ArrayList<>();
         List<FileMetadata> insertedMetadata = new ArrayList<>();

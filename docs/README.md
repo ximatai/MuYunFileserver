@@ -7,20 +7,21 @@
 
 ## Design
 
-- [01 Overview Design](./design/01-overview.md)
-- [02 API Design](./design/02-api.md)
+- [Overview Design](./design/overview.md)
+- [API Design](./design/api.md)
+- [Server Integration Guide](./design/server-integration.md)
 
 ## Project
 
-- [03 Technical Solution](./project/03-technical-solution.md)
-- [04 Development Plan](./project/04-development-plan.md)
-- [05 Risks And Next Steps](./project/05-risks-and-next-steps.md)
-- [06 Signed Download Token Design Draft](./project/06-signed-download-token-design.md)
-- [07 Delete Token Design Draft](./project/07-delete-token-design.md)
+- [Technical Solution](./project/technical-solution.md)
+- [Development Plan](./project/development-plan.md)
+- [Risks And Next Steps](./project/risks-and-next-steps.md)
+- [Signed Download Token Design Draft](./project/signed-download-token-design.md)
+- [Delete Token Design Draft](./project/delete-token-design.md)
 
 ## Document Rules
 
 - 根目录只保留面向仓库入口的 `README.md` 和通用文件
 - 正式设计契约优先放在 `docs/design/`
 - 项目推进、风险、任务拆解优先放在 `docs/project/`
-- 后续新增文档优先遵循 `NN-name.md` 的稳定命名方式，避免随意命名和重复职责
+- 后续新增文档优先使用语义化文件名，避免编号驱动命名和重复职责

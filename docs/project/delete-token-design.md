@@ -208,7 +208,7 @@ DELETE /api/v1/public/files/{fileId}?access_token=...
 
 ```yaml
 mfs:
-  delete-token:
+  token:
     enabled: false
     ttl: 30S
 ```
@@ -219,8 +219,8 @@ mfs:
 
 | 配置项 | 必填 | 说明 |
 |---|---|---|
-| `mfs.delete-token.enabled` | 是 | 是否启用删除 token 入口 |
-| `mfs.delete-token.ttl` | 否 | 建议默认有效期 |
+| `mfs.token.enabled` | 是 | 是否启用 token 模式与删除 token 入口 |
+| `mfs.token.ttl` | 否 | 建议默认有效期 |
 
 说明：
 

@@ -16,25 +16,34 @@ import java.util.Map;
 @ApplicationScoped
 class UploadRequestParser {
 
+    static final String FILE_IDS_NOT_SUPPORTED_FOR_TOKEN_UPLOAD = "file_ids is not supported for token upload";
+
     @Inject
     FileServiceConfig config;
 
     UploadRequest parse(MultipartFormDataInput input) {
+        return parse(input, true);
+    }
+
+    UploadRequest parse(MultipartFormDataInput input, boolean allowRequestedFileIds) {
         Map<String, Collection<FormValue>> values = input.getValues();
         List<FormValue> fileValues = formValues(values, "files");
         List<String> requestedFileIds = textValues(values, "file_ids");
         String remark = singleOptionalText(values, "remark");
 
-        validateRequest(fileValues, requestedFileIds);
+        validateRequest(fileValues, requestedFileIds, allowRequestedFileIds);
         return new UploadRequest(fileValues, requestedFileIds, remark);
     }
 
-    private void validateRequest(List<FormValue> fileValues, List<String> requestedFileIds) {
+    private void validateRequest(List<FormValue> fileValues, List<String> requestedFileIds, boolean allowRequestedFileIds) {
         if (fileValues.isEmpty()) {
             throw new ValidationException("files is required");
         }
         if (fileValues.size() > config.upload().maxFileCount()) {
             throw new ValidationException("too many files in one request");
+        }
+        if (!allowRequestedFileIds && !requestedFileIds.isEmpty()) {
+            throw new ValidationException(FILE_IDS_NOT_SUPPORTED_FOR_TOKEN_UPLOAD);
         }
         if (requestedFileIds.size() > fileValues.size()) {
             throw new ValidationException("file_ids count cannot exceed files count");

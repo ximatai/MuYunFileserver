@@ -27,6 +27,8 @@ public class RequestContextFilter implements ContainerRequestFilter {
         String path = requestContext.getUriInfo().getPath();
         if (path.startsWith("q/")
                 || path.startsWith("/q/")
+                || path.equals("api/v1/public/files")
+                || path.equals("/api/v1/public/files")
                 || path.startsWith("api/v1/public/files/")
                 || path.startsWith("/api/v1/public/files/")) {
             return;

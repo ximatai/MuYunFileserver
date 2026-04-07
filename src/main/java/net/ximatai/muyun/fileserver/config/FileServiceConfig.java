@@ -24,9 +24,7 @@ public interface FileServiceConfig {
 
     Security security();
 
-    DownloadToken downloadToken();
-
-    DeleteToken deleteToken();
+    Token token();
 
     interface Storage {
         @WithDefault("local")
@@ -84,7 +82,7 @@ public interface FileServiceConfig {
         List<String> allowedMimeTypes();
     }
 
-    interface DownloadToken {
+    interface Token {
         @WithDefault("false")
         boolean enabled();
 
@@ -97,10 +95,5 @@ public interface FileServiceConfig {
 
         @WithDefault("5S")
         Duration allowedClockSkew();
-    }
-
-    interface DeleteToken {
-        @WithDefault("false")
-        boolean enabled();
     }
 }

@@ -48,17 +48,17 @@ class MinioStorageProviderTest {
         Path tempFile = provider.createTempFile();
         Files.writeString(tempFile, "hello minio", StandardCharsets.UTF_8);
 
-        provider.moveToPermanent(tempFile, "tenant/tenant-a/2026/04/02/file-1");
+        provider.moveToPermanent(tempFile, "tenant-a/2026/04/02/file-1");
 
-        assertTrue(provider.exists("tenant/tenant-a/2026/04/02/file-1"));
+        assertTrue(provider.exists("tenant-a/2026/04/02/file-1"));
         assertEquals(BUCKET, provider.storageBucket());
 
-        try (InputStream inputStream = provider.open("tenant/tenant-a/2026/04/02/file-1")) {
+        try (InputStream inputStream = provider.open("tenant-a/2026/04/02/file-1")) {
             assertEquals("hello minio", new String(inputStream.readAllBytes(), StandardCharsets.UTF_8));
         }
 
-        provider.deleteIfExists("tenant/tenant-a/2026/04/02/file-1");
-        assertFalse(provider.exists("tenant/tenant-a/2026/04/02/file-1"));
+        provider.deleteIfExists("tenant-a/2026/04/02/file-1");
+        assertFalse(provider.exists("tenant-a/2026/04/02/file-1"));
     }
 
     @Test

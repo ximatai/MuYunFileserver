@@ -3,7 +3,7 @@ package net.ximatai.muyun.fileserver.infrastructure.storage;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Clock;
-import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 
 @ApplicationScoped
@@ -20,12 +20,11 @@ public class StorageKeyFactory {
     }
 
     public String build(String tenantId, String fileId) {
-        LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
-        return "tenant/%s/%04d/%02d/%02d/%s".formatted(
+        YearMonth currentMonth = YearMonth.now(clock.withZone(ZoneOffset.UTC));
+        return "%s/%04d/%02d/%s".formatted(
                 tenantId,
-                today.getYear(),
-                today.getMonthValue(),
-                today.getDayOfMonth(),
+                currentMonth.getYear(),
+                currentMonth.getMonthValue(),
                 fileId
         );
     }
