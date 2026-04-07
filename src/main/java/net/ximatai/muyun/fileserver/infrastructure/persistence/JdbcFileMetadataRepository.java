@@ -6,10 +6,8 @@ import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.domain.file.FileStatus;
 
 import javax.sql.DataSource;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,9 +38,9 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
         String sql = """
                 insert into file_metadata (
                     id, tenant_id, original_filename, extension, mime_type, size_bytes, sha256,
-                    storage_provider, storage_bucket, storage_key, status, uploaded_by, uploaded_at,
+                    storage_provider, storage_bucket, storage_key, status, temporary, uploaded_by, uploaded_at,
                     deleted_at, delete_marked_by, remark
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (var connection = dataSource.getConnection();
              var statement = connection.prepareStatement(sql)) {
@@ -57,11 +55,12 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
             statement.setString(9, metadata.storageBucket());
             statement.setString(10, metadata.storageKey());
             statement.setString(11, metadata.status().name());
-            statement.setString(12, metadata.uploadedBy());
-            statement.setString(13, metadata.uploadedAt().toString());
-            statement.setString(14, metadata.deletedAt() == null ? null : metadata.deletedAt().toString());
-            statement.setString(15, metadata.deleteMarkedBy());
-            statement.setString(16, metadata.remark());
+            statement.setBoolean(12, metadata.temporary());
+            statement.setString(13, metadata.uploadedBy());
+            statement.setString(14, metadata.uploadedAt().toString());
+            statement.setString(15, metadata.deletedAt() == null ? null : metadata.deletedAt().toString());
+            statement.setString(16, metadata.deleteMarkedBy());
+            statement.setString(17, metadata.remark());
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to insert file metadata", exception);
@@ -98,6 +97,46 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
     }
 
     @Override
+    public boolean promote(String fileId, String tenantId) {
+        String sql = """
+                update file_metadata
+                   set temporary = ?
+                 where id = ? and tenant_id = ? and status = ? and temporary = ?
+                """;
+        try (var connection = dataSource.getConnection();
+             var statement = connection.prepareStatement(sql)) {
+            statement.setBoolean(1, false);
+            statement.setString(2, fileId);
+            statement.setString(3, tenantId);
+            statement.setString(4, FileStatus.ACTIVE.name());
+            statement.setBoolean(5, true);
+            return statement.executeUpdate() > 0;
+        } catch (SQLException exception) {
+            throw new IllegalStateException("failed to promote temporary file metadata", exception);
+        }
+    }
+
+    @Override
+    public boolean rename(String fileId, String tenantId, String originalFilename, String extension) {
+        String sql = """
+                update file_metadata
+                   set original_filename = ?, extension = ?
+                 where id = ? and tenant_id = ? and status = ?
+                """;
+        try (var connection = dataSource.getConnection();
+             var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, originalFilename);
+            statement.setString(2, extension);
+            statement.setString(3, fileId);
+            statement.setString(4, tenantId);
+            statement.setString(5, FileStatus.ACTIVE.name());
+            return statement.executeUpdate() > 0;
+        } catch (SQLException exception) {
+            throw new IllegalStateException("failed to rename file metadata", exception);
+        }
+    }
+
+    @Override
     public boolean softDelete(String fileId, String tenantId, String deletedBy, Instant deletedAt) {
         String sql = """
                 update file_metadata
@@ -115,6 +154,53 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
             return statement.executeUpdate() > 0;
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to soft delete file metadata", exception);
+        }
+    }
+
+    @Override
+    public boolean markTemporaryForCleanup(String fileId, Instant deletedAt, String deletedBy) {
+        String sql = """
+                update file_metadata
+                   set status = ?, deleted_at = ?, delete_marked_by = ?
+                 where id = ? and status = ? and temporary = ?
+                """;
+        try (var connection = dataSource.getConnection();
+             var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, FileStatus.DELETED.name());
+            statement.setString(2, deletedAt.toString());
+            statement.setString(3, deletedBy);
+            statement.setString(4, fileId);
+            statement.setString(5, FileStatus.ACTIVE.name());
+            statement.setBoolean(6, true);
+            return statement.executeUpdate() > 0;
+        } catch (SQLException exception) {
+            throw new IllegalStateException("failed to mark temporary file metadata for cleanup", exception);
+        }
+    }
+
+    @Override
+    public List<FileMetadata> findTemporaryBefore(Instant cutoff, int limit) {
+        String sql = """
+                select * from file_metadata
+                 where status = ? and temporary = ? and uploaded_at < ?
+                 order by uploaded_at asc
+                 limit ?
+                """;
+        try (var connection = dataSource.getConnection();
+             var statement = connection.prepareStatement(sql)) {
+            statement.setString(1, FileStatus.ACTIVE.name());
+            statement.setBoolean(2, true);
+            statement.setString(3, cutoff.toString());
+            statement.setInt(4, limit);
+            try (var resultSet = statement.executeQuery()) {
+                List<FileMetadata> items = new ArrayList<>();
+                while (resultSet.next()) {
+                    items.add(map(resultSet));
+                }
+                return items;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("failed to query temporary file metadata", exception);
         }
     }
 
@@ -168,6 +254,7 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
                 resultSet.getString("storage_bucket"),
                 resultSet.getString("storage_key"),
                 FileStatus.valueOf(resultSet.getString("status")),
+                resultSet.getBoolean("temporary"),
                 resultSet.getString("uploaded_by"),
                 Instant.parse(resultSet.getString("uploaded_at")),
                 parseInstant(resultSet.getString("deleted_at")),

@@ -14,6 +14,7 @@
 当前已经支持：
 
 - 单次多文件上传
+- 临时文件上传与批量转正
 - 整单成功 / 整单失败语义
 - 单文件元数据查询
 - 附件下载
@@ -117,6 +118,16 @@ curl -X POST http://127.0.0.1:8080/api/v1/files \
 ```
 
 如果你只想快速验证项目，到这里就够了。
+
+如果上传的是草稿附件、富文本中转文件等临时资源，可以在上传时传 `temporary=true`。后续业务确认要保留这些文件时，再调用批量转正接口：
+
+```sh
+curl -X POST http://127.0.0.1:8080/api/v1/files/promote \
+  -H 'X-Tenant-Id: tenant-a' \
+  -H 'X-User-Id: u123' \
+  -H 'Content-Type: application/json' \
+  -d '{"fileIds":["01...","01..."]}'
+```
 
 ## 从源码运行
 

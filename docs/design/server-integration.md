@@ -152,7 +152,8 @@ sequenceDiagram
     F->>S: persist file
     F->>D: insert metadata
     F-->>U: 201 + fileId
-    U->>B: bind fileId to business object
+    U->>B: persist fileId to business object
+    B->>F: POST /api/v1/files/promote (optional for temporary uploads)
 ```
 
 关键点：
@@ -160,6 +161,7 @@ sequenceDiagram
 - 上传 token 至少包含 `tenant_id`、`sub`、`purpose=upload`、`exp`
 - token 上传支持多文件整单语义和 `remark`
 - token 上传不支持 `file_ids`
+- 若业务把上传结果仅作为草稿或中转文件，可先按临时文件使用，确认保留后再调用批量转正接口
 
 ### 5.3 短时 token 下载 / 查询
 

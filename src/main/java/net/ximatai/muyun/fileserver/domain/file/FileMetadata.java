@@ -14,6 +14,7 @@ public record FileMetadata(
         String storageBucket,
         String storageKey,
         FileStatus status,
+        boolean temporary,
         String uploadedBy,
         Instant uploadedAt,
         Instant deletedAt,

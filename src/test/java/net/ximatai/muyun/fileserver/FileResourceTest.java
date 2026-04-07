@@ -2,12 +2,17 @@ package net.ximatai.muyun.fileserver;
 
 import de.huxhorn.sulky.ulid.ULID;
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import net.ximatai.muyun.fileserver.job.FileCleanupJob;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
+import javax.sql.DataSource;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -30,6 +35,12 @@ class FileResourceTest {
     private static final Path STORAGE_ROOT = Path.of(System.getProperty("user.dir"), "build", "test-storage");
     private static final int MAX_FILE_SIZE_BYTES = 1024 * 1024;
     private static final String TOKEN_SECRET = "test-token-secret";
+
+    @Inject
+    DataSource dataSource;
+
+    @Inject
+    FileCleanupJob fileCleanupJob;
 
     @Test
     void shouldUploadQueryDownloadAndDeleteFile() {
@@ -54,6 +65,7 @@ class FileResourceTest {
                 .body("success", equalTo(true))
                 .body("data.id", equalTo(fileId))
                 .body("data.mimeType", equalTo("text/plain"))
+                .body("data.temporary", equalTo(false))
                 .body("data.remark", equalTo("crm upload"));
 
         givenAuthenticated()
@@ -85,6 +97,111 @@ class FileResourceTest {
                 .delete("/api/v1/files/{fileId}", fileId)
                 .then()
                 .statusCode(404);
+    }
+
+    @Test
+    void shouldRenameFileAndUseRenamedFilenameForDownload() {
+        String fileId = uploadSingleFile("contract.txt", "hello rename".getBytes(), "text/plain");
+
+        givenAuthenticated()
+                .contentType("application/json")
+                .body("""
+                        {
+                          "originalFilename": "renamed-contract.txt"
+                        }
+                        """)
+                .when()
+                .put("/api/v1/files/{fileId}/name", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.id", equalTo(fileId))
+                .body("data.originalFilename", equalTo("renamed-contract.txt"))
+                .body("data.extension", equalTo("txt"));
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(200)
+                .header("Content-Disposition", Matchers.containsString("renamed-contract.txt"))
+                .body(equalTo("hello rename"));
+    }
+
+    @Test
+    void shouldPromoteTemporaryFilesInBatch() {
+        String firstFileId = uploadSingleFile("draft-a.txt", "a".getBytes(), "text/plain", true);
+        String secondFileId = uploadSingleFile("draft-b.txt", "b".getBytes(), "text/plain", true);
+
+        givenAuthenticated()
+                .contentType("application/json")
+                .body("""
+                        {
+                          "fileIds": ["%s", "%s"]
+                        }
+                        """.formatted(firstFileId, secondFileId))
+                .when()
+                .post("/api/v1/files/promote")
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.items.size()", equalTo(2))
+                .body("data.items[0].id", equalTo(firstFileId))
+                .body("data.items[0].temporary", equalTo(false))
+                .body("data.items[1].id", equalTo(secondFileId))
+                .body("data.items[1].temporary", equalTo(false));
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}", firstFileId)
+                .then()
+                .statusCode(200)
+                .body("data.id", equalTo(firstFileId))
+                .body("data.temporary", equalTo(false));
+    }
+
+    @Test
+    void shouldCleanupTemporaryFileAfterRetention() throws Exception {
+        String fileId = uploadSingleFile("temporary-cleanup.txt", "cleanup".getBytes(), "text/plain", true);
+
+        ageTemporaryFile(fileId, Instant.now().minusSeconds(60L * 60L * 25L));
+        runCleanupJob();
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}", fileId)
+                .then()
+                .statusCode(404)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file not found"));
+    }
+
+    @Test
+    void shouldNotCleanupPromotedFileInTemporarySweep() throws Exception {
+        String fileId = uploadSingleFile("promoted-keep.txt", "keep me".getBytes(), "text/plain", true);
+
+        givenAuthenticated()
+                .contentType("application/json")
+                .body("""
+                        {
+                          "fileIds": ["%s"]
+                        }
+                        """.formatted(fileId))
+                .when()
+                .post("/api/v1/files/promote")
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true));
+
+        ageTemporaryFile(fileId, Instant.now().minusSeconds(60L * 60L * 25L));
+        runCleanupJob();
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}", fileId)
+                .then()
+                .statusCode(200)
+                .body("data.id", equalTo(fileId));
     }
 
     @Test
@@ -756,8 +873,13 @@ class FileResourceTest {
     }
 
     private String uploadSingleFile(String filename, byte[] content, String contentType) {
+        return uploadSingleFile(filename, content, contentType, false);
+    }
+
+    private String uploadSingleFile(String filename, byte[] content, String contentType, boolean temporary) {
         return givenAuthenticated()
                 .multiPart("files", filename, content, contentType)
+                .multiPart("temporary", String.valueOf(temporary))
                 .when()
                 .post("/api/v1/files")
                 .then()
@@ -804,5 +926,20 @@ class FileResourceTest {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(payloadBytes)
                 + "."
                 + Base64.getUrlEncoder().withoutPadding().encodeToString(signature);
+    }
+
+    private void ageTemporaryFile(String fileId, Instant uploadedAt) throws Exception {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "update file_metadata set uploaded_at = ? where id = ?"
+             )) {
+            statement.setString(1, uploadedAt.toString());
+            statement.setString(2, fileId);
+            statement.executeUpdate();
+        }
+    }
+
+    private void runCleanupJob() throws Exception {
+        fileCleanupJob.sweepNow();
     }
 }

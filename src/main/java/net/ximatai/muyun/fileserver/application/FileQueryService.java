@@ -46,20 +46,7 @@ public class FileQueryService {
                 "request_id", requestContext.requestId(),
                 "storage_provider", metadata.storageProvider()
         ));
-        return new FileMetadataResponse(
-                metadata.id(),
-                metadata.tenantId(),
-                metadata.originalFilename(),
-                metadata.extension(),
-                metadata.mimeType(),
-                metadata.sizeBytes(),
-                metadata.sha256(),
-                metadata.status().name(),
-                metadata.remark(),
-                metadata.uploadedBy(),
-                metadata.uploadedAt(),
-                metadata.deletedAt()
-        );
+        return FileMetadataMapper.toResponse(metadata);
     }
 
     public DownloadFile openDownload(String fileId) {

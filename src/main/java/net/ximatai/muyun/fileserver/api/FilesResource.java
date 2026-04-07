@@ -6,13 +6,16 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import net.ximatai.muyun.fileserver.api.dto.DeleteFileResult;
 import net.ximatai.muyun.fileserver.api.dto.FileMetadataResponse;
+import net.ximatai.muyun.fileserver.api.dto.PromoteFilesRequest;
+import net.ximatai.muyun.fileserver.api.dto.PromoteFilesResponse;
+import net.ximatai.muyun.fileserver.api.dto.RenameFileRequest;
 import net.ximatai.muyun.fileserver.api.dto.UploadFilesResponse;
 import net.ximatai.muyun.fileserver.application.DownloadFile;
 import net.ximatai.muyun.fileserver.application.FileCommandService;
@@ -59,6 +62,25 @@ public class FilesResource {
     public Response download(@RestPath String fileId) {
         DownloadFile file = fileQueryService.openDownload(fileId);
         return DownloadResponses.ok(file);
+    }
+
+    @PUT
+    @Path("/{fileId}/name")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response rename(@RestPath String fileId, RenameFileRequest request) {
+        FileMetadataResponse response = fileCommandService.rename(
+                fileId,
+                request == null ? null : request.originalFilename()
+        );
+        return Response.ok(ApiResponses.ok(response)).build();
+    }
+
+    @POST
+    @Path("/promote")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response promote(PromoteFilesRequest request) {
+        PromoteFilesResponse response = fileCommandService.promote(request == null ? null : request.fileIds());
+        return Response.ok(ApiResponses.ok(response)).build();
     }
 
     @DELETE

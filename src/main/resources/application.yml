@@ -24,6 +24,7 @@ mfs:
   database:
     path: ${user.dir}/var/data/muyun-fileserver.db
   cleanup:
+    temporary-retention: 24H
     deleted-retention: 7D
     deleted-sweep-interval: 1H
     batch-size: 100

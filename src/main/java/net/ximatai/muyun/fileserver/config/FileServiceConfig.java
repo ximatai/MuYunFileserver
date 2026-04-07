@@ -69,6 +69,8 @@ public interface FileServiceConfig {
     }
 
     interface Cleanup {
+        Duration temporaryRetention();
+
         Duration deletedRetention();
 
         Duration deletedSweepInterval();

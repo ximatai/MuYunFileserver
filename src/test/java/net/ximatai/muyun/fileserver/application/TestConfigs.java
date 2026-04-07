@@ -57,11 +57,12 @@ public final class TestConfigs {
         });
 
         FileServiceConfig.Database database = proxy(FileServiceConfig.Database.class, methodName -> switch (methodName) {
-            case "path" -> Path.of("build/test-runtime.db");
+            case "path" -> Path.of("build/test-runtime-temp.db");
             default -> throw new UnsupportedOperationException(methodName);
         });
 
         FileServiceConfig.Cleanup cleanup = proxy(FileServiceConfig.Cleanup.class, methodName -> switch (methodName) {
+            case "temporaryRetention" -> Duration.ofHours(24);
             case "deletedRetention" -> Duration.ofDays(7);
             case "deletedSweepInterval" -> Duration.ofHours(1);
             case "batchSize" -> 100;

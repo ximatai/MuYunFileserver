@@ -11,6 +11,7 @@ public record FileMetadataResponse(
         long sizeBytes,
         String sha256,
         String status,
+        boolean temporary,
         String remark,
         String uploadedBy,
         Instant uploadedAt,

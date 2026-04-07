@@ -57,12 +57,18 @@ class UploadFilePreparer {
                 .mapToObj(index -> prepareSingle(
                         extractUploadFile(uploadRequest.fileValues().get(index)),
                         requestedIdAt(uploadRequest.requestedFileIds(), index),
+                        uploadRequest.temporary(),
                         requestContext
                 ))
                 .toList();
     }
 
-    private PreparedUpload prepareSingle(UploadFile uploadFile, String requestedFileId, RequestContext requestContext) {
+    private PreparedUpload prepareSingle(
+            UploadFile uploadFile,
+            String requestedFileId,
+            boolean temporary,
+            RequestContext requestContext
+    ) {
         validateReportedSize(uploadFile.fileItem());
 
         String fileId = resolveFileId(requestedFileId);
@@ -85,6 +91,7 @@ class UploadFilePreparer {
                 storageProvider.storageBucket(),
                 storageKeyFactory.build(requestContext.tenantId(), fileId),
                 Instant.now(),
+                temporary,
                 tempFile
         );
     }

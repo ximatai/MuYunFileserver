@@ -34,6 +34,7 @@ class UploadRequestParserTest {
         assertEquals(2, request.fileValues().size());
         assertEquals(List.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"), request.requestedFileIds());
         assertEquals("batch upload", request.remark());
+        assertEquals(false, request.temporary());
     }
 
     @Test
@@ -42,10 +43,12 @@ class UploadRequestParserTest {
         parser.config = TestConfigs.fileServiceConfig();
 
         UploadRequest request = parser.parse(new TestMultipartInput(Map.of(
-                "files", List.of(TestFormValue.file("first.txt"))
+                "files", List.of(TestFormValue.file("first.txt")),
+                "temporary", List.of(TestFormValue.text("true"))
         )));
 
         assertNull(request.remark());
+        assertEquals(true, request.temporary());
     }
 
     @Test
@@ -72,6 +75,19 @@ class UploadRequestParserTest {
         ))));
 
         assertEquals("remark must appear at most once", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectInvalidTemporaryValue() {
+        UploadRequestParser parser = new UploadRequestParser();
+        parser.config = TestConfigs.fileServiceConfig();
+
+        ValidationException exception = assertThrows(ValidationException.class, () -> parser.parse(new TestMultipartInput(Map.of(
+                "files", List.of(TestFormValue.file("first.txt")),
+                "temporary", List.of(TestFormValue.text("yes"))
+        ))));
+
+        assertEquals("temporary must be true or false", exception.getMessage());
     }
 
     private record TestMultipartInput(Map<String, Collection<FormValue>> values) implements MultipartFormDataInput {

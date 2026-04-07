@@ -7,6 +7,7 @@ import java.util.List;
 record UploadRequest(
         List<FormValue> fileValues,
         List<String> requestedFileIds,
-        String remark
+        String remark,
+        boolean temporary
 ) {
 }

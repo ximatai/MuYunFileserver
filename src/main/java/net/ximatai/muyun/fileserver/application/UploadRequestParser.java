@@ -30,9 +30,10 @@ class UploadRequestParser {
         List<FormValue> fileValues = formValues(values, "files");
         List<String> requestedFileIds = textValues(values, "file_ids");
         String remark = singleOptionalText(values, "remark");
+        boolean temporary = singleOptionalBoolean(values, "temporary", false);
 
         validateRequest(fileValues, requestedFileIds, allowRequestedFileIds);
-        return new UploadRequest(fileValues, requestedFileIds, remark);
+        return new UploadRequest(fileValues, requestedFileIds, remark, temporary);
     }
 
     private void validateRequest(List<FormValue> fileValues, List<String> requestedFileIds, boolean allowRequestedFileIds) {
@@ -89,5 +90,26 @@ class UploadRequestParser {
             throw new ValidationException(key + " must appear at most once");
         }
         return items.getFirst();
+    }
+
+    private boolean singleOptionalBoolean(Map<String, Collection<FormValue>> values, String key, boolean defaultValue) {
+        List<String> items = textValues(values, key);
+        if (items.isEmpty()) {
+            return defaultValue;
+        }
+        if (items.size() > 1) {
+            throw new ValidationException(key + " must appear at most once");
+        }
+        return parseBoolean(items.getFirst(), key);
+    }
+
+    private boolean parseBoolean(String value, String key) {
+        if ("true".equalsIgnoreCase(value)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(value)) {
+            return false;
+        }
+        throw new ValidationException(key + " must be true or false");
     }
 }

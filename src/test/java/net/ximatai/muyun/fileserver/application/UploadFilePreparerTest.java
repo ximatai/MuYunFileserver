@@ -45,7 +45,8 @@ class UploadFilePreparerTest {
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("hello.txt", "hello".getBytes(), "text/plain")),
                 List.of(),
-                "remark"
+                "remark",
+                false
         );
 
         List<PreparedUpload> preparedUploads = preparer.prepare(request, new RequestContext("tenant-a", "user-1", "req-1", "client-1"));
@@ -60,6 +61,7 @@ class UploadFilePreparerTest {
         assertTrue(preparedUpload.storageKey().startsWith("tenant-a/"));
         assertTrue(preparedUpload.storageKey().endsWith("/01JABCDEF1234567890ABCDEF"));
         assertNotNull(preparedUpload.sha256());
+        assertEquals(false, preparedUpload.temporary());
         assertTrue(Files.exists(preparedUpload.tempFile()));
     }
 
@@ -75,7 +77,8 @@ class UploadFilePreparerTest {
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("hello.txt", "hello".getBytes(), "text/plain")),
                 List.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"),
-                null
+                null,
+                false
         );
 
         ConflictException exception = assertThrows(ConflictException.class,
@@ -96,7 +99,8 @@ class UploadFilePreparerTest {
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("hello.txt", "hello".getBytes(), "text/plain")),
                 List.of(),
-                null
+                null,
+                false
         );
 
         ValidationException exception = assertThrows(ValidationException.class,
@@ -117,7 +121,8 @@ class UploadFilePreparerTest {
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("script.sh", "echo hi".getBytes(), "application/x-sh")),
                 List.of(),
-                null
+                null,
+                false
         );
 
         UnsupportedMediaTypeException exception = assertThrows(UnsupportedMediaTypeException.class,
@@ -153,8 +158,28 @@ class UploadFilePreparerTest {
         }
 
         @Override
+        public boolean promote(String fileId, String tenantId) {
+            return false;
+        }
+
+        @Override
+        public boolean rename(String fileId, String tenantId, String originalFilename, String extension) {
+            return false;
+        }
+
+        @Override
         public boolean softDelete(String fileId, String tenantId, String deletedBy, Instant deletedAt) {
             return false;
+        }
+
+        @Override
+        public boolean markTemporaryForCleanup(String fileId, Instant deletedAt, String deletedBy) {
+            return false;
+        }
+
+        @Override
+        public List<FileMetadata> findTemporaryBefore(Instant cutoff, int limit) {
+            return List.of();
         }
 
         @Override

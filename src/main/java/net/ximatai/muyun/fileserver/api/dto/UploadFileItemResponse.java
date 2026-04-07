@@ -7,6 +7,7 @@ public record UploadFileItemResponse(
         String originalFilename,
         String mimeType,
         long sizeBytes,
-        Instant uploadedAt
+        Instant uploadedAt,
+        boolean temporary
 ) {
 }

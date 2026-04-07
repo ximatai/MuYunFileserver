@@ -107,7 +107,8 @@ public class UploadService {
                     metadata.originalFilename(),
                     metadata.mimeType(),
                     metadata.sizeBytes(),
-                    metadata.uploadedAt()
+                    metadata.uploadedAt(),
+                    metadata.temporary()
             ));
         }
         return responseItems;

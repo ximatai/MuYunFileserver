@@ -17,6 +17,7 @@ record PreparedUpload(
         String storageBucket,
         String storageKey,
         Instant uploadedAt,
+        boolean temporary,
         Path tempFile
 ) {
     FileMetadata toMetadata(String remark, String uploadedBy, String storageProvider) {
@@ -32,6 +33,7 @@ record PreparedUpload(
                 storageBucket,
                 storageKey,
                 FileStatus.ACTIVE,
+                temporary,
                 uploadedBy,
                 uploadedAt,
                 null,

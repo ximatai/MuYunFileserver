@@ -7,6 +7,8 @@
 本文档仅覆盖一期正式能力：
 
 - 文件上传
+- 文件重命名
+- 临时文件批量转正
 - 单文件元数据查询
 - 文件下载
 - 文件删除
@@ -132,6 +134,7 @@
   "size_bytes": 102400,
   "sha256": "abcdef123456...",
   "status": "ACTIVE",
+  "temporary": false,
   "remark": "imported by crm",
   "uploaded_by": "u123",
   "uploaded_at": "2026-04-01T10:00:00Z",
@@ -158,14 +161,16 @@
         "original_filename": "a.pdf",
         "mime_type": "application/pdf",
         "size_bytes": 12345,
-        "uploaded_at": "2026-04-01T10:00:00Z"
+        "uploaded_at": "2026-04-01T10:00:00Z",
+        "temporary": false
       },
       {
         "id": "01JYYYYYYYYYYYYYYY",
         "original_filename": "b.png",
         "mime_type": "image/png",
         "size_bytes": 23456,
-        "uploaded_at": "2026-04-01T10:00:01Z"
+        "uploaded_at": "2026-04-01T10:00:01Z",
+        "temporary": false
       }
     ]
   }
@@ -188,6 +193,8 @@
 | 能力 | 可信身份头模式 | 短时 token 模式 |
 |---|---|---|
 | 上传 | `POST /api/v1/files` | `POST /api/v1/public/files?access_token=...` |
+| 重命名 | `PUT /api/v1/files/{fileId}/name` | - |
+| 临时文件批量转正 | `POST /api/v1/files/promote` | - |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
@@ -205,6 +212,8 @@
 |---|---|---|
 | `POST` | `/api/v1/files` | 上传一个或多个文件 |
 | `POST` | `/api/v1/public/files?access_token=...` | 使用短时上传 token 上传一个或多个文件 |
+| `PUT` | `/api/v1/files/{fileId}/name` | 重命名文件 |
+| `POST` | `/api/v1/files/promote` | 批量转正临时文件 |
 | `GET` | `/api/v1/files/{fileId}` | 查询单文件元数据 |
 | `GET` | `/api/v1/files/{fileId}/download` | 下载文件 |
 | `GET` | `/api/v1/public/files/{fileId}?access_token=...` | 使用短时只读 token 查询单文件元数据 |
@@ -231,6 +240,7 @@
 | `files` | 是 | 文件内容，可重复出现，支持多文件 |
 | `file_ids` | 否 | 与文件顺序对应的可选 `ULID` 列表 |
 | `remark` | 否 | 统一备注 |
+| `temporary` | 否 | 是否按临时文件写入，默认 `false` |
 
 说明：
 
@@ -238,6 +248,7 @@
 - 单次请求最多 10 个文件。
 - 默认单文件大小上限为 `524288000` 字节，也就是 `500 MB`。
 - 默认允许的 MIME 类型为 `application/pdf`、`image/png`、`image/jpeg`、`text/plain`。
+- `temporary=true` 时，文件会进入临时文件清理窗口；默认上传为正式文件。
 - 若提供 `file_ids`，则每个值必须为合法 `ULID`。
 - 若部分文件未提供 `file_id`，则由服务端生成。
 - `file_ids` 按出现顺序与 `files` 一一对应。
@@ -253,6 +264,7 @@ curl -X POST "http://localhost:8080/api/v1/files" \
   -F "files=@contract.pdf" \
   -F "files=@image.png" \
   -F "file_ids=01JABCDEF1234567890ABCDEF" \
+  -F "temporary=true" \
   -F "remark=crm upload"
 ```
 
@@ -270,14 +282,16 @@ curl -X POST "http://localhost:8080/api/v1/files" \
         "original_filename": "contract.pdf",
         "mime_type": "application/pdf",
         "size_bytes": 102400,
-        "uploaded_at": "2026-04-01T10:00:00Z"
+        "uploaded_at": "2026-04-01T10:00:00Z",
+        "temporary": true
       },
       {
         "id": "01JQWERTY1234567890QWERTY",
         "original_filename": "image.png",
         "mime_type": "image/png",
         "size_bytes": 20480,
-        "uploaded_at": "2026-04-01T10:00:01Z"
+        "uploaded_at": "2026-04-01T10:00:01Z",
+        "temporary": true
       }
     ]
   }
@@ -317,6 +331,7 @@ curl -X POST "http://localhost:8080/api/v1/files" \
 |---|---|---|
 | `files` | 是 | 文件内容，可重复出现，支持多文件 |
 | `remark` | 否 | 统一备注 |
+| `temporary` | 否 | 是否按临时文件写入，默认 `false` |
 
 说明：
 
@@ -327,6 +342,7 @@ curl -X POST "http://localhost:8080/api/v1/files" \
 - 上传 token 必须单独签发，并带 `purpose=upload`
 - token 上传仍经过文件服务，不是对象存储直传
 - token 上传不支持 `file_ids`，文件 ID 统一由服务端生成
+- token 上传支持 `temporary`，用于草稿类临时资源
 - 上传成功后的元数据查询、下载、删除语义与普通上传一致
 
 ### 7.7 短时 token 上传请求示例
@@ -393,6 +409,7 @@ curl "http://localhost:8080/api/v1/files/01JABCDEF1234567890ABCDEF" \
     "size_bytes": 102400,
     "sha256": "abcdef123456...",
     "status": "ACTIVE",
+    "temporary": false,
     "remark": "crm upload",
     "uploaded_by": "u123",
     "uploaded_at": "2026-04-01T10:00:00Z",
@@ -449,6 +466,93 @@ curl "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF?access
 - 第一版仅支持 `HMAC-SHA256`
 - token 至少应包含 `tenant_id`、`file_id`、`exp`
 - 第一版不实现严格一次性消费
+
+---
+
+## 8.9 文件重命名接口
+
+### 8.9.1 接口定义
+
+- 方法：`PUT`
+- 路径：`/api/v1/files/{fileId}/name`
+- Content-Type：`application/json`
+
+请求体：
+
+```json
+{
+  "originalFilename": "renamed-contract.txt"
+}
+```
+
+说明：
+
+- 仅更新展示文件名和推导扩展名，不改变存储 key
+- 空文件名或空白文件名返回 `400`
+
+### 8.9.2 成功响应
+
+- 状态码：`200 OK`
+- 返回最新文件元数据响应模型
+
+### 8.10 临时文件批量转正接口
+
+### 8.10.1 接口定义
+
+- 方法：`POST`
+- 路径：`/api/v1/files/promote`
+- Content-Type：`application/json`
+
+请求体：
+
+```json
+{
+  "fileIds": [
+    "01JABCDEF1234567890ABCDEF",
+    "01JQWERTY1234567890QWERTY"
+  ]
+}
+```
+
+说明：
+
+- 仅对当前租户下的文件生效
+- 已经是正式文件时按幂等成功处理
+- 空列表、空白值或非法 `ULID` 返回 `400`
+
+### 8.10.2 成功响应
+
+- 状态码：`200 OK`
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "01JABCDEF1234567890ABCDEF",
+        "temporary": false
+      },
+      {
+        "id": "01JQWERTY1234567890QWERTY",
+        "temporary": false
+      }
+    ]
+  }
+}
+```
+
+### 8.10.3 失败场景
+
+| 场景 | 状态码 |
+|---|---|
+| `fileIds` 为空 | `400` |
+| `fileIds` 含空白值 | `400` |
+| `fileId` 非法 | `400` |
+| 无身份上下文 | `401` |
+| 租户不匹配或无权访问 | `403` |
+| 文件不存在或已删除 | `404` |
+| 内部错误 | `500` |
 
 ---
 
@@ -695,6 +799,8 @@ curl -X DELETE "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABC
 - 短时 token 模式下，公开上传、查询、下载、删除接口通过 `access_token` 完成授权，不要求身份头
 - 一期只支持单文件查询，不支持列表和搜索
 - 一期支持多文件上传，但单次请求最多 10 个文件
+- 一期支持临时文件上传，默认上传为正式文件
+- 一期支持批量转正临时文件
 - 一期允许请求端可选指定 `ULID` 格式的 `file_id`
 - 短时 token 上传接口不支持请求端显式指定 `file_id`
 - 已存在的 `file_id` 返回 `409 Conflict`
