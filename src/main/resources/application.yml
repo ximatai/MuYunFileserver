@@ -1,6 +1,12 @@
 quarkus:
   http:
     port: 8080
+    cors:
+      enabled: true
+      origins: "*"
+      methods: GET,POST,PUT,DELETE,OPTIONS
+      headers: accept,authorization,content-type,x-requested-with,x-tenant-id,x-user-id
+      exposed-headers: content-disposition,content-length,content-type
   datasource:
     db-kind: sqlite
     jdbc:
@@ -30,10 +36,50 @@ mfs:
     batch-size: 100
   security:
     allowed-mime-types:
+      # Documents
       - application/pdf
-      - image/png
-      - image/jpeg
       - text/plain
+      - text/csv
+      - text/markdown
+      - application/json
+      - application/rtf
+      - application/msword
+      - application/vnd.ms-excel
+      - application/vnd.ms-powerpoint
+      - application/vnd.oasis.opendocument.text
+      - application/vnd.oasis.opendocument.spreadsheet
+      - application/vnd.oasis.opendocument.presentation
+      - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      - application/vnd.openxmlformats-officedocument.presentationml.presentation
+      # Images
+      - image/bmp
+      - image/gif
+      - image/heic
+      - image/heif
+      - image/jpeg
+      - image/png
+      - image/tiff
+      - image/webp
+      # Audio and video
+      - audio/aac
+      - audio/mpeg
+      - audio/mp4
+      - audio/ogg
+      - audio/wav
+      - audio/webm
+      - video/mp4
+      - video/ogg
+      - video/quicktime
+      - video/webm
+      - video/x-msvideo
+      # Common archives
+      - application/gzip
+      - application/x-7z-compressed
+      - application/x-bzip2
+      - application/x-rar-compressed
+      - application/x-tar
+      - application/zip
   token:
     enabled: false
     algorithm: hmac-sha256

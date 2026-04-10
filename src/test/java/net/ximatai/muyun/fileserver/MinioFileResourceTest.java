@@ -22,7 +22,7 @@ class MinioFileResourceTest {
                 .when()
                 .post("/api/v1/files")
                 .then()
-                .statusCode(201)
+                .statusCode(200)
                 .body("success", equalTo(true))
                 .body("data.items[0].id", notNullValue())
                 .extract()

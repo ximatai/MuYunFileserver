@@ -123,8 +123,8 @@ sequenceDiagram
     F->>F: validate multipart / size / MIME
     F->>S: persist file
     F->>D: insert metadata
-    F-->>G: 201 + fileId
-    G-->>B: 201 + fileId
+    F-->>G: 200 + fileId
+    G-->>B: 200 + fileId
     B-->>U: business response with fileId
 ```
 
@@ -151,7 +151,7 @@ sequenceDiagram
     F->>F: validate multipart / size / MIME
     F->>S: persist file
     F->>D: insert metadata
-    F-->>U: 201 + fileId
+    F-->>U: 200 + fileId
     U->>B: persist fileId to business object
     B->>F: POST /api/v1/files/promote (optional for temporary uploads)
 ```

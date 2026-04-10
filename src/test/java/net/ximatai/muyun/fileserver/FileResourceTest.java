@@ -50,7 +50,7 @@ class FileResourceTest {
                 .when()
                 .post("/api/v1/files")
                 .then()
-                .statusCode(201)
+                .statusCode(200)
                 .body("success", equalTo(true))
                 .body("data.items.size()", equalTo(1))
                 .body("data.items[0].id", notNullValue())
@@ -234,7 +234,7 @@ class FileResourceTest {
                 .when()
                 .post("/api/v1/files")
                 .then()
-                .statusCode(201)
+                .statusCode(200)
                 .extract()
                 .path("data.items[0].id");
 
@@ -282,7 +282,7 @@ class FileResourceTest {
                 .when()
                 .post("/api/v1/files")
                 .then()
-                .statusCode(201);
+                .statusCode(200);
 
         givenAuthenticated()
                 .multiPart("files", "second.txt", "world".getBytes(), "text/plain")
@@ -371,7 +371,7 @@ class FileResourceTest {
                 .when()
                 .post("/api/v1/files")
                 .then()
-                .statusCode(201)
+                .statusCode(200)
                 .body("data.items.size()", equalTo(2))
                 .body("data.items[0].id", equalTo(explicitFileId))
                 .body("data.items[1].id", Matchers.not(equalTo(explicitFileId)))
@@ -389,7 +389,7 @@ class FileResourceTest {
                 .when()
                 .post("/api/v1/public/files")
                 .then()
-                .statusCode(201)
+                .statusCode(200)
                 .body("success", equalTo(true))
                 .body("data.items.size()", equalTo(1))
                 .body("data.items[0].id", notNullValue())
@@ -417,7 +417,7 @@ class FileResourceTest {
                 .when()
                 .post("/api/v1/public/files")
                 .then()
-                .statusCode(201)
+                .statusCode(200)
                 .body("success", equalTo(true))
                 .body("data.items.size()", equalTo(2));
     }
@@ -594,7 +594,7 @@ class FileResourceTest {
                 .when()
                 .post("/api/v1/public/files")
                 .then()
-                .statusCode(201)
+                .statusCode(200)
                 .extract()
                 .path("data.items[0].id");
 
@@ -883,7 +883,7 @@ class FileResourceTest {
                 .when()
                 .post("/api/v1/files")
                 .then()
-                .statusCode(201)
+                .statusCode(200)
                 .extract()
                 .path("data.items[0].id");
     }

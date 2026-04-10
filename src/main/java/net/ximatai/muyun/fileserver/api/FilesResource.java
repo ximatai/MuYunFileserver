@@ -44,9 +44,7 @@ public class FilesResource {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     public Response upload(MultipartFormDataInput input) {
         UploadFilesResponse response = uploadService.upload(input);
-        return Response.status(Response.Status.CREATED)
-                .entity(ApiResponses.ok(response))
-                .build();
+        return Response.ok(ApiResponses.ok(response)).build();
     }
 
     @GET

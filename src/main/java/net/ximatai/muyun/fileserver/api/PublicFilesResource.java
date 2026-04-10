@@ -41,9 +41,7 @@ public class PublicFilesResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response upload(MultipartFormDataInput input, @QueryParam("access_token") String accessToken) {
         UploadFilesResponse response = tokenUploadService.upload(input, accessToken);
-        return Response.status(Response.Status.CREATED)
-                .entity(ApiResponses.ok(response))
-                .build();
+        return Response.ok(ApiResponses.ok(response)).build();
     }
 
     @GET
