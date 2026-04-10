@@ -68,7 +68,7 @@ public class FilesResource {
     public Response preview(@RestPath String fileId) {
         fileQueryService.ensurePreviewReady(fileId);
         return Response.status(Response.Status.FOUND)
-                .header("Location", "/api/v1/files/" + fileId + "/preview/content")
+                .header("Location", "preview/content")
                 .build();
     }
 

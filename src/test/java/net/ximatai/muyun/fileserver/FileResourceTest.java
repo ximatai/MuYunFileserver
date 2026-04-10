@@ -373,7 +373,7 @@ class FileResourceTest {
                 .get("/api/v1/files/{fileId}/preview", fileId)
                 .then()
                 .statusCode(302)
-                .header("Location", endsWith("/api/v1/files/" + fileId + "/preview/content"));
+                .header("Location", equalTo("preview/content"));
 
         givenAuthenticated()
                 .when()
@@ -399,7 +399,7 @@ class FileResourceTest {
                 .get("/api/v1/files/{fileId}/preview", fileId)
                 .then()
                 .statusCode(302)
-                .header("Location", endsWith("/api/v1/files/" + fileId + "/preview/content"));
+                .header("Location", equalTo("preview/content"));
 
         Path previewPath = previewStoragePath(fileId);
         org.junit.jupiter.api.Assertions.assertTrue(Files.exists(previewPath));
@@ -963,7 +963,7 @@ class FileResourceTest {
                 .get("/api/v1/public/files/{fileId}/preview", fileId)
                 .then()
                 .statusCode(302)
-                .header("Location", Matchers.containsString("/api/v1/public/files/" + fileId + "/preview/content?access_token="));
+                .header("Location", Matchers.startsWith("preview/content?access_token="));
 
         given()
                 .queryParam("access_token", accessToken)

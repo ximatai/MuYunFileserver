@@ -66,7 +66,7 @@ public class PublicFilesResource {
     public Response preview(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
         tokenFileQueryService.ensurePreviewReady(fileId, accessToken);
         return Response.status(Response.Status.FOUND)
-                .header("Location", "/api/v1/public/files/" + fileId + "/preview/content?access_token=" + java.net.URLEncoder.encode(accessToken, java.nio.charset.StandardCharsets.UTF_8))
+                .header("Location", "preview/content?access_token=" + java.net.URLEncoder.encode(accessToken, java.nio.charset.StandardCharsets.UTF_8))
                 .build();
     }
 
