@@ -26,6 +26,8 @@ public interface FileServiceConfig {
 
     Token token();
 
+    Preview preview();
+
     interface Storage {
         @WithDefault("local")
         String type();
@@ -97,5 +99,45 @@ public interface FileServiceConfig {
 
         @WithDefault("5S")
         Duration allowedClockSkew();
+    }
+
+    interface Preview {
+        @WithDefault("true")
+        boolean enabled();
+
+        @WithDefault("true")
+        boolean officeEnabled();
+
+        @NotEmpty
+        List<String> allowedMimeTypes();
+
+        @WithDefault("libreoffice")
+        String converter();
+
+        Libreoffice libreoffice();
+
+        Cache cache();
+    }
+
+    interface Libreoffice {
+        @WithDefault("soffice")
+        String command();
+
+        @WithDefault("60S")
+        Duration timeout();
+
+        @Min(1)
+        int maxConcurrency();
+
+        @WithDefault("5M")
+        Duration retryFailureAfter();
+
+        @NotNull
+        Path profileRoot();
+    }
+
+    interface Cache {
+        @WithDefault("true")
+        boolean cleanupOrphanPreviewOnFileDelete();
     }
 }

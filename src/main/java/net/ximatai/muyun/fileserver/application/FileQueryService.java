@@ -33,6 +33,9 @@ public class FileQueryService {
     @Inject
     StorageProvider storageProvider;
 
+    @Inject
+    PreviewService previewService;
+
     public FileMetadataResponse getMetadata(String fileId) {
         FileMetadata metadata = requireAccessibleFile(fileId);
 
@@ -73,6 +76,41 @@ public class FileQueryService {
                 metadata.sizeBytes(),
                 storageProvider.open(metadata.storageKey())
         );
+    }
+
+    public PreviewResolution openPreview(String fileId) {
+        FileMetadata metadata = requireAccessibleFile(fileId);
+
+        PreviewResolution preview = previewService.openPreview(metadata);
+
+        RequestContext requestContext = requestContextHolder.getRequired();
+        LOG.info(OperationLog.format(
+                "preview",
+                "success",
+                "file_id", fileId,
+                "tenant_id", requestContext.tenantId(),
+                "user_id", requestContext.userId(),
+                "request_id", requestContext.requestId(),
+                "storage_provider", metadata.storageProvider()
+        ));
+
+        return preview;
+    }
+
+    public void ensurePreviewReady(String fileId) {
+        FileMetadata metadata = requireAccessibleFile(fileId);
+        previewService.ensurePreviewReady(metadata);
+
+        RequestContext requestContext = requestContextHolder.getRequired();
+        LOG.info(OperationLog.format(
+                "preview_ready",
+                "success",
+                "file_id", fileId,
+                "tenant_id", requestContext.tenantId(),
+                "user_id", requestContext.userId(),
+                "request_id", requestContext.requestId(),
+                "storage_provider", metadata.storageProvider()
+        ));
     }
 
     private FileMetadata requireAccessibleFile(String fileId) {

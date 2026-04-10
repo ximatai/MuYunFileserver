@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import net.ximatai.muyun.fileserver.common.exception.StorageException;
+import net.ximatai.muyun.fileserver.application.OfficePreviewConverter;
 import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
@@ -26,6 +27,9 @@ public class StorageReadinessCheck implements HealthCheck {
     @Inject
     StorageProvider storageProvider;
 
+    @Inject
+    OfficePreviewConverter officePreviewConverter;
+
     @Override
     public HealthCheckResponse call() {
         HealthCheckResponseBuilder builder = HealthCheckResponse.named("storage-readiness");
@@ -45,6 +49,16 @@ public class StorageReadinessCheck implements HealthCheck {
                     .withData("storageType", config.storage().type())
                     .withData("storage", exception.getMessage())
                     .build();
+        }
+
+        if (config.preview().enabled() && config.preview().officeEnabled()) {
+            try {
+                officePreviewConverter.verifyReadiness();
+            } catch (RuntimeException exception) {
+                return builder.up()
+                        .withData("previewConverter", exception.getMessage())
+                        .build();
+            }
         }
 
         return builder.up().build();

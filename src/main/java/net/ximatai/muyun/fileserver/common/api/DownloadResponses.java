@@ -15,10 +15,18 @@ public final class DownloadResponses {
     }
 
     public static Response ok(DownloadFile file) {
+        return build(file, "attachment");
+    }
+
+    public static Response inline(DownloadFile file) {
+        return build(file, "inline");
+    }
+
+    private static Response build(DownloadFile file, String dispositionType) {
         return Response.ok((jakarta.ws.rs.core.StreamingOutput) output -> transfer(file.inputStream(), output))
                 .type(file.mimeType())
                 .header("Content-Length", file.sizeBytes())
-                .header("Content-Disposition", contentDisposition(file.originalFilename()))
+                .header("Content-Disposition", contentDisposition(dispositionType, file.originalFilename()))
                 .build();
     }
 
@@ -30,13 +38,13 @@ public final class DownloadResponses {
         }
     }
 
-    private static String contentDisposition(String originalFilename) {
+    private static String contentDisposition(String dispositionType, String originalFilename) {
         String sanitized = originalFilename
                 .replace("\\", "_")
                 .replace("\"", "_")
                 .replace("\r", "_")
                 .replace("\n", "_");
         String encoded = URLEncoder.encode(sanitized, StandardCharsets.UTF_8).replace("+", "%20");
-        return "attachment; filename=\"" + sanitized + "\"; filename*=UTF-8''" + encoded;
+        return dispositionType + "; filename=\"" + sanitized + "\"; filename*=UTF-8''" + encoded;
     }
 }

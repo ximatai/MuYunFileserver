@@ -18,12 +18,16 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Base64;
+import java.io.ByteArrayOutputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.notNullValue;
 
 @QuarkusTest
@@ -343,6 +347,95 @@ class FileResourceTest {
                 .statusCode(200)
                 .header("Content-Length", "0")
                 .body(equalTo(""));
+    }
+
+    @Test
+    void shouldPreviewPdfFileAndReturnInlineContent() {
+        byte[] pdfBytes = """
+                %PDF-1.4
+                1 0 obj
+                << /Type /Catalog /Pages 2 0 R >>
+                endobj
+                xref
+                0 1
+                0000000000 65535 f 
+                trailer
+                << /Size 1 /Root 1 0 R >>
+                startxref
+                9
+                %%EOF
+                """.getBytes(StandardCharsets.UTF_8);
+        String fileId = uploadSingleFile("contract.pdf", pdfBytes, "application/pdf");
+
+        givenAuthenticated()
+                .redirects().follow(false)
+                .when()
+                .get("/api/v1/files/{fileId}/preview", fileId)
+                .then()
+                .statusCode(302)
+                .header("Location", endsWith("/api/v1/files/" + fileId + "/preview/content"));
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/preview/content", fileId)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("application/pdf"))
+                .header("Content-Disposition", Matchers.containsString("inline;"))
+                .body(equalTo(new String(pdfBytes, StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void shouldGeneratePreviewForOfficeFileAndReuseCachedPdf() {
+        String fileId = uploadSingleFile(
+                "report.docx",
+                minimalDocxBytes(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        );
+
+        givenAuthenticated()
+                .redirects().follow(false)
+                .when()
+                .get("/api/v1/files/{fileId}/preview", fileId)
+                .then()
+                .statusCode(302)
+                .header("Location", endsWith("/api/v1/files/" + fileId + "/preview/content"));
+
+        Path previewPath = previewStoragePath(fileId);
+        org.junit.jupiter.api.Assertions.assertTrue(Files.exists(previewPath));
+
+        long modifiedTime = previewPath.toFile().lastModified();
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/preview/content", fileId)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("application/pdf"))
+                .header("Content-Disposition", Matchers.containsString("inline;"))
+                .body(Matchers.containsString("Fake Preview PDF"));
+
+        givenAuthenticated()
+                .redirects().follow(false)
+                .when()
+                .get("/api/v1/files/{fileId}/preview", fileId)
+                .then()
+                .statusCode(302);
+
+        org.junit.jupiter.api.Assertions.assertEquals(modifiedTime, previewPath.toFile().lastModified());
+    }
+
+    @Test
+    void shouldRejectPreviewForUnsupportedFileType() {
+        String fileId = uploadSingleFile("image.png", "png".getBytes(StandardCharsets.UTF_8), "image/png");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/preview", fileId)
+                .then()
+                .statusCode(415)
+                .body("success", equalTo(false))
+                .body("message", equalTo("preview is not supported for current file type"));
     }
 
     @Test
@@ -857,6 +950,115 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldPreviewFileByToken() throws Exception {
+        String fileId = uploadSingleFile("token-preview.pdf",
+                "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8),
+                "application/pdf");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .redirects().follow(false)
+                .when()
+                .get("/api/v1/public/files/{fileId}/preview", fileId)
+                .then()
+                .statusCode(302)
+                .header("Location", Matchers.containsString("/api/v1/public/files/" + fileId + "/preview/content?access_token="));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/preview/content", fileId)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("application/pdf"))
+                .header("Content-Disposition", Matchers.containsString("inline;"));
+    }
+
+    @Test
+    void shouldRejectPreviewTokenForAnotherFile() throws Exception {
+        String firstFileId = uploadSingleFile("a.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
+        String secondFileId = uploadSingleFile("b.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
+        String accessToken = signReadToken(TENANT_ID, firstFileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/preview", secondFileId)
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("download token does not match requested file"));
+    }
+
+    @Test
+    void shouldRejectExpiredPreviewToken() throws Exception {
+        String fileId = uploadSingleFile("expired-preview.pdf",
+                "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8),
+                "application/pdf");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().minusSeconds(5));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/preview", fileId)
+                .then()
+                .statusCode(401)
+                .body("success", equalTo(false))
+                .body("message", equalTo("download token expired"));
+    }
+
+    @Test
+    void shouldDeleteGeneratedPreviewWhenFileIsDeleted() throws Exception {
+        String fileId = uploadSingleFile(
+                "delete-preview.docx",
+                minimalDocxBytes(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        );
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/preview/content", fileId)
+                .then()
+                .statusCode(200);
+
+        Path previewPath = previewStoragePath(fileId);
+        org.junit.jupiter.api.Assertions.assertTrue(Files.exists(previewPath));
+
+        givenAuthenticated()
+                .when()
+                .delete("/api/v1/files/{fileId}", fileId)
+                .then()
+                .statusCode(200);
+
+        org.junit.jupiter.api.Assertions.assertFalse(Files.exists(previewPath));
+    }
+
+    @Test
+    void shouldCleanupGeneratedPreviewForTemporaryFile() throws Exception {
+        String fileId = uploadSingleFile(
+                "cleanup-preview.docx",
+                minimalDocxBytes(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                true
+        );
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/preview/content", fileId)
+                .then()
+                .statusCode(200);
+
+        Path previewPath = previewStoragePath(fileId);
+        org.junit.jupiter.api.Assertions.assertTrue(Files.exists(previewPath));
+
+        ageTemporaryFile(fileId, Instant.now().minusSeconds(60L * 60L * 25L));
+        runCleanupJob();
+
+        org.junit.jupiter.api.Assertions.assertFalse(Files.exists(previewPath));
+    }
+
+    @Test
     void readinessShouldBeUp() {
         given()
                 .when()
@@ -894,6 +1096,13 @@ class FileResourceTest {
                 .resolve("%04d".formatted(today.getYear()))
                 .resolve("%02d".formatted(today.getMonthValue()))
                 .resolve(fileId);
+    }
+
+    private Path previewStoragePath(String fileId) {
+        return STORAGE_ROOT.resolve(TENANT_ID)
+                .resolve("previews")
+                .resolve(fileId)
+                .resolve("preview.pdf");
     }
 
     private String signReadToken(String tenantId, String fileId, Instant expiresAt) throws Exception {
@@ -941,5 +1150,46 @@ class FileResourceTest {
 
     private void runCleanupJob() throws Exception {
         fileCleanupJob.sweepNow();
+    }
+
+    private byte[] minimalDocxBytes() {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
+            writeZipEntry(zip, "[Content_Types].xml", """
+                    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                    <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                      <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                      <Default Extension="xml" ContentType="application/xml"/>
+                      <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                    </Types>
+                    """);
+            writeZipEntry(zip, "_rels/.rels", """
+                    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                    <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                      <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                    </Relationships>
+                    """);
+            writeZipEntry(zip, "word/document.xml", """
+                    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                      <w:body>
+                        <w:p>
+                          <w:r>
+                            <w:t>Fake preview</w:t>
+                          </w:r>
+                        </w:p>
+                      </w:body>
+                    </w:document>
+                    """);
+        } catch (Exception exception) {
+            throw new IllegalStateException("failed to build minimal docx", exception);
+        }
+        return output.toByteArray();
+    }
+
+    private void writeZipEntry(ZipOutputStream zip, String name, String content) throws Exception {
+        zip.putNextEntry(new ZipEntry(name));
+        zip.write(content.getBytes(StandardCharsets.UTF_8));
+        zip.closeEntry();
     }
 }

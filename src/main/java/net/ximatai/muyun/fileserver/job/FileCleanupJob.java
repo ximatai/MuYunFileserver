@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.common.log.OperationLog;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
+import net.ximatai.muyun.fileserver.application.PreviewService;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
 import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
 import org.jboss.logging.Logger;
@@ -27,6 +28,9 @@ public class FileCleanupJob {
 
     @Inject
     StorageProvider storageProvider;
+
+    @Inject
+    PreviewService previewService;
 
     @Scheduled(every = "${mfs.cleanup.deleted-sweep-interval}")
     void sweepDeletedFiles() {
@@ -53,6 +57,7 @@ public class FileCleanupJob {
                 if (!fileMetadataRepository.markTemporaryForCleanup(item.id(), Instant.now(), TEMPORARY_CLEANUP_ACTOR)) {
                     continue;
                 }
+                previewService.deletePreviewIfExists(item);
                 storageProvider.deleteIfExists(item.storageKey());
                 fileMetadataRepository.deleteById(item.id());
                 LOG.info(OperationLog.format(
@@ -87,6 +92,7 @@ public class FileCleanupJob {
         ));
         for (FileMetadata item : items) {
             try {
+                previewService.deletePreviewIfExists(item);
                 storageProvider.deleteIfExists(item.storageKey());
                 fileMetadataRepository.deleteById(item.id());
                 LOG.info(OperationLog.format(

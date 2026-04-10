@@ -196,12 +196,14 @@
 | 临时文件批量转正 | `POST /api/v1/files/promote` | - |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
+| 预览跳转 | `GET /api/v1/files/{fileId}/preview` | `GET /api/v1/public/files/{fileId}/preview?access_token=...` |
+| 预览内容 | `GET /api/v1/files/{fileId}/preview/content` | `GET /api/v1/public/files/{fileId}/preview/content?access_token=...` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
 
 说明：
 
 - 可信身份头模式依赖统一网关或受控上游注入身份上下文
-- 短时 token 模式当前覆盖上传、查询、下载、删除
+- 短时 token 模式当前覆盖上传、查询、下载、预览、删除
 
 ### 6.2 接口明细
 
@@ -795,7 +797,7 @@ curl -X DELETE "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABC
 ## 12. 关键接口规则汇总
 
 - 可信身份头模式下，业务请求必须带可信的 `X-Tenant-Id` 和 `X-User-Id`
-- 短时 token 模式下，公开上传、查询、下载、删除接口通过 `access_token` 完成授权，不要求身份头
+- 短时 token 模式下，公开上传、查询、下载、预览、删除接口通过 `access_token` 完成授权，不要求身份头
 - 一期只支持单文件查询，不支持列表和搜索
 - 一期支持多文件上传，但单次请求最多 10 个文件
 - 一期支持临时文件上传，默认上传为正式文件
@@ -803,7 +805,8 @@ curl -X DELETE "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABC
 - 一期允许请求端可选指定 `ULID` 格式的 `file_id`
 - 短时 token 上传接口不支持请求端显式指定 `file_id`
 - 已存在的 `file_id` 返回 `409 Conflict`
-- 下载统一返回附件流，不支持 `Range` 和 `inline`
+- 下载统一返回附件流，不支持 `Range`
+- 预览统一返回 `302` 跳转或 `inline pdf`
 - 删除统一为软删，默认保留 7 天后内部物理清理
 
 ---
@@ -812,7 +815,6 @@ curl -X DELETE "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABC
 
 以下仅作为后续方向记录，不属于一期接口承诺：
 
-- `/api/v1/files/{fileId}/preview`
 - `/api/v1/files:search`
 - `/api/v1/files/batch-delete`
 - `/api/v1/files/{fileId}/share`

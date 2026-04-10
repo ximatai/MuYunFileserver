@@ -167,7 +167,7 @@ public class MinioStorageProvider implements StorageProvider {
     private void cleanupTempDirectory() throws IOException {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(config.storage().tempDir())) {
             for (Path path : stream) {
-                Files.deleteIfExists(path);
+                deleteRecursively(path);
             }
         }
     }
@@ -205,5 +205,27 @@ public class MinioStorageProvider implements StorageProvider {
     private boolean isMissingObject(ErrorResponseException exception) {
         String code = exception.errorResponse().code();
         return "NoSuchKey".equals(code) || "NoSuchObject".equals(code);
+    }
+
+    private void deleteRecursively(Path path) throws IOException {
+        if (Files.isDirectory(path)) {
+            try (var walk = Files.walk(path)) {
+                walk.sorted(java.util.Comparator.reverseOrder())
+                        .forEach(item -> {
+                            try {
+                                Files.deleteIfExists(item);
+                            } catch (IOException exception) {
+                                throw new RuntimeException(exception);
+                            }
+                        });
+            } catch (RuntimeException exception) {
+                if (exception.getCause() instanceof IOException ioException) {
+                    throw ioException;
+                }
+                throw exception;
+            }
+            return;
+        }
+        Files.deleteIfExists(path);
     }
 }

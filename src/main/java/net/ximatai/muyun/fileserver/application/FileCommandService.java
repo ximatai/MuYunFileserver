@@ -36,6 +36,9 @@ public class FileCommandService {
     @Inject
     UlidGenerator ulidGenerator;
 
+    @Inject
+    PreviewService previewService;
+
     public PromoteFilesResponse promote(List<String> fileIds) {
         List<String> normalizedFileIds = normalizeFileIds(fileIds);
         RequestContext requestContext = requestContextHolder.getRequired();
@@ -106,6 +109,7 @@ public class FileCommandService {
         if (!deleted) {
             throw new NotFoundException("file not found");
         }
+        previewService.deletePreviewIfExists(metadata);
 
         LOG.info(OperationLog.format(
                 "delete",

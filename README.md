@@ -1,6 +1,6 @@
 # MuYunFileServer
 
-`MuYunFileServer` 是一个基于 `Quarkus` 的轻量文件资产服务，当前提供文件上传、元数据查询、下载、删除和健康检查能力。
+`MuYunFileServer` 是一个基于 `Quarkus` 的轻量文件资产服务，当前提供文件上传、元数据查询、下载、预览、删除和健康检查能力。
 
 它适合这类场景：
 
@@ -18,6 +18,7 @@
 - 整单成功 / 整单失败语义
 - 单文件元数据查询
 - 附件下载
+- 文档预览
 - 文件软删
 - 定时物理清理
 - `liveness / readiness` 健康检查
@@ -28,7 +29,6 @@
 - 分片上传
 - 断点续传
 - HTTP `Range`
-- 文件预览
 - 公开分享链接
 - 列表搜索
 - 业务对象引用治理
@@ -118,6 +118,14 @@ curl -X POST http://127.0.0.1:8080/api/v1/files \
 ```
 
 如果你只想快速验证项目，到这里就够了。
+
+试预览一个文件：
+
+```sh
+curl -I http://127.0.0.1:8080/api/v1/files/<fileId>/preview \
+  -H 'X-Tenant-Id: tenant-a' \
+  -H 'X-User-Id: u123'
+```
 
 如果上传的是草稿附件、富文本中转文件等临时资源，可以在上传时传 `temporary=true`。后续业务确认要保留这些文件时，再调用批量转正接口：
 
@@ -333,6 +341,8 @@ Content-Disposition, Content-Length, Content-Type
 | 上传 | `POST /api/v1/files` | `POST /api/v1/public/files?access_token=...` |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
+| 预览跳转 | `GET /api/v1/files/{fileId}/preview` | `GET /api/v1/public/files/{fileId}/preview?access_token=...` |
+| 预览内容 | `GET /api/v1/files/{fileId}/preview/content` | `GET /api/v1/public/files/{fileId}/preview/content?access_token=...` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
 
 可信身份头模式：
@@ -343,7 +353,7 @@ Content-Disposition, Content-Length, Content-Type
 短时 token 模式：
 
 - 适合业务后端先完成权限校验，再给前端一个短时访问地址或上传授权的场景
-- 当前覆盖“上传 + 单文件元数据查询 + 下载 + 删除”
+- 当前覆盖“上传 + 单文件元数据查询 + 下载 + 预览 + 删除”
 - 业务后端负责校验“这个用户能不能访问这个附件”
 - `MuYunFileServer` 只负责校验 token 是否允许上传或访问这个文件
 - token 上传仍先进入 `MuYunFileServer`，不是对象存储直传
@@ -354,6 +364,22 @@ Content-Disposition, Content-Length, Content-Type
 
 - 若业务网关长期转发下载流量太重，或前端只需要临时访问单文件能力，优先考虑短时 token 模式
 - 若现有系统已经稳定依赖网关注入身份头，继续使用可信身份头模式即可
+
+## 文档预览
+
+当前预览能力支持：
+
+- `application/pdf` 直接 inline 预览
+- `doc/docx/xls/xlsx/ppt/pptx/odt/ods/odp` 转 PDF 后 inline 预览
+
+预览行为：
+
+- 首次访问时懒生成
+- 成功后缓存 PDF 预览产物
+- `GET /preview` 返回 `302`
+- `GET /preview/content` 直接返回 `application/pdf`
+
+如果启用了 Office 预览，请确保运行环境中存在可执行的 `soffice` 命令。
 
 当前最小实现说明：
 

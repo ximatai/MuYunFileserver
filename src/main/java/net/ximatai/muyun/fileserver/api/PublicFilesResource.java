@@ -12,6 +12,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import net.ximatai.muyun.fileserver.application.DownloadFile;
+import net.ximatai.muyun.fileserver.application.PreviewResolution;
 import net.ximatai.muyun.fileserver.application.TokenFileCommandService;
 import net.ximatai.muyun.fileserver.application.TokenFileQueryService;
 import net.ximatai.muyun.fileserver.application.TokenUploadService;
@@ -58,6 +59,29 @@ public class PublicFilesResource {
     public Response download(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
         DownloadFile file = tokenFileQueryService.openDownload(fileId, accessToken);
         return DownloadResponses.ok(file);
+    }
+
+    @GET
+    @Path("/{fileId}/preview")
+    public Response preview(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
+        tokenFileQueryService.ensurePreviewReady(fileId, accessToken);
+        return Response.status(Response.Status.FOUND)
+                .header("Location", "/api/v1/public/files/" + fileId + "/preview/content?access_token=" + java.net.URLEncoder.encode(accessToken, java.nio.charset.StandardCharsets.UTF_8))
+                .build();
+    }
+
+    @GET
+    @Path("/{fileId}/preview/content")
+    @Produces("application/pdf")
+    public Response previewContent(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
+        PreviewResolution preview = tokenFileQueryService.openPreview(fileId, accessToken);
+        return DownloadResponses.inline(new DownloadFile(
+                fileId,
+                preview.originalFilename(),
+                preview.mimeType(),
+                preview.sizeBytes(),
+                preview.inputStream()
+        ));
     }
 
     @DELETE

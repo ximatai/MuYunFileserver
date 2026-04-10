@@ -20,6 +20,8 @@ mkdir -p var/storage var/tmp var/data
 
 2. 按需参考 `application.local.example.yml` 调整 `application.yml`
 
+如果你要启用 Office 预览，请先安装 `LibreOffice`，并确保 `soffice` 可执行。
+
 3. 启动：
 
 ```sh
@@ -50,6 +52,8 @@ mkdir -p var/tmp var/data
 
 3. 按需参考 `application.minio.example.yml` 调整 `application.yml`
 
+如果你要启用 Office 预览，请同时确保运行环境里可执行 `soffice`。
+
 4. 启动：
 
 ```sh
@@ -71,4 +75,12 @@ curl -X POST http://127.0.0.1:8080/api/v1/files \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123' \
   -F 'files=@/path/to/contract.pdf'
+```
+
+预览跳转：
+
+```sh
+curl -I http://127.0.0.1:8080/api/v1/files/<fileId>/preview \
+  -H 'X-Tenant-Id: tenant-a' \
+  -H 'X-User-Id: u123'
 ```

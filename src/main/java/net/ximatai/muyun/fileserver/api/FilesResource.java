@@ -20,6 +20,7 @@ import net.ximatai.muyun.fileserver.api.dto.UploadFilesResponse;
 import net.ximatai.muyun.fileserver.application.DownloadFile;
 import net.ximatai.muyun.fileserver.application.FileCommandService;
 import net.ximatai.muyun.fileserver.application.FileQueryService;
+import net.ximatai.muyun.fileserver.application.PreviewResolution;
 import net.ximatai.muyun.fileserver.application.UploadService;
 import net.ximatai.muyun.fileserver.common.api.ApiResponses;
 import net.ximatai.muyun.fileserver.common.api.DownloadResponses;
@@ -60,6 +61,29 @@ public class FilesResource {
     public Response download(@RestPath String fileId) {
         DownloadFile file = fileQueryService.openDownload(fileId);
         return DownloadResponses.ok(file);
+    }
+
+    @GET
+    @Path("/{fileId}/preview")
+    public Response preview(@RestPath String fileId) {
+        fileQueryService.ensurePreviewReady(fileId);
+        return Response.status(Response.Status.FOUND)
+                .header("Location", "/api/v1/files/" + fileId + "/preview/content")
+                .build();
+    }
+
+    @GET
+    @Path("/{fileId}/preview/content")
+    @Produces("application/pdf")
+    public Response previewContent(@RestPath String fileId) {
+        PreviewResolution preview = fileQueryService.openPreview(fileId);
+        return DownloadResponses.inline(new DownloadFile(
+                fileId,
+                preview.originalFilename(),
+                preview.mimeType(),
+                preview.sizeBytes(),
+                preview.inputStream()
+        ));
     }
 
     @PUT
