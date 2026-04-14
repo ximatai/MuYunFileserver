@@ -41,7 +41,9 @@ mfs:
       - text/plain
       - text/csv
       - text/markdown
+      - text/xml
       - application/json
+      - application/xml
       - application/rtf
       - application/msword
       - application/vnd.ms-excel
@@ -107,3 +109,6 @@ mfs:
       profile-root: ${user.dir}/var/tmp/libreoffice-profile
     cache:
       cleanup-orphan-preview-on-file-delete: true
+  viewer:
+    text:
+      max-inline-bytes: 1048576

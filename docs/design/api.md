@@ -213,7 +213,9 @@ viewer 页面入口：
 
 - 可信身份头模式依赖统一网关或受控上游注入身份上下文
 - 短时 token 模式当前覆盖上传、查询、下载、预览、删除
-- 当前内置 viewer 已正式支持 `PDF`、`Office -> PDF` 和主流图片在线展示
+- 当前内置 viewer 已正式支持 `PDF`、`Office -> PDF`、主流图片和纯文本在线展示
+- 纯文本 viewer 首版覆盖 `text/plain`、`text/markdown`、`text/csv`、`text/xml`、`application/json`、`application/xml`
+- 纯文本 viewer 首版对超大文本返回明确错误并引导下载，不做分页和流式 tail
 
 ### 6.2 接口明细
 

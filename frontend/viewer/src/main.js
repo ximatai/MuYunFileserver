@@ -17,7 +17,7 @@ if (!route) {
 async function bootstrap(routeConfig) {
   renderLoading();
   const descriptor = normalizeDescriptorUrls(await fetchDescriptor(routeConfig), routeConfig);
-  renderShell(descriptor, routeConfig);
+  await renderShell(descriptor, routeConfig);
 }
 
 function parseRoute(location) {
@@ -73,7 +73,7 @@ function renderLoading() {
   `;
 }
 
-function renderShell(descriptor, routeConfig) {
+async function renderShell(descriptor, routeConfig) {
   app.innerHTML = `
     <main class="viewer-shell">
       <header class="viewer-header">
@@ -94,10 +94,11 @@ function renderShell(descriptor, routeConfig) {
   const renderers = {
     pdf: renderPdfViewer,
     image: renderImageViewer,
+    text: renderTextViewer,
     fallback: renderFallback
   };
   const renderer = renderers[descriptor.viewerType] || renderFallback;
-  renderer(target, descriptor, routeConfig);
+  await renderer(target, descriptor, routeConfig);
 }
 
 function renderPdfViewer(target, descriptor, routeConfig) {
@@ -201,6 +202,49 @@ function renderImageViewer(target, descriptor) {
   });
 }
 
+async function renderTextViewer(target, descriptor) {
+  target.innerHTML = `
+    <section class="text-viewer-shell panel">
+      <div class="text-viewer-toolbar">
+        <div class="text-viewer-toolbar-title">纯文本查看</div>
+        <div class="text-viewer-toolbar-meta">${escapeHtml(descriptor.contentMimeType)}</div>
+      </div>
+      <div class="text-viewer-stage">
+        <div class="text-viewer-loading">正在加载文本内容...</div>
+      </div>
+    </section>
+  `;
+
+  try {
+    const response = await fetch(descriptor.contentUrl, { credentials: 'same-origin' });
+    if (!response.ok) {
+      throw new Error(await describeError(response));
+    }
+    const text = await response.text();
+    target.innerHTML = `
+      <section class="text-viewer-shell panel">
+        <div class="text-viewer-toolbar">
+          <div class="text-viewer-toolbar-title">纯文本查看</div>
+          <div class="text-viewer-toolbar-meta">${escapeHtml(descriptor.contentMimeType)}</div>
+        </div>
+        <div class="text-viewer-stage">
+          <pre class="text-viewer-content">${escapeHtml(text)}</pre>
+        </div>
+      </section>
+    `;
+  } catch (error) {
+    target.innerHTML = `
+      <section class="empty-state">
+        <h2>文本加载失败</h2>
+        <p>${escapeHtml(normalizeTextError(error))}</p>
+        <div class="empty-state-actions">
+          <a class="button" href="${descriptor.downloadUrl}" target="_blank" rel="noopener">下载原文件</a>
+        </div>
+      </section>
+    `;
+  }
+}
+
 function renderFallback(target, descriptor) {
   target.innerHTML = `
     <section class="empty-state">
@@ -263,6 +307,17 @@ function normalizeError(error) {
     return '文件或展示描述不存在。';
   }
   return message || '文件查看器加载失败。';
+}
+
+function normalizeTextError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('413')) {
+    return '当前文本文件过大，首版 viewer 不做分页或流式加载，建议直接下载查看。';
+  }
+  if (message.includes('422')) {
+    return '当前文本文件不是可安全内联展示的 UTF-8 内容，建议直接下载查看。';
+  }
+  return normalizeError(error);
 }
 
 async function describeError(response) {

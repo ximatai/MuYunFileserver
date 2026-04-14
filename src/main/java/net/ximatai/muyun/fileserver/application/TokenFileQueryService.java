@@ -37,6 +37,9 @@ public class TokenFileQueryService {
     @Inject
     ViewDescriptorService viewDescriptorService;
 
+    @Inject
+    TextViewService textViewService;
+
     public FileMetadataResponse getMetadata(String fileId, String accessToken) {
         FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
 
@@ -165,6 +168,18 @@ public class TokenFileQueryService {
                     metadata.sizeBytes(),
                     storageProvider.open(metadata.storageKey())
             );
+        }
+        if (viewerType == ViewerType.TEXT) {
+            LOG.info(OperationLog.format(
+                    "view_content_by_token",
+                    "success",
+                    "file_id", fileId,
+                    "tenant_id", metadata.tenantId(),
+                    "request_id", null,
+                    "storage_provider", metadata.storageProvider(),
+                    "viewer_type", viewerType.value()
+            ));
+            return textViewService.openTextContent(metadata);
         }
         throw new NotFoundException("view content is not available for current file");
     }

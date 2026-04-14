@@ -502,7 +502,7 @@ class FileResourceTest {
 
     @Test
     void shouldReturnFallbackViewDescriptorForUnsupportedViewerType() {
-        String fileId = uploadSingleFile("image.png", "png".getBytes(StandardCharsets.UTF_8), "image/png");
+        String fileId = uploadSingleFile("notes.rtf", "{\\rtf1\\ansi fallback}".getBytes(StandardCharsets.UTF_8), "application/rtf");
 
         givenAuthenticated()
                 .when()
@@ -551,6 +551,81 @@ class FileResourceTest {
                 .statusCode(200)
                 .header("Content-Type", Matchers.containsString("image/png"))
                 .header("Content-Disposition", Matchers.containsString("inline;"));
+    }
+
+    @Test
+    void shouldReturnTextViewDescriptorForPlainTextFile() {
+        String fileId = uploadSingleFile("notes.txt", "hello text viewer".getBytes(StandardCharsets.UTF_8), "text/plain");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.fileId", equalTo(fileId))
+                .body("data.viewerType", equalTo("text"))
+                .body("data.sourceMimeType", equalTo("text/plain"))
+                .body("data.contentMimeType", equalTo("text/plain; charset=UTF-8"))
+                .body("data.contentUrl", equalTo("/api/v1/files/" + fileId + "/view/content"))
+                .body("data.downloadUrl", equalTo("/api/v1/files/" + fileId + "/download"))
+                .body("data.capabilities.download", equalTo(true))
+                .body("data.capabilities.zoom", equalTo(false))
+                .body("data.capabilities.pageNavigate", equalTo(false));
+    }
+
+    @Test
+    void shouldReturnTextViewDescriptorForJsonFile() {
+        String fileId = uploadSingleFile("data.json", "{\"ok\":true}".getBytes(StandardCharsets.UTF_8), "application/json");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.viewerType", equalTo("text"))
+                .body("data.contentMimeType", equalTo("application/json; charset=UTF-8"));
+    }
+
+    @Test
+    void shouldServeTextViewContentInline() {
+        String fileId = uploadSingleFile("notes.txt", "viewer text".getBytes(StandardCharsets.UTF_8), "text/plain");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view/content", fileId)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("text/plain"))
+                .header("Content-Disposition", Matchers.containsString("inline;"))
+                .body(equalTo("viewer text"));
+    }
+
+    @Test
+    void shouldRejectTextViewContentWhenFileIsTooLarge() {
+        String fileId = uploadSingleFile("large.txt", oversizedInlineText().getBytes(StandardCharsets.UTF_8), "text/plain");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view/content", fileId)
+                .then()
+                .statusCode(413)
+                .body("success", equalTo(false))
+                .body("message", equalTo("text content exceeds inline viewing limit"));
+    }
+
+    @Test
+    void shouldRejectTextViewContentWhenEncodingIsUnsupported() {
+        String fileId = uploadSingleFile("invalid.txt", new byte[]{(byte) 0xC3, (byte) 0x28}, "text/plain");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view/content", fileId)
+                .then()
+                .statusCode(422)
+                .body("success", equalTo(false))
+                .body("message", equalTo("text content encoding is not supported for inline viewing"));
     }
 
     @Test
@@ -1158,6 +1233,38 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldReturnTextViewDescriptorByToken() throws Exception {
+        String fileId = uploadSingleFile("token-text.txt", "token text".getBytes(StandardCharsets.UTF_8), "text/plain");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.viewerType", equalTo("text"))
+                .body("data.contentUrl", equalTo("/api/v1/public/files/" + fileId + "/view/content/" + accessToken))
+                .body("data.downloadUrl", equalTo("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken));
+    }
+
+    @Test
+    void shouldServeTextViewContentByToken() throws Exception {
+        String fileId = uploadSingleFile("token-text-content.txt", "token text viewer".getBytes(StandardCharsets.UTF_8), "text/plain");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .when()
+                .get("/api/v1/public/files/{fileId}/view/content/{accessToken}", fileId, accessToken)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("text/plain"))
+                .header("Content-Disposition", Matchers.containsString("inline;"))
+                .body(equalTo("token text viewer"));
+    }
+
+    @Test
     void shouldRejectPreviewTokenForAnotherFile() throws Exception {
         String firstFileId = uploadSingleFile("a.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
         String secondFileId = uploadSingleFile("b.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
@@ -1416,6 +1523,10 @@ class FileResourceTest {
         return Base64.getDecoder().decode(
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0XcAAAAASUVORK5CYII="
         );
+    }
+
+    private String oversizedInlineText() {
+        return "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ--oversized-inline-text";
     }
 
     private void writeZipEntry(ZipOutputStream zip, String name, String content) throws Exception {

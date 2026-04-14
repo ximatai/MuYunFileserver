@@ -37,6 +37,9 @@ mfs:
       profile-root: ${user.dir}/build/test-libreoffice-profile
     cache:
       cleanup-orphan-preview-on-file-delete: true
+  viewer:
+    text:
+      max-inline-bytes: 64
 
 quarkus:
   datasource:

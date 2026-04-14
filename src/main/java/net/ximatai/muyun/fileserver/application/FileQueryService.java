@@ -40,6 +40,9 @@ public class FileQueryService {
     @Inject
     ViewDescriptorService viewDescriptorService;
 
+    @Inject
+    TextViewService textViewService;
+
     public FileMetadataResponse getMetadata(String fileId) {
         FileMetadata metadata = requireAccessibleFile(fileId);
 
@@ -180,6 +183,19 @@ public class FileQueryService {
                     metadata.sizeBytes(),
                     storageProvider.open(metadata.storageKey())
             );
+        }
+        if (viewerType == ViewerType.TEXT) {
+            LOG.info(OperationLog.format(
+                    "view_content",
+                    "success",
+                    "file_id", fileId,
+                    "tenant_id", requestContext.tenantId(),
+                    "user_id", requestContext.userId(),
+                    "request_id", requestContext.requestId(),
+                    "storage_provider", metadata.storageProvider(),
+                    "viewer_type", viewerType.value()
+            ));
+            return textViewService.openTextContent(metadata);
         }
         throw new NotFoundException("view content is not available for current file");
     }

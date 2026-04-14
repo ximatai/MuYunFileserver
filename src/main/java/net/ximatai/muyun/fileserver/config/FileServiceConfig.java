@@ -28,6 +28,8 @@ public interface FileServiceConfig {
 
     Preview preview();
 
+    Viewer viewer();
+
     interface Storage {
         @WithDefault("local")
         String type();
@@ -139,5 +141,14 @@ public interface FileServiceConfig {
     interface Cache {
         @WithDefault("true")
         boolean cleanupOrphanPreviewOnFileDelete();
+    }
+
+    interface Viewer {
+        Text text();
+    }
+
+    interface Text {
+        @WithDefault("1048576")
+        long maxInlineBytes();
     }
 }

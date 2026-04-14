@@ -21,6 +21,8 @@ public class ViewDescriptorService {
             new ViewCapabilitiesResponse(true, true, true);
     private static final ViewCapabilitiesResponse IMAGE_CAPABILITIES =
             new ViewCapabilitiesResponse(true, true, false);
+    private static final ViewCapabilitiesResponse TEXT_CAPABILITIES =
+            new ViewCapabilitiesResponse(true, false, false);
     private static final ViewCapabilitiesResponse FALLBACK_CAPABILITIES =
             new ViewCapabilitiesResponse(true, false, false);
     private static final Set<String> IMAGE_MIME_TYPES = Set.of(
@@ -30,6 +32,14 @@ public class ViewDescriptorService {
             "image/png",
             "image/svg+xml",
             "image/webp"
+    );
+    private static final Set<String> TEXT_MIME_TYPES = Set.of(
+            "text/plain",
+            "text/markdown",
+            "text/csv",
+            "text/xml",
+            "application/json",
+            "application/xml"
     );
 
     @Inject
@@ -44,7 +54,7 @@ public class ViewDescriptorService {
             previewService.ensurePreviewReady(metadata);
         }
         String contentUrl = switch (viewerType) {
-            case PDF, IMAGE -> "/api/v1/files/" + metadata.id() + "/view/content";
+            case PDF, IMAGE, TEXT -> "/api/v1/files/" + metadata.id() + "/view/content";
             case FALLBACK -> null;
         };
         return new FileViewResponse(
@@ -68,7 +78,7 @@ public class ViewDescriptorService {
         String encodedToken = URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
         String query = "?access_token=" + encodedToken;
         String contentUrl = switch (viewerType) {
-            case PDF, IMAGE -> "/api/v1/public/files/" + metadata.id() + "/view/content/" + accessToken;
+            case PDF, IMAGE, TEXT -> "/api/v1/public/files/" + metadata.id() + "/view/content/" + accessToken;
             case FALLBACK -> null;
         };
         return new FileViewResponse(
@@ -88,6 +98,9 @@ public class ViewDescriptorService {
         if (IMAGE_MIME_TYPES.contains(normalizedMimeType)) {
             return ViewerType.IMAGE;
         }
+        if (TEXT_MIME_TYPES.contains(normalizedMimeType)) {
+            return ViewerType.TEXT;
+        }
         if (!config.preview().enabled()) {
             return ViewerType.FALLBACK;
         }
@@ -104,6 +117,7 @@ public class ViewDescriptorService {
         return switch (viewerType) {
             case PDF -> PDF_MIME_TYPE;
             case IMAGE -> sourceMimeType;
+            case TEXT -> textContentMimeType(sourceMimeType);
             case FALLBACK -> sourceMimeType;
         };
     }
@@ -112,7 +126,15 @@ public class ViewDescriptorService {
         return switch (viewerType) {
             case PDF -> PDF_CAPABILITIES;
             case IMAGE -> IMAGE_CAPABILITIES;
+            case TEXT -> TEXT_CAPABILITIES;
             case FALLBACK -> FALLBACK_CAPABILITIES;
         };
+    }
+
+    private String textContentMimeType(String sourceMimeType) {
+        if (sourceMimeType.toLowerCase(Locale.ROOT).contains("charset=")) {
+            return sourceMimeType;
+        }
+        return sourceMimeType + "; charset=UTF-8";
     }
 }
