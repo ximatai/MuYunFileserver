@@ -21,9 +21,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @ApplicationScoped
@@ -46,6 +44,9 @@ public class PreviewService {
 
     @Inject
     PreviewPathResolver previewPathResolver;
+
+    @Inject
+    SupportedFileTypes supportedFileTypes;
 
     private final ConcurrentHashMap<String, Object> previewLocks = new ConcurrentHashMap<>();
 
@@ -138,10 +139,7 @@ public class PreviewService {
     }
 
     private boolean isPreviewableMimeType(String mimeType) {
-        Set<String> allowed = config.preview().allowedMimeTypes().stream()
-                .map(item -> item.toLowerCase(Locale.ROOT))
-                .collect(java.util.stream.Collectors.toSet());
-        return allowed.contains(mimeType.toLowerCase(Locale.ROOT));
+        return supportedFileTypes.isPreviewableMimeType(mimeType);
     }
 
     private boolean shouldRetry(FilePreviewArtifact artifact) {

@@ -34,57 +34,6 @@ mfs:
     deleted-retention: 7D
     deleted-sweep-interval: 1H
     batch-size: 100
-  security:
-    allowed-mime-types:
-      # Documents
-      - application/pdf
-      - text/plain
-      - text/csv
-      - text/markdown
-      - text/xml
-      - application/json
-      - application/xml
-      - application/rtf
-      - application/msword
-      - application/vnd.ms-excel
-      - application/vnd.ms-powerpoint
-      - application/vnd.oasis.opendocument.text
-      - application/vnd.oasis.opendocument.spreadsheet
-      - application/vnd.oasis.opendocument.presentation
-      - application/vnd.openxmlformats-officedocument.wordprocessingml.document
-      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-      - application/vnd.openxmlformats-officedocument.presentationml.presentation
-      # Images
-      - image/bmp
-      - image/gif
-      - image/heic
-      - image/heif
-      - image/jpeg
-      - image/png
-      - image/tiff
-      - image/webp
-      # Audio and video
-      - audio/aac
-      - audio/mpeg
-      - audio/mp4
-      - audio/ogg
-      - audio/vnd.wave
-      - audio/wav
-      - audio/wave
-      - audio/webm
-      - audio/x-wav
-      - video/mp4
-      - video/ogg
-      - video/quicktime
-      - video/webm
-      - video/x-msvideo
-      # Common archives
-      - application/gzip
-      - application/x-7z-compressed
-      - application/x-bzip2
-      - application/x-rar-compressed
-      - application/x-tar
-      - application/zip
   token:
     enabled: false
     algorithm: hmac-sha256
@@ -92,17 +41,6 @@ mfs:
   preview:
     enabled: true
     office-enabled: true
-    allowed-mime-types:
-      - application/pdf
-      - application/msword
-      - application/vnd.ms-excel
-      - application/vnd.ms-powerpoint
-      - application/vnd.oasis.opendocument.text
-      - application/vnd.oasis.opendocument.spreadsheet
-      - application/vnd.oasis.opendocument.presentation
-      - application/vnd.openxmlformats-officedocument.wordprocessingml.document
-      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-      - application/vnd.openxmlformats-officedocument.presentationml.presentation
     converter: libreoffice
     libreoffice:
       command: soffice

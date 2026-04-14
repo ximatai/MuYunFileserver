@@ -10,8 +10,6 @@ import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class ViewDescriptorService {
@@ -27,46 +25,15 @@ public class ViewDescriptorService {
             new ViewCapabilitiesResponse(true, false, false);
     private static final ViewCapabilitiesResponse FALLBACK_CAPABILITIES =
             new ViewCapabilitiesResponse(true, false, false);
-    private static final Set<String> IMAGE_MIME_TYPES = Set.of(
-            "image/bmp",
-            "image/gif",
-            "image/jpeg",
-            "image/png",
-            "image/svg+xml",
-            "image/webp"
-    );
-    private static final Set<String> TEXT_MIME_TYPES = Set.of(
-            "text/plain",
-            "text/markdown",
-            "text/csv",
-            "text/xml",
-            "application/json",
-            "application/xml"
-    );
-    private static final Set<String> VIDEO_MIME_TYPES = Set.of(
-            "video/mp4",
-            "video/ogg",
-            "video/quicktime",
-            "video/webm",
-            "video/x-msvideo"
-    );
-    private static final Set<String> AUDIO_MIME_TYPES = Set.of(
-            "audio/aac",
-            "audio/mpeg",
-            "audio/mp4",
-            "audio/ogg",
-            "audio/vnd.wave",
-            "audio/wav",
-            "audio/wave",
-            "audio/webm",
-            "audio/x-wav"
-    );
 
     @Inject
     FileServiceConfig config;
 
     @Inject
     PreviewService previewService;
+
+    @Inject
+    SupportedFileTypes supportedFileTypes;
 
     public FileViewResponse describeInternal(FileMetadata metadata) {
         ViewerType viewerType = resolveViewerType(metadata.mimeType());
@@ -114,26 +81,23 @@ public class ViewDescriptorService {
     }
 
     ViewerType resolveViewerType(String mimeType) {
-        String normalizedMimeType = mimeType.toLowerCase(Locale.ROOT);
-        if (IMAGE_MIME_TYPES.contains(normalizedMimeType)) {
+        String canonicalMimeType = supportedFileTypes.canonicalize(mimeType);
+        if (supportedFileTypes.isImageMimeType(canonicalMimeType)) {
             return ViewerType.IMAGE;
         }
-        if (VIDEO_MIME_TYPES.contains(normalizedMimeType)) {
+        if (supportedFileTypes.isVideoMimeType(canonicalMimeType)) {
             return ViewerType.VIDEO;
         }
-        if (AUDIO_MIME_TYPES.contains(normalizedMimeType)) {
+        if (supportedFileTypes.isAudioMimeType(canonicalMimeType)) {
             return ViewerType.AUDIO;
         }
-        if (TEXT_MIME_TYPES.contains(normalizedMimeType)) {
+        if (supportedFileTypes.isTextMimeType(canonicalMimeType)) {
             return ViewerType.TEXT;
         }
         if (!config.preview().enabled()) {
             return ViewerType.FALLBACK;
         }
-        Set<String> allowedMimeTypes = config.preview().allowedMimeTypes().stream()
-                .map(value -> value.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toUnmodifiableSet());
-        if (allowedMimeTypes.contains(normalizedMimeType)) {
+        if (supportedFileTypes.isPreviewableMimeType(canonicalMimeType)) {
             return ViewerType.PDF;
         }
         return ViewerType.FALLBACK;

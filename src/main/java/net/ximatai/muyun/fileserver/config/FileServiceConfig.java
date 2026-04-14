@@ -3,12 +3,10 @@ package net.ximatai.muyun.fileserver.config;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.List;
 import java.util.Optional;
 
 @ConfigMapping(prefix = "mfs")
@@ -84,8 +82,6 @@ public interface FileServiceConfig {
     }
 
     interface Security {
-        @NotEmpty
-        List<String> allowedMimeTypes();
     }
 
     interface Token {
@@ -109,9 +105,6 @@ public interface FileServiceConfig {
 
         @WithDefault("true")
         boolean officeEnabled();
-
-        @NotEmpty
-        List<String> allowedMimeTypes();
 
         @WithDefault("libreoffice")
         String converter();

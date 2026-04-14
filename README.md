@@ -272,7 +272,8 @@ Readiness 在两种模式下的行为：
 - `mfs.storage.temp-dir`
 - `mfs.database.path`
 - `mfs.upload.max-file-size-bytes`
-- `mfs.security.allowed-mime-types`
+- `mfs.preview.enabled`
+- `mfs.preview.office-enabled`
 
 只有切换到 `minio` 时，才需要额外关注：
 
@@ -492,7 +493,7 @@ DELETE /api/v1/public/files/{fileId}?access_token=...
 - 单次多文件上传
 - 可选显式 `file_ids`
 - `sha256` 计算
-- MIME 白名单校验
+- 内置文件类型安全校验
 - 临时文件落盘与失败回滚
 
 公开 token 上传补充说明：

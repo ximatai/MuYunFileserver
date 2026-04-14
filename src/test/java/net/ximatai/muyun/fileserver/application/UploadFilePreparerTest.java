@@ -41,6 +41,7 @@ class UploadFilePreparerTest {
         preparer.storageProvider = new TestStorageProvider(Files.createTempDirectory("upload-preparer-test"));
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("01JABCDEF1234567890ABCDEF", Set.of("01JABCDEF1234567890ABCDEF"));
+        preparer.supportedFileTypes = new SupportedFileTypes();
 
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("hello.txt", "hello".getBytes(), "text/plain")),
@@ -73,6 +74,7 @@ class UploadFilePreparerTest {
         preparer.storageProvider = new TestStorageProvider(Files.createTempDirectory("upload-preparer-conflict"));
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("generated", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
+        preparer.supportedFileTypes = new SupportedFileTypes();
 
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("hello.txt", "hello".getBytes(), "text/plain")),
@@ -95,6 +97,7 @@ class UploadFilePreparerTest {
         preparer.storageProvider = new TestStorageProvider(Files.createTempDirectory("upload-preparer-invalid"));
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("bad-ulid", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
+        preparer.supportedFileTypes = new SupportedFileTypes();
 
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("hello.txt", "hello".getBytes(), "text/plain")),
@@ -117,6 +120,7 @@ class UploadFilePreparerTest {
         preparer.storageProvider = new TestStorageProvider(Files.createTempDirectory("upload-preparer-mime"));
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("01ARZ3NDEKTSV4RRFFQ69G5FAV", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
+        preparer.supportedFileTypes = new SupportedFileTypes();
 
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("script.sh", "echo hi".getBytes(), "application/x-sh")),
@@ -129,6 +133,29 @@ class UploadFilePreparerTest {
                 () -> preparer.prepare(request, new RequestContext("tenant-a", "user-1", "req-1", "client-1")));
 
         assertEquals("unsupported media type", exception.getMessage());
+    }
+
+    @Test
+    void shouldCanonicalizeSupportedMimeAlias() throws Exception {
+        UploadFilePreparer preparer = new UploadFilePreparer();
+        preparer.config = TestConfigs.fileServiceConfig();
+        preparer.repository = new InMemoryRepository(Set.of());
+        preparer.storageProvider = new TestStorageProvider(Files.createTempDirectory("upload-preparer-alias"));
+        preparer.storageKeyFactory = new StorageKeyFactory();
+        preparer.ulidGenerator = new FixedUlidGenerator("01JABCDEF1234567890ABCDE1", Set.of("01JABCDEF1234567890ABCDE1"));
+        preparer.supportedFileTypes = new SupportedFileTypes();
+
+        UploadRequest request = new UploadRequest(
+                List.of(TestFormValue.file("sound.wav", minimalWavBytes(), "audio/x-wav")),
+                List.of(),
+                null,
+                false
+        );
+
+        List<PreparedUpload> preparedUploads = preparer.prepare(request, new RequestContext("tenant-a", "user-1", "req-1", "client-1"));
+
+        assertEquals(1, preparedUploads.size());
+        assertEquals("audio/wav", preparedUploads.getFirst().mimeType());
     }
 
     private static final class InMemoryRepository implements FileMetadataRepository {
@@ -337,5 +364,21 @@ class UploadFilePreparerTest {
         public void write(Path target) throws IOException {
             Files.write(target, content);
         }
+    }
+
+    private byte[] minimalWavBytes() {
+        return new byte[]{
+                0x52, 0x49, 0x46, 0x46,
+                0x24, 0x00, 0x00, 0x00,
+                0x57, 0x41, 0x56, 0x45,
+                0x66, 0x6D, 0x74, 0x20,
+                0x10, 0x00, 0x00, 0x00,
+                0x01, 0x00, 0x01, 0x00,
+                0x40, 0x1F, 0x00, 0x00,
+                (byte) 0x80, 0x3E, 0x00, 0x00,
+                0x02, 0x00, 0x10, 0x00,
+                0x64, 0x61, 0x74, 0x61,
+                0x00, 0x00, 0x00, 0x00
+        };
     }
 }

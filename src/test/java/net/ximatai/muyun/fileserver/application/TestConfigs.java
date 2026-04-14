@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.List;
 
 public final class TestConfigs {
 
@@ -76,9 +75,8 @@ public final class TestConfigs {
             default -> throw new UnsupportedOperationException(methodName);
         });
 
-        FileServiceConfig.Security security = proxy(FileServiceConfig.Security.class, methodName -> switch (methodName) {
-            case "allowedMimeTypes" -> List.of("text/plain");
-            default -> throw new UnsupportedOperationException(methodName);
+        FileServiceConfig.Security security = proxy(FileServiceConfig.Security.class, methodName -> {
+            throw new UnsupportedOperationException(methodName);
         });
 
         FileServiceConfig.Token token = proxy(FileServiceConfig.Token.class, methodName -> switch (methodName) {
@@ -93,10 +91,6 @@ public final class TestConfigs {
         FileServiceConfig.Preview preview = proxy(FileServiceConfig.Preview.class, methodName -> switch (methodName) {
             case "enabled" -> true;
             case "officeEnabled" -> true;
-            case "allowedMimeTypes" -> List.of(
-                    "application/pdf",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            );
             case "converter" -> "libreoffice";
             case "libreoffice" -> proxy(FileServiceConfig.Libreoffice.class, previewMethod -> switch (previewMethod) {
                 case "command" -> previewCommand;

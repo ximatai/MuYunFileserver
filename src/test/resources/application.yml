@@ -18,17 +18,6 @@ mfs:
   preview:
     enabled: true
     office-enabled: true
-    allowed-mime-types:
-      - application/pdf
-      - application/msword
-      - application/vnd.ms-excel
-      - application/vnd.ms-powerpoint
-      - application/vnd.oasis.opendocument.text
-      - application/vnd.oasis.opendocument.spreadsheet
-      - application/vnd.oasis.opendocument.presentation
-      - application/vnd.openxmlformats-officedocument.wordprocessingml.document
-      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-      - application/vnd.openxmlformats-officedocument.presentationml.presentation
     libreoffice:
       command: ${user.dir}/src/test/resources/bin/fake-soffice.sh
       timeout: 5S

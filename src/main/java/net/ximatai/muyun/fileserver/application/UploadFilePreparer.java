@@ -52,6 +52,9 @@ class UploadFilePreparer {
     @Inject
     UlidGenerator ulidGenerator;
 
+    @Inject
+    SupportedFileTypes supportedFileTypes;
+
     List<PreparedUpload> prepare(UploadRequest uploadRequest, RequestContext requestContext) {
         return java.util.stream.IntStream.range(0, uploadRequest.fileValues().size())
                 .mapToObj(index -> prepareSingle(
@@ -77,7 +80,7 @@ class UploadFilePreparer {
         validateStreamedSize(fileDigest.sizeBytes());
 
         String originalFilename = Objects.requireNonNullElse(uploadFile.originalFilename(), fileId);
-        String mimeType = detectMimeType(tempFile, originalFilename, uploadFile.formValue());
+        String mimeType = supportedFileTypes.canonicalize(detectMimeType(tempFile, originalFilename, uploadFile.formValue()));
         validateMimeType(mimeType);
 
         return new PreparedUpload(
@@ -162,7 +165,7 @@ class UploadFilePreparer {
     }
 
     private void validateMimeType(String mimeType) {
-        if (!config.security().allowedMimeTypes().contains(mimeType)) {
+        if (!supportedFileTypes.isAllowedUploadMimeType(mimeType)) {
             throw new UnsupportedMediaTypeException("unsupported media type");
         }
     }
