@@ -13,6 +13,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import net.ximatai.muyun.fileserver.api.dto.DeleteFileResult;
 import net.ximatai.muyun.fileserver.api.dto.FileMetadataResponse;
+import net.ximatai.muyun.fileserver.api.dto.FileViewResponse;
 import net.ximatai.muyun.fileserver.api.dto.PromoteFilesRequest;
 import net.ximatai.muyun.fileserver.api.dto.PromoteFilesResponse;
 import net.ximatai.muyun.fileserver.api.dto.RenameFileRequest;
@@ -52,6 +53,13 @@ public class FilesResource {
     @Path("/{fileId}")
     public Response getMetadata(@RestPath String fileId) {
         FileMetadataResponse response = fileQueryService.getMetadata(fileId);
+        return Response.ok(ApiResponses.ok(response)).build();
+    }
+
+    @GET
+    @Path("/{fileId}/view")
+    public Response getView(@RestPath String fileId) {
+        FileViewResponse response = fileQueryService.getView(fileId);
         return Response.ok(ApiResponses.ok(response)).build();
     }
 

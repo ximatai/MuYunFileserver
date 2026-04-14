@@ -1,0 +1,211 @@
+:root {
+  color-scheme: light;
+  --bg: #f3f4f6;
+  --panel: #ffffff;
+  --panel-soft: #f8fafc;
+  --line: #d0d7de;
+  --text: #0f172a;
+  --muted: #475569;
+  --accent: #0f766e;
+  --accent-soft: #ccfbf1;
+  --danger: #b91c1c;
+  font-family: "IBM Plex Sans", "Noto Sans SC", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 28%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  color: var(--text);
+}
+
+.viewer-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100%;
+}
+
+.viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(208, 215, 222, 0.85);
+  backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.82);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.viewer-title {
+  min-width: 0;
+}
+
+.viewer-kicker {
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.viewer-title h1 {
+  font-size: 20px;
+  line-height: 1.2;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.viewer-meta {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.viewer-actions,
+.pdf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.viewer-main {
+  padding: 20px 24px 24px;
+}
+
+.panel,
+.empty-state {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(208, 215, 222, 0.88);
+  border-radius: 20px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+}
+
+.empty-state {
+  max-width: 720px;
+  margin: 48px auto;
+  padding: 32px;
+}
+
+.empty-state h2 {
+  margin: 0 0 12px;
+  font-size: 26px;
+}
+
+.empty-state p {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.empty-state-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.button,
+.ghost-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.button {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.18);
+}
+
+.ghost-button {
+  background: var(--panel-soft);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.button:hover,
+.ghost-button:hover {
+  transform: translateY(-1px);
+}
+
+.status-note {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.status-note.error {
+  color: var(--danger);
+}
+
+.pdf-viewer {
+  display: grid;
+  gap: 16px;
+}
+
+.pdf-toolbar {
+  padding: 14px 16px;
+}
+
+.pdf-counter {
+  min-width: 74px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.pdf-stage {
+  padding: 18px;
+}
+
+.pdf-stage-inner {
+  overflow: auto;
+  padding: 24px;
+  min-height: calc(100vh - 240px);
+}
+
+.pdf-canvas {
+  display: block;
+  margin: 0 auto;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.15);
+  background: #fff;
+}
+
+@media (max-width: 900px) {
+  .viewer-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .viewer-main {
+    padding: 16px;
+  }
+
+  .pdf-stage {
+    padding: 12px;
+  }
+
+  .pdf-stage-inner {
+    padding: 12px;
+  }
+}

@@ -3,6 +3,8 @@ plugins {
     id 'io.quarkus'
 }
 
+import org.apache.tools.ant.taskdefs.condition.Os
+
 repositories {
     mavenCentral()
     mavenLocal()
@@ -43,4 +45,41 @@ compileJava {
 
 compileTestJava {
     options.encoding = 'UTF-8'
+}
+
+def viewerDir = file("$projectDir/frontend/viewer")
+def viewerGeneratedResourcesDir = file("$buildDir/generated-resources/viewer")
+def viewerOutputDir = file("$viewerGeneratedResourcesDir/META-INF/resources/viewer")
+def npmCommand = Os.isFamily(Os.FAMILY_WINDOWS) ? 'npm.cmd' : 'npm'
+
+sourceSets {
+    main {
+        resources {
+            srcDir viewerGeneratedResourcesDir
+        }
+    }
+}
+
+tasks.register('npmInstallViewer', Exec) {
+    workingDir viewerDir
+    inputs.files(file("$viewerDir/package.json"), file("$viewerDir/package-lock.json"))
+    outputs.dir(file("$viewerDir/node_modules"))
+    commandLine npmCommand, 'ci'
+}
+
+tasks.register('buildViewer', Exec) {
+    dependsOn tasks.named('npmInstallViewer')
+    workingDir viewerDir
+    inputs.files(fileTree("$viewerDir/src"), file("$viewerDir/index.html"), file("$viewerDir/package.json"), file("$viewerDir/package-lock.json"), file("$viewerDir/vite.config.js"))
+    outputs.dir(viewerOutputDir)
+    environment 'VIEWER_OUT_DIR', viewerOutputDir.absolutePath
+    commandLine npmCommand, 'run', 'build'
+}
+
+tasks.named('processResources') {
+    dependsOn tasks.named('buildViewer')
+}
+
+tasks.named('clean') {
+    delete viewerGeneratedResourcesDir
 }

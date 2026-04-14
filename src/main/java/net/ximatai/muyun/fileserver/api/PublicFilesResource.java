@@ -18,6 +18,7 @@ import net.ximatai.muyun.fileserver.application.TokenFileQueryService;
 import net.ximatai.muyun.fileserver.application.TokenUploadService;
 import net.ximatai.muyun.fileserver.api.dto.DeleteFileResult;
 import net.ximatai.muyun.fileserver.api.dto.FileMetadataResponse;
+import net.ximatai.muyun.fileserver.api.dto.FileViewResponse;
 import net.ximatai.muyun.fileserver.api.dto.UploadFilesResponse;
 import net.ximatai.muyun.fileserver.common.api.ApiResponses;
 import net.ximatai.muyun.fileserver.common.api.DownloadResponses;
@@ -50,6 +51,14 @@ public class PublicFilesResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response getMetadata(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
         FileMetadataResponse response = tokenFileQueryService.getMetadata(fileId, accessToken);
+        return Response.ok(ApiResponses.ok(response)).build();
+    }
+
+    @GET
+    @Path("/{fileId}/view")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getView(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
+        FileViewResponse response = tokenFileQueryService.getView(fileId, accessToken);
         return Response.ok(ApiResponses.ok(response)).build();
     }
 

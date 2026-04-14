@@ -386,6 +386,29 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldReturnPdfViewDescriptorForPdfFile() {
+        String fileId = uploadSingleFile("descriptor.pdf",
+                "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8),
+                "application/pdf");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.fileId", equalTo(fileId))
+                .body("data.viewerType", equalTo("pdf"))
+                .body("data.sourceMimeType", equalTo("application/pdf"))
+                .body("data.contentMimeType", equalTo("application/pdf"))
+                .body("data.contentUrl", equalTo("/api/v1/files/" + fileId + "/preview/content"))
+                .body("data.downloadUrl", equalTo("/api/v1/files/" + fileId + "/download"))
+                .body("data.capabilities.download", equalTo(true))
+                .body("data.capabilities.zoom", equalTo(true))
+                .body("data.capabilities.pageNavigate", equalTo(true));
+    }
+
+    @Test
     void shouldGeneratePreviewForOfficeFileAndReuseCachedPdf() {
         String fileId = uploadSingleFile(
                 "report.docx",
@@ -426,6 +449,30 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldReturnPdfViewDescriptorForOfficeFile() {
+        String fileId = uploadSingleFile(
+                "descriptor.docx",
+                minimalDocxBytes(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        );
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.fileId", equalTo(fileId))
+                .body("data.viewerType", equalTo("pdf"))
+                .body("data.sourceMimeType", equalTo("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .body("data.contentMimeType", equalTo("application/pdf"))
+                .body("data.contentUrl", equalTo("/api/v1/files/" + fileId + "/preview/content"))
+                .body("data.downloadUrl", equalTo("/api/v1/files/" + fileId + "/download"));
+
+        org.junit.jupiter.api.Assertions.assertTrue(Files.exists(previewStoragePath(fileId)));
+    }
+
+    @Test
     void shouldRejectPreviewForUnsupportedFileType() {
         String fileId = uploadSingleFile("image.png", "png".getBytes(StandardCharsets.UTF_8), "image/png");
 
@@ -436,6 +483,25 @@ class FileResourceTest {
                 .statusCode(415)
                 .body("success", equalTo(false))
                 .body("message", equalTo("preview is not supported for current file type"));
+    }
+
+    @Test
+    void shouldReturnFallbackViewDescriptorForUnsupportedViewerType() {
+        String fileId = uploadSingleFile("image.png", "png".getBytes(StandardCharsets.UTF_8), "image/png");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.fileId", equalTo(fileId))
+                .body("data.viewerType", equalTo("fallback"))
+                .body("data.contentUrl", Matchers.nullValue())
+                .body("data.downloadUrl", equalTo("/api/v1/files/" + fileId + "/download"))
+                .body("data.capabilities.download", equalTo(true))
+                .body("data.capabilities.zoom", equalTo(false))
+                .body("data.capabilities.pageNavigate", equalTo(false));
     }
 
     @Test
@@ -976,6 +1042,26 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldReturnViewDescriptorByToken() throws Exception {
+        String fileId = uploadSingleFile("token-view.docx",
+                minimalDocxBytes(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.fileId", equalTo(fileId))
+                .body("data.viewerType", equalTo("pdf"))
+                .body("data.contentUrl", equalTo("/api/v1/public/files/" + fileId + "/preview/content?access_token=" + accessToken))
+                .body("data.downloadUrl", equalTo("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken));
+    }
+
+    @Test
     void shouldRejectPreviewTokenForAnotherFile() throws Exception {
         String firstFileId = uploadSingleFile("a.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
         String secondFileId = uploadSingleFile("b.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
@@ -989,6 +1075,45 @@ class FileResourceTest {
                 .statusCode(403)
                 .body("success", equalTo(false))
                 .body("message", equalTo("download token does not match requested file"));
+    }
+
+    @Test
+    void shouldRejectViewTokenForAnotherFile() throws Exception {
+        String firstFileId = uploadSingleFile("a.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
+        String secondFileId = uploadSingleFile("b.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
+        String accessToken = signReadToken(TENANT_ID, firstFileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", secondFileId)
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("download token does not match requested file"));
+    }
+
+    @Test
+    void shouldServeViewerPageShell() {
+        given()
+                .when()
+                .get("/view/files/{fileId}", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("text/html"))
+                .body(Matchers.containsString("MuYun File Viewer"));
+    }
+
+    @Test
+    void shouldServePublicViewerPageShell() {
+        given()
+                .queryParam("access_token", "placeholder")
+                .when()
+                .get("/view/public/files/{fileId}", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("text/html"))
+                .body(Matchers.containsString("MuYun File Viewer"));
     }
 
     @Test

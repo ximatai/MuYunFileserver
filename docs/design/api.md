@@ -11,6 +11,8 @@
 - 临时文件批量转正
 - 单文件元数据查询
 - 文件下载
+- 文件 viewer 展示描述
+- 文件 viewer 页面入口
 - 文件删除
 - 健康检查
 
@@ -196,9 +198,15 @@
 | 临时文件批量转正 | `POST /api/v1/files/promote` | - |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
+| 展示描述 | `GET /api/v1/files/{fileId}/view` | `GET /api/v1/public/files/{fileId}/view?access_token=...` |
 | 预览跳转 | `GET /api/v1/files/{fileId}/preview` | `GET /api/v1/public/files/{fileId}/preview?access_token=...` |
 | 预览内容 | `GET /api/v1/files/{fileId}/preview/content` | `GET /api/v1/public/files/{fileId}/preview/content?access_token=...` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
+
+viewer 页面入口：
+
+- `GET /view/files/{fileId}`
+- `GET /view/public/files/{fileId}?access_token=...`
 
 说明：
 
@@ -217,10 +225,14 @@
 | `POST` | `/api/v1/files/promote` | 批量转正临时文件 |
 | `GET` | `/api/v1/files/{fileId}` | 查询单文件元数据 |
 | `GET` | `/api/v1/files/{fileId}/download` | 下载文件 |
+| `GET` | `/api/v1/files/{fileId}/view` | 返回 viewer 展示描述 |
 | `GET` | `/api/v1/public/files/{fileId}?access_token=...` | 使用短时只读 token 查询单文件元数据 |
 | `GET` | `/api/v1/public/files/{fileId}/download?access_token=...` | 使用短时下载 token 下载文件 |
+| `GET` | `/api/v1/public/files/{fileId}/view?access_token=...` | 使用短时只读 token 获取 viewer 展示描述 |
 | `DELETE` | `/api/v1/files/{fileId}` | 软删文件 |
 | `DELETE` | `/api/v1/public/files/{fileId}?access_token=...` | 使用短时删除 token 软删文件 |
+| `GET` | `/view/files/{fileId}` | 内置 viewer 页面 |
+| `GET` | `/view/public/files/{fileId}?access_token=...` | 内置 public viewer 页面 |
 | `GET` | `/q/health/live` | 存活检查 |
 | `GET` | `/q/health/ready` | 就绪检查 |
 
@@ -807,6 +819,8 @@ curl -X DELETE "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABC
 - 已存在的 `file_id` 返回 `409 Conflict`
 - 下载统一返回附件流，不支持 `Range`
 - 预览统一返回 `302` 跳转或 `inline pdf`
+- viewer 页面推荐作为前端正式接入入口
+- viewer shell 只依赖 `GET /api/v1/.../view` 描述协议
 - 删除统一为软删，默认保留 7 天后内部物理清理
 
 ---

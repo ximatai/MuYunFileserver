@@ -16,6 +16,7 @@
 - [Technical Solution](./project/technical-solution.md)
 - [Development Plan](./project/development-plan.md)
 - [Risks And Next Steps](./project/risks-and-next-steps.md)
+- [File Viewer Product Plan](./project/file-viewer-product-plan.md)
 - [Signed Download Token Design Draft](./project/signed-download-token-design.md)
 - [Delete Token Design Draft](./project/delete-token-design.md)
 

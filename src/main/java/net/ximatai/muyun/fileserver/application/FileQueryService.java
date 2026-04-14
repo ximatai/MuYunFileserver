@@ -3,6 +3,7 @@ package net.ximatai.muyun.fileserver.application;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.api.dto.FileMetadataResponse;
+import net.ximatai.muyun.fileserver.api.dto.FileViewResponse;
 import net.ximatai.muyun.fileserver.common.context.RequestContext;
 import net.ximatai.muyun.fileserver.common.context.RequestContextHolder;
 import net.ximatai.muyun.fileserver.common.exception.ForbiddenException;
@@ -35,6 +36,9 @@ public class FileQueryService {
 
     @Inject
     PreviewService previewService;
+
+    @Inject
+    ViewDescriptorService viewDescriptorService;
 
     public FileMetadataResponse getMetadata(String fileId) {
         FileMetadata metadata = requireAccessibleFile(fileId);
@@ -111,6 +115,24 @@ public class FileQueryService {
                 "request_id", requestContext.requestId(),
                 "storage_provider", metadata.storageProvider()
         ));
+    }
+
+    public FileViewResponse getView(String fileId) {
+        FileMetadata metadata = requireAccessibleFile(fileId);
+        FileViewResponse descriptor = viewDescriptorService.describeInternal(metadata);
+
+        RequestContext requestContext = requestContextHolder.getRequired();
+        LOG.info(OperationLog.format(
+                "view_descriptor",
+                "success",
+                "file_id", fileId,
+                "tenant_id", requestContext.tenantId(),
+                "user_id", requestContext.userId(),
+                "request_id", requestContext.requestId(),
+                "storage_provider", metadata.storageProvider(),
+                "viewer_type", descriptor.viewerType().value()
+        ));
+        return descriptor;
     }
 
     private FileMetadata requireAccessibleFile(String fileId) {

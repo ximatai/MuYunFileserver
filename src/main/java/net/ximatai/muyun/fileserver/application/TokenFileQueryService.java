@@ -3,6 +3,7 @@ package net.ximatai.muyun.fileserver.application;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.api.dto.FileMetadataResponse;
+import net.ximatai.muyun.fileserver.api.dto.FileViewResponse;
 import net.ximatai.muyun.fileserver.common.exception.ForbiddenException;
 import net.ximatai.muyun.fileserver.common.exception.NotFoundException;
 import net.ximatai.muyun.fileserver.common.exception.ValidationException;
@@ -32,6 +33,9 @@ public class TokenFileQueryService {
 
     @Inject
     PreviewService previewService;
+
+    @Inject
+    ViewDescriptorService viewDescriptorService;
 
     public FileMetadataResponse getMetadata(String fileId, String accessToken) {
         FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
@@ -101,6 +105,22 @@ public class TokenFileQueryService {
                 "request_id", null,
                 "storage_provider", metadata.storageProvider()
         ));
+    }
+
+    public FileViewResponse getView(String fileId, String accessToken) {
+        FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
+        FileViewResponse descriptor = viewDescriptorService.describePublic(metadata, accessToken);
+
+        LOG.info(OperationLog.format(
+                "view_descriptor_by_token",
+                "success",
+                "file_id", fileId,
+                "tenant_id", metadata.tenantId(),
+                "request_id", null,
+                "storage_provider", metadata.storageProvider(),
+                "viewer_type", descriptor.viewerType().value()
+        ));
+        return descriptor;
     }
 
     private FileMetadata requireAccessibleFile(String fileId, String accessToken) {

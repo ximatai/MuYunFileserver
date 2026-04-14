@@ -20,6 +20,13 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/viewer/package-lock.json
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 

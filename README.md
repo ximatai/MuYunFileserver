@@ -19,6 +19,7 @@
 - 单文件元数据查询
 - 附件下载
 - 文档预览
+- 内置 file viewer 页面
 - 文件软删
 - 定时物理清理
 - `liveness / readiness` 健康检查
@@ -125,6 +126,12 @@ curl -X POST http://127.0.0.1:8080/api/v1/files \
 curl -I http://127.0.0.1:8080/api/v1/files/<fileId>/preview \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123'
+```
+
+打开统一 viewer 页面：
+
+```sh
+open http://127.0.0.1:8080/view/files/<fileId>
 ```
 
 如果上传的是草稿附件、富文本中转文件等临时资源，可以在上传时传 `temporary=true`。后续业务确认要保留这些文件时，再调用批量转正接口：
@@ -341,9 +348,15 @@ Content-Disposition, Content-Length, Content-Type
 | 上传 | `POST /api/v1/files` | `POST /api/v1/public/files?access_token=...` |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
+| 展示描述 | `GET /api/v1/files/{fileId}/view` | `GET /api/v1/public/files/{fileId}/view?access_token=...` |
 | 预览跳转 | `GET /api/v1/files/{fileId}/preview` | `GET /api/v1/public/files/{fileId}/preview?access_token=...` |
 | 预览内容 | `GET /api/v1/files/{fileId}/preview/content` | `GET /api/v1/public/files/{fileId}/preview/content?access_token=...` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
+
+内置 viewer 页面入口：
+
+- `GET /view/files/{fileId}`
+- `GET /view/public/files/{fileId}?access_token=...`
 
 可信身份头模式：
 
@@ -378,6 +391,9 @@ Content-Disposition, Content-Length, Content-Type
 - 成功后缓存 PDF 预览产物
 - `GET /preview` 返回 `302`
 - `GET /preview/content` 直接返回 `application/pdf`
+- `GET /view` 推荐作为前端统一展示入口
+- `GET /api/v1/.../view` 返回 viewer descriptor，是 viewer 页面唯一正式协议
+- 一期 viewer 只正式保证 `PDF` 和 `Office -> PDF`
 
 如果启用了 Office 预览，请确保运行环境中存在可执行的 `soffice` 命令。
 
