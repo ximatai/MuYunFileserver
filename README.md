@@ -349,6 +349,7 @@ Content-Disposition, Content-Length, Content-Type
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
 | 展示描述 | `GET /api/v1/files/{fileId}/view` | `GET /api/v1/public/files/{fileId}/view?access_token=...` |
+| viewer 内容 | `GET /api/v1/files/{fileId}/view/content` | `GET /api/v1/public/files/{fileId}/view/content/{accessToken}` |
 | 预览跳转 | `GET /api/v1/files/{fileId}/preview` | `GET /api/v1/public/files/{fileId}/preview?access_token=...` |
 | 预览内容 | `GET /api/v1/files/{fileId}/preview/content` | `GET /api/v1/public/files/{fileId}/preview/content?access_token=...` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
@@ -392,6 +393,7 @@ Content-Disposition, Content-Length, Content-Type
 - `GET /preview` 返回 `302`
 - `GET /preview/content` 直接返回 `application/pdf`
 - `GET /view` 推荐作为前端统一展示入口
+- `GET /view/content` 是内置 viewer 消费的稳定 PDF 内容地址，避免第三方 viewer 对 query token 的兼容问题
 - `GET /api/v1/.../view` 返回 viewer descriptor，是 viewer 页面唯一正式协议
 - 一期 viewer 只正式保证 `PDF` 和 `Office -> PDF`
 

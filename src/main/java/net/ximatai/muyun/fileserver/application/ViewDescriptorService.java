@@ -40,7 +40,7 @@ public class ViewDescriptorService {
                 metadata.mimeType(),
                 viewerType == ViewerType.PDF ? PDF_MIME_TYPE : metadata.mimeType(),
                 viewerType == ViewerType.PDF
-                        ? "/api/v1/files/" + metadata.id() + "/preview/content"
+                        ? "/api/v1/files/" + metadata.id() + "/view/content"
                         : null,
                 "/api/v1/files/" + metadata.id() + "/download",
                 viewerType == ViewerType.PDF ? PDF_CAPABILITIES : FALLBACK_CAPABILITIES
@@ -62,7 +62,7 @@ public class ViewDescriptorService {
                 metadata.mimeType(),
                 viewerType == ViewerType.PDF ? PDF_MIME_TYPE : metadata.mimeType(),
                 viewerType == ViewerType.PDF
-                        ? "/api/v1/public/files/" + metadata.id() + "/preview/content" + query
+                        ? "/api/v1/public/files/" + metadata.id() + "/view/content/" + accessToken
                         : null,
                 "/api/v1/public/files/" + metadata.id() + "/download" + query,
                 viewerType == ViewerType.PDF ? PDF_CAPABILITIES : FALLBACK_CAPABILITIES

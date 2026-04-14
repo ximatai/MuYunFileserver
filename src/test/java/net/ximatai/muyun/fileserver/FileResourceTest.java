@@ -401,11 +401,26 @@ class FileResourceTest {
                 .body("data.viewerType", equalTo("pdf"))
                 .body("data.sourceMimeType", equalTo("application/pdf"))
                 .body("data.contentMimeType", equalTo("application/pdf"))
-                .body("data.contentUrl", equalTo("/api/v1/files/" + fileId + "/preview/content"))
+                .body("data.contentUrl", equalTo("/api/v1/files/" + fileId + "/view/content"))
                 .body("data.downloadUrl", equalTo("/api/v1/files/" + fileId + "/download"))
                 .body("data.capabilities.download", equalTo(true))
                 .body("data.capabilities.zoom", equalTo(true))
                 .body("data.capabilities.pageNavigate", equalTo(true));
+    }
+
+    @Test
+    void shouldServeViewContentForPdfFile() {
+        String fileId = uploadSingleFile("view-content.pdf",
+                "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8),
+                "application/pdf");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view/content", fileId)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("application/pdf"))
+                .header("Content-Disposition", Matchers.containsString("inline;"));
     }
 
     @Test
@@ -466,7 +481,7 @@ class FileResourceTest {
                 .body("data.viewerType", equalTo("pdf"))
                 .body("data.sourceMimeType", equalTo("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
                 .body("data.contentMimeType", equalTo("application/pdf"))
-                .body("data.contentUrl", equalTo("/api/v1/files/" + fileId + "/preview/content"))
+                .body("data.contentUrl", equalTo("/api/v1/files/" + fileId + "/view/content"))
                 .body("data.downloadUrl", equalTo("/api/v1/files/" + fileId + "/download"));
 
         org.junit.jupiter.api.Assertions.assertTrue(Files.exists(previewStoragePath(fileId)));
@@ -1057,8 +1072,24 @@ class FileResourceTest {
                 .body("success", equalTo(true))
                 .body("data.fileId", equalTo(fileId))
                 .body("data.viewerType", equalTo("pdf"))
-                .body("data.contentUrl", equalTo("/api/v1/public/files/" + fileId + "/preview/content?access_token=" + accessToken))
+                .body("data.contentUrl", equalTo("/api/v1/public/files/" + fileId + "/view/content/" + accessToken))
                 .body("data.downloadUrl", equalTo("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken));
+    }
+
+    @Test
+    void shouldServeViewContentByToken() throws Exception {
+        String fileId = uploadSingleFile("token-view-content.pdf",
+                "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8),
+                "application/pdf");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .when()
+                .get("/api/v1/public/files/{fileId}/view/content/{accessToken}", fileId, accessToken)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("application/pdf"))
+                .header("Content-Disposition", Matchers.containsString("inline;"));
     }
 
     @Test
@@ -1101,7 +1132,9 @@ class FileResourceTest {
                 .then()
                 .statusCode(200)
                 .header("Content-Type", Matchers.containsString("text/html"))
-                .body(Matchers.containsString("MuYun File Viewer"));
+                .body(Matchers.containsString("MuYun File Viewer"))
+                .body(Matchers.containsString("/viewer/assets/"))
+                .body(Matchers.containsString(".js"));
     }
 
     @Test
@@ -1113,7 +1146,9 @@ class FileResourceTest {
                 .then()
                 .statusCode(200)
                 .header("Content-Type", Matchers.containsString("text/html"))
-                .body(Matchers.containsString("MuYun File Viewer"));
+                .body(Matchers.containsString("MuYun File Viewer"))
+                .body(Matchers.containsString("/viewer/assets/"))
+                .body(Matchers.containsString(".js"));
     }
 
     @Test

@@ -1,0 +1,22 @@
+#viewsManagerToggleButton,
+#editorSignature,
+#editorHighlight,
+#editorFreeText,
+#editorInk,
+#editorStamp,
+#editorModeSeparator,
+#editorSignatureParamsToolbar,
+#editorHighlightParamsToolbar,
+#editorFreeTextParamsToolbar,
+#editorInkParamsToolbar,
+#editorStampParamsToolbar {
+  display: none !important;
+}
+
+#toolbarViewerLeft .toolbarButtonSpacer {
+  display: none !important;
+}
+
+#toolbarViewerMiddle {
+  margin-inline-start: 0 !important;
+}

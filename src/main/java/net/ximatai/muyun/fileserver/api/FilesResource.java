@@ -64,6 +64,20 @@ public class FilesResource {
     }
 
     @GET
+    @Path("/{fileId}/view/content")
+    @Produces("application/pdf")
+    public Response viewContent(@RestPath String fileId) {
+        PreviewResolution preview = fileQueryService.openPreview(fileId);
+        return DownloadResponses.inline(new DownloadFile(
+                fileId,
+                preview.originalFilename(),
+                preview.mimeType(),
+                preview.sizeBytes(),
+                preview.inputStream()
+        ));
+    }
+
+    @GET
     @Path("/{fileId}/download")
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     public Response download(@RestPath String fileId) {

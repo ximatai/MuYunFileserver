@@ -121,7 +121,7 @@
   "viewerType": "pdf",
   "sourceMimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "contentMimeType": "application/pdf",
-  "contentUrl": "/api/v1/public/files/01J.../preview/content?access_token=...",
+  "contentUrl": "/api/v1/public/files/01J.../view/content/<accessToken>",
   "downloadUrl": "/api/v1/public/files/01J.../download?access_token=...",
   "capabilities": {
     "download": true,
@@ -228,13 +228,13 @@
 
 执行项：
 
-- [ ] A1. 定义统一 viewer 页面路由
-- [ ] A2. 定义 `GET /api/v1/files/{fileId}/view` 与 token 对应接口
-- [ ] A3. 定义 `viewerType` 枚举与默认 MIME 映射
-- [ ] A4. 定义 viewer shell 的状态模型：`loading / ready / unauthorized / unsupported / failed`
-- [ ] A5. 明确 viewer 页面与下载能力的交互边界
-- [ ] A6. 明确 token 模式在 viewer 页面的传递方式与安全约束
-- [ ] A7. 明确前端工程目录、构建方式与产物落点
+- [x] A1. 定义统一 viewer 页面路由
+- [x] A2. 定义 `GET /api/v1/files/{fileId}/view` 与 token 对应接口
+- [x] A3. 定义 `viewerType` 枚举与默认 MIME 映射
+- [x] A4. 定义 viewer shell 的状态模型：`loading / ready / unauthorized / unsupported / failed`
+- [x] A5. 明确 viewer 页面与下载能力的交互边界
+- [x] A6. 明确 token 模式在 viewer 页面的传递方式与安全约束
+- [x] A7. 明确前端工程目录、构建方式与产物落点
 
 验收标准：
 
@@ -260,13 +260,13 @@
 
 执行项：
 
-- [ ] B1. 初始化前端工程
-- [ ] B2. 配置构建产物输出到 Quarkus 静态资源目录
-- [ ] B3. 实现统一 viewer shell
-- [ ] B4. 实现路由参数解析：`fileId / access_token / mode`
-- [ ] B5. 实现通用页面布局：标题区、内容区、工具栏、错误态区
-- [ ] B6. 实现基础加载态、失败态、无权限态
-- [ ] B7. 提供统一下载按钮与回退行为
+- [x] B1. 初始化前端工程
+- [x] B2. 配置构建产物输出到 Quarkus 静态资源目录
+- [x] B3. 实现统一 viewer shell
+- [x] B4. 实现路由参数解析：`fileId / access_token / mode`
+- [x] B5. 实现通用页面布局：标题区、内容区、工具栏、错误态区
+- [x] B6. 实现基础加载态、失败态、无权限态
+- [x] B7. 提供统一下载按钮与回退行为
 
 验收标准：
 
@@ -291,13 +291,13 @@
 
 执行项：
 
-- [ ] C1. 引入 `PDF.js` 或 `pdfjs-dist`
-- [ ] C2. 封装 `pdf` renderer，作为 viewer shell 的一个插件
-- [ ] C3. 支持基础能力：翻页、缩放、适配宽度、加载失败提示
-- [ ] C4. 处理 token 模式下的 PDF 请求
+- [x] C1. 引入 `PDF.js` 或 `pdfjs-dist`
+- [x] C2. 封装 `pdf` renderer，作为 viewer shell 的一个插件
+- [x] C3. 支持基础能力：翻页、缩放、适配宽度、加载失败提示
+- [x] C4. 处理 token 模式下的 PDF 请求
 - [ ] C5. 处理大 PDF 的初次加载体验
-- [ ] C6. 处理浏览器刷新、二次打开、深链接访问
-- [ ] C7. 补齐 Office 转 PDF 与原始 PDF 的统一展示体验
+- [x] C6. 处理浏览器刷新、二次打开、深链接访问
+- [x] C7. 补齐 Office 转 PDF 与原始 PDF 的统一展示体验
 
 验收标准：
 
@@ -323,12 +323,12 @@
 
 执行项：
 
-- [ ] D1. 实现可信身份头模式 `view` 接口
-- [ ] D2. 实现 token 模式 `view` 接口
-- [ ] D3. 将现有预览能力接入 `viewerType=pdf`
-- [ ] D4. 定义 `fallback` 行为
-- [ ] D5. 补齐接口测试与 token 测试
-- [ ] D6. 明确 descriptor 字段的稳定契约
+- [x] D1. 实现可信身份头模式 `view` 接口
+- [x] D2. 实现 token 模式 `view` 接口
+- [x] D3. 将现有预览能力接入 `viewerType=pdf`
+- [x] D4. 定义 `fallback` 行为
+- [x] D5. 补齐接口测试与 token 测试
+- [x] D6. 明确 descriptor 字段的稳定契约
 
 验收标准：
 
@@ -455,31 +455,31 @@
 
 ### 9.1 功能验收
 
-- [ ] PDF 原文件可在线查看
-- [ ] Office 文件可在线查看
+- [x] PDF 原文件可在线查看
+- [x] Office 文件可在线查看
 - [ ] 图片文件可在线查看
 - [ ] 视频文件可在线查看
 - [ ] 音频文件可在线播放
 - [ ] 文本文件可在线查看
-- [ ] 不支持类型可稳定回退下载
+- [x] 不支持类型可稳定回退下载
 
 ### 9.2 协议验收
 
-- [ ] viewer shell 只依赖统一 descriptor
-- [ ] token 模式与可信身份头模式有一致的页面体验
-- [ ] 业务前端接入时无需分别处理 PDF、Office、图片、视频
+- [x] viewer shell 只依赖统一 descriptor
+- [x] token 模式与可信身份头模式有一致的页面体验
+- [x] 业务前端接入时无需分别处理 PDF、Office、图片、视频
 
 ### 9.3 交付验收
 
-- [ ] viewer 前端可随 release 包一同发布
-- [ ] Rocky 部署流程已覆盖 viewer 产物
+- [x] viewer 前端可随 release 包一同发布
+- [x] Rocky 部署流程已覆盖 viewer 产物
 - [ ] Docker 交付已覆盖 viewer 静态资源
 
 ### 9.4 回归验收
 
-- [ ] 下载能力未因 viewer 引入而退化
-- [ ] 现有 token 下载能力未被破坏
-- [ ] `Office -> PDF` 预览能力未被 viewer 改造破坏
+- [x] 下载能力未因 viewer 引入而退化
+- [x] 现有 token 下载能力未被破坏
+- [x] `Office -> PDF` 预览能力未被 viewer 改造破坏
 
 ---
 
@@ -528,10 +528,10 @@
 
 ## 12. 下一步执行建议
 
-基于当前项目状态，下一轮实际实施建议只做以下三件事：
+基于当前项目状态，一期 viewer 已完成首个可交付停点。下一轮建议进入第二阶段能力扩展，而不是重复补一期基础设施：
 
-- [ ] 1. 定义 viewer 页面路由与 view descriptor 协议
-- [ ] 2. 确定前端工程落点和构建产物集成方式
-- [ ] 3. 完成 `PDF.js` 的内化方案设计与最小落地实现
+- [ ] 1. 完成图片 renderer
+- [ ] 2. 收敛 PDF.js 文案与工具栏裁剪策略
+- [ ] 3. 评估并补齐 Docker 交付中的 viewer 静态资源验证
 
-只有这三件事完成后，再进入具体编码实现阶段，投入产出比最高。
+这三件事完成后，再决定是否进入视频、音频与文本 renderer。

@@ -70,7 +70,11 @@ tasks.register('npmInstallViewer', Exec) {
 tasks.register('buildViewer', Exec) {
     dependsOn tasks.named('npmInstallViewer')
     workingDir viewerDir
-    inputs.files(fileTree("$viewerDir/src"), file("$viewerDir/index.html"), file("$viewerDir/package.json"), file("$viewerDir/package-lock.json"), file("$viewerDir/vite.config.js"))
+    inputs.files(fileTree(viewerDir) {
+        exclude 'node_modules/**'
+        exclude 'dist/**'
+        exclude '*.tgz'
+    })
     outputs.dir(viewerOutputDir)
     environment 'VIEWER_OUT_DIR', viewerOutputDir.absolutePath
     commandLine npmCommand, 'run', 'build'

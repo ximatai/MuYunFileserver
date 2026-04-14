@@ -1,10 +1,8 @@
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import './styles.css';
-
-GlobalWorkerOptions.workerSrc = workerUrl;
+import pdfjsVersionConfig from '../pdfjs-version.json';
 
 const app = document.querySelector('#app');
+const PDFJS_VERSION = pdfjsVersionConfig.version;
 
 const route = parseRoute(window.location);
 if (!route) {
@@ -24,20 +22,24 @@ async function bootstrap(routeConfig) {
 
 function parseRoute(location) {
   const pathname = location.pathname.replace(/\/+$/, '');
-  const internalMatch = pathname.match(/^\/view\/files\/([^/]+)$/);
+  const internalMatch = pathname.match(/^(.*)\/view\/files\/([^/]+)$/);
   if (internalMatch) {
     return {
       mode: 'internal',
-      fileId: decodeURIComponent(internalMatch[1]),
-      accessToken: null
+      pathPrefix: internalMatch[1] || '',
+      fileId: decodeURIComponent(internalMatch[2]),
+      accessToken: null,
+      viewerBasePath: `${internalMatch[1] || ''}/viewer`
     };
   }
-  const publicMatch = pathname.match(/^\/view\/public\/files\/([^/]+)$/);
+  const publicMatch = pathname.match(/^(.*)\/view\/public\/files\/([^/]+)$/);
   if (publicMatch) {
     return {
       mode: 'public',
-      fileId: decodeURIComponent(publicMatch[1]),
-      accessToken: new URLSearchParams(location.search).get('access_token')
+      pathPrefix: publicMatch[1] || '',
+      fileId: decodeURIComponent(publicMatch[2]),
+      accessToken: new URLSearchParams(location.search).get('access_token'),
+      viewerBasePath: `${publicMatch[1] || ''}/viewer`
     };
   }
   return null;
@@ -45,8 +47,8 @@ function parseRoute(location) {
 
 async function fetchDescriptor(routeConfig) {
   const descriptorUrl = routeConfig.mode === 'public'
-    ? `/api/v1/public/files/${encodeURIComponent(routeConfig.fileId)}/view?access_token=${encodeURIComponent(routeConfig.accessToken || '')}`
-    : `/api/v1/files/${encodeURIComponent(routeConfig.fileId)}/view`;
+    ? `${routeConfig.pathPrefix}/api/v1/public/files/${encodeURIComponent(routeConfig.fileId)}/view?access_token=${encodeURIComponent(routeConfig.accessToken || '')}`
+    : `${routeConfig.pathPrefix}/api/v1/files/${encodeURIComponent(routeConfig.fileId)}/view`;
 
   const response = await fetch(descriptorUrl, {
     credentials: 'same-origin'
@@ -97,98 +99,19 @@ function renderShell(descriptor, routeConfig) {
   renderer(target, descriptor, routeConfig);
 }
 
-async function renderPdfViewer(target, descriptor) {
+function renderPdfViewer(target, descriptor, routeConfig) {
+  const viewerUrl = `${routeConfig.viewerBasePath}/pdfjs/web/viewer.html?v=${encodeURIComponent(PDFJS_VERSION)}&file=${encodeURIComponent(descriptor.contentUrl)}`;
   target.innerHTML = `
-    <div class="pdf-viewer">
-      <div class="panel pdf-toolbar">
-        <button class="ghost-button" data-action="prev">上一页</button>
-        <div class="pdf-counter" data-role="counter">- / -</div>
-        <button class="ghost-button" data-action="next">下一页</button>
-        <button class="ghost-button" data-action="zoom-out">缩小</button>
-        <button class="ghost-button" data-action="zoom-in">放大</button>
-        <button class="ghost-button" data-action="fit">适应宽度</button>
-        <div class="status-note" data-role="status">正在加载 PDF…</div>
-      </div>
-      <div class="panel pdf-stage">
-        <div class="pdf-stage-inner" data-role="stage">
-          <canvas class="pdf-canvas" data-role="canvas"></canvas>
-        </div>
-      </div>
+    <div class="pdf-viewer-frame-shell">
+      <iframe
+        class="pdf-viewer-frame"
+        title="PDF Viewer"
+        src="${viewerUrl}"
+        loading="eager"
+        referrerpolicy="same-origin"
+      ></iframe>
     </div>
   `;
-
-  const canvas = target.querySelector('[data-role="canvas"]');
-  const stage = target.querySelector('[data-role="stage"]');
-  const counter = target.querySelector('[data-role="counter"]');
-  const status = target.querySelector('[data-role="status"]');
-
-  const loadingTask = getDocument({
-    url: descriptor.contentUrl,
-    withCredentials: true
-  });
-  const pdf = await loadingTask.promise;
-  const state = {
-    pdf,
-    pageNumber: 1,
-    scale: 1,
-    fitWidth: true
-  };
-
-  async function draw() {
-    status.textContent = '正在渲染页面…';
-    status.classList.remove('error');
-    const page = await state.pdf.getPage(state.pageNumber);
-    const viewport = page.getViewport({ scale: 1 });
-    if (state.fitWidth) {
-      const availableWidth = Math.max(stage.clientWidth - 48, 320);
-      state.scale = availableWidth / viewport.width;
-    }
-    const scaledViewport = page.getViewport({ scale: state.scale });
-    const context = canvas.getContext('2d');
-    canvas.width = Math.floor(scaledViewport.width);
-    canvas.height = Math.floor(scaledViewport.height);
-    canvas.style.width = `${Math.floor(scaledViewport.width)}px`;
-    canvas.style.height = `${Math.floor(scaledViewport.height)}px`;
-    await page.render({
-      canvasContext: context,
-      viewport: scaledViewport
-    }).promise;
-    counter.textContent = `${state.pageNumber} / ${state.pdf.numPages}`;
-    status.textContent = `缩放 ${Math.round(state.scale * 100)}%`;
-  }
-
-  target.addEventListener('click', async (event) => {
-    const action = event.target.dataset.action;
-    if (!action) {
-      return;
-    }
-    if (action === 'prev' && state.pageNumber > 1) {
-      state.pageNumber -= 1;
-      await draw();
-    } else if (action === 'next' && state.pageNumber < state.pdf.numPages) {
-      state.pageNumber += 1;
-      await draw();
-    } else if (action === 'zoom-in') {
-      state.fitWidth = false;
-      state.scale = Math.min(state.scale + 0.1, 3);
-      await draw();
-    } else if (action === 'zoom-out') {
-      state.fitWidth = false;
-      state.scale = Math.max(state.scale - 0.1, 0.4);
-      await draw();
-    } else if (action === 'fit') {
-      state.fitWidth = true;
-      await draw();
-    }
-  });
-
-  window.addEventListener('resize', debounce(async () => {
-    if (state.fitWidth) {
-      await draw();
-    }
-  }, 120));
-
-  await draw();
 }
 
 function renderFallback(target, descriptor) {
@@ -248,14 +171,4 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
-}
-
-function debounce(fn, wait) {
-  let timerId;
-  return (...args) => {
-    window.clearTimeout(timerId);
-    timerId = window.setTimeout(() => {
-      fn(...args);
-    }, wait);
-  };
 }

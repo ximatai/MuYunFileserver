@@ -17,6 +17,7 @@
 - [Development Plan](./project/development-plan.md)
 - [Risks And Next Steps](./project/risks-and-next-steps.md)
 - [File Viewer Product Plan](./project/file-viewer-product-plan.md)
+- [PDF.js Upgrade Guide](./project/pdfjs-upgrade-guide.md)
 - [Signed Download Token Design Draft](./project/signed-download-token-design.md)
 - [Delete Token Design Draft](./project/delete-token-design.md)
 

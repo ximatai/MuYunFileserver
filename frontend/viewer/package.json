@@ -4,10 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "vite build"
-  },
-  "dependencies": {
-    "pdfjs-dist": "^5.4.54"
+    "prepare:pdfjs": "node scripts/sync-pdfjs-vendor.mjs",
+    "build": "npm run prepare:pdfjs && vite build"
   },
   "devDependencies": {
     "vite": "^7.1.9"

@@ -138,6 +138,12 @@
 - [x] 上传链路边界场景已补充第二批集成测试覆盖
 - [x] `UploadService` 已完成第一轮拆分，上传请求解析和单文件预处理已从编排层解耦
 - [x] 上传链路已具备更细粒度的单元测试入口
+- [x] `Office -> PDF` 预览能力已落地并支持 `PDF / Office` 统一预览
+- [x] token 模式与可信身份头模式均已支持预览与 viewer 描述接口
+- [x] 内置 file viewer 已落地，统一入口为 `/view/...`
+- [x] `PDF.js` 已改为官方 viewer vendor 集成，不再依赖 wrapper 与 webpack
+- [x] viewer 前端已接入正式构建链并可随 release 一起发布
+- [x] Rocky 环境已完成 viewer 与 `LibreOffice` 闭环验证
 
 ---
 
@@ -166,6 +172,7 @@
 - [ ] 统一关键日志字段：`operation`、`file_id`、`tenant_id`、`user_id`、`request_id`、`result`、`reason`
 - [ ] 增补部署与运维文档，覆盖环境变量、目录准备、SQLite 使用边界和备份建议
 - [ ] 复查清理任务日志，区分可重试失败与需要人工介入的失败
+- [ ] 补齐 Docker 交付中 viewer 静态资源与 `LibreOffice` 的正式验收说明
 
 ### P2 安全与规则增强
 
@@ -180,3 +187,6 @@
 - [ ] 评估并设计“短时签名下载 token”模式，降低业务网关下载转发负担
 - [ ] 若采用下载 token，补充配置模型、验签组件、公开下载入口与集成测试
 - [ ] 评估并设计“删除 token”模式，明确 `purpose=delete`、有效期、幂等语义与接口形态
+- [ ] 实现图片 renderer，作为 viewer 的第二种正式 renderer
+- [ ] 评估并收口 PDF.js 官方 viewer 的文案、工具栏裁剪与本地化策略
+- [ ] 评估视频、音频、文本 renderer 的产品优先级与协议扩展方式

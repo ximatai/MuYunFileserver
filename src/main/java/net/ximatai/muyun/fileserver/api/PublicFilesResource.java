@@ -63,6 +63,20 @@ public class PublicFilesResource {
     }
 
     @GET
+    @Path("/{fileId}/view/content/{accessToken}")
+    @Produces("application/pdf")
+    public Response viewContent(@RestPath String fileId, @RestPath String accessToken) {
+        PreviewResolution preview = tokenFileQueryService.openPreview(fileId, accessToken);
+        return DownloadResponses.inline(new DownloadFile(
+                fileId,
+                preview.originalFilename(),
+                preview.mimeType(),
+                preview.sizeBytes(),
+                preview.inputStream()
+        ));
+    }
+
+    @GET
     @Path("/{fileId}/download")
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     public Response download(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
