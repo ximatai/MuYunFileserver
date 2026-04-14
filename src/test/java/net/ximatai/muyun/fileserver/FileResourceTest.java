@@ -554,6 +554,74 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldReturnVideoViewDescriptorForSupportedVideoType() {
+        String fileId = uploadSingleFile("demo.mp4", minimalMp4Bytes(), "video/mp4");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.fileId", equalTo(fileId))
+                .body("data.viewerType", equalTo("video"))
+                .body("data.sourceMimeType", equalTo("video/mp4"))
+                .body("data.contentMimeType", equalTo("video/mp4"))
+                .body("data.contentUrl", equalTo("/api/v1/files/" + fileId + "/view/content"))
+                .body("data.downloadUrl", equalTo("/api/v1/files/" + fileId + "/download"))
+                .body("data.capabilities.download", equalTo(true))
+                .body("data.capabilities.zoom", equalTo(false))
+                .body("data.capabilities.pageNavigate", equalTo(false));
+    }
+
+    @Test
+    void shouldServeVideoViewContentInline() {
+        String fileId = uploadSingleFile("demo.mp4", minimalMp4Bytes(), "video/mp4");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view/content", fileId)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("video/mp4"))
+                .header("Content-Disposition", Matchers.containsString("inline;"));
+    }
+
+    @Test
+    void shouldReturnAudioViewDescriptorForSupportedAudioType() {
+        String fileId = uploadSingleFile("demo.wav", minimalWavBytes(), "audio/wav");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.fileId", equalTo(fileId))
+                .body("data.viewerType", equalTo("audio"))
+                .body("data.sourceMimeType", Matchers.startsWith("audio/"))
+                .body("data.contentMimeType", Matchers.startsWith("audio/"))
+                .body("data.contentUrl", equalTo("/api/v1/files/" + fileId + "/view/content"))
+                .body("data.downloadUrl", equalTo("/api/v1/files/" + fileId + "/download"))
+                .body("data.capabilities.download", equalTo(true))
+                .body("data.capabilities.zoom", equalTo(false))
+                .body("data.capabilities.pageNavigate", equalTo(false));
+    }
+
+    @Test
+    void shouldServeAudioViewContentInline() {
+        String fileId = uploadSingleFile("demo.wav", minimalWavBytes(), "audio/wav");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view/content", fileId)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("audio/"))
+                .header("Content-Disposition", Matchers.containsString("inline;"));
+    }
+
+    @Test
     void shouldReturnTextViewDescriptorForPlainTextFile() {
         String fileId = uploadSingleFile("notes.txt", "hello text viewer".getBytes(StandardCharsets.UTF_8), "text/plain");
 
@@ -1233,6 +1301,37 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldReturnVideoViewDescriptorByToken() throws Exception {
+        String fileId = uploadSingleFile("token-video.mp4", minimalMp4Bytes(), "video/mp4");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.viewerType", equalTo("video"))
+                .body("data.contentUrl", equalTo("/api/v1/public/files/" + fileId + "/view/content/" + accessToken))
+                .body("data.downloadUrl", equalTo("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken));
+    }
+
+    @Test
+    void shouldServeAudioViewContentByToken() throws Exception {
+        String fileId = uploadSingleFile("token-audio.wav", minimalWavBytes(), "audio/wav");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .when()
+                .get("/api/v1/public/files/{fileId}/view/content/{accessToken}", fileId, accessToken)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("audio/"))
+                .header("Content-Disposition", Matchers.containsString("inline;"));
+    }
+
+    @Test
     void shouldReturnTextViewDescriptorByToken() throws Exception {
         String fileId = uploadSingleFile("token-text.txt", "token text".getBytes(StandardCharsets.UTF_8), "text/plain");
         String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
@@ -1523,6 +1622,33 @@ class FileResourceTest {
         return Base64.getDecoder().decode(
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0XcAAAAASUVORK5CYII="
         );
+    }
+
+    private byte[] minimalMp4Bytes() {
+        return new byte[]{
+                0x00, 0x00, 0x00, 0x18,
+                0x66, 0x74, 0x79, 0x70,
+                0x6D, 0x70, 0x34, 0x32,
+                0x00, 0x00, 0x00, 0x00,
+                0x6D, 0x70, 0x34, 0x32,
+                0x69, 0x73, 0x6F, 0x6D
+        };
+    }
+
+    private byte[] minimalWavBytes() {
+        return new byte[]{
+                0x52, 0x49, 0x46, 0x46,
+                0x24, 0x00, 0x00, 0x00,
+                0x57, 0x41, 0x56, 0x45,
+                0x66, 0x6D, 0x74, 0x20,
+                0x10, 0x00, 0x00, 0x00,
+                0x01, 0x00, 0x01, 0x00,
+                0x40, 0x1F, 0x00, 0x00,
+                (byte) 0x80, 0x3E, 0x00, 0x00,
+                0x02, 0x00, 0x10, 0x00,
+                0x64, 0x61, 0x74, 0x61,
+                0x00, 0x00, 0x00, 0x00
+        };
     }
 
     private String oversizedInlineText() {

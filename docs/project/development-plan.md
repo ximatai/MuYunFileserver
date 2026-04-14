@@ -146,6 +146,7 @@
 - [x] Rocky 环境已完成 viewer 与 `LibreOffice` 闭环验证
 - [x] 图片 renderer 已落地，viewer 已支持主流图片在线查看
 - [x] 文本 renderer 已落地，viewer 已支持纯文本在线查看
+- [x] 音频与视频 renderer 已落地，viewer 已支持浏览器原生媒体播放
 
 ---
 
@@ -191,5 +192,8 @@
 - [ ] 评估并设计“删除 token”模式，明确 `purpose=delete`、有效期、幂等语义与接口形态
 - [x] 实现图片 renderer，作为 viewer 的第二种正式 renderer
 - [x] 实现文本 renderer，作为 viewer 的第三种正式 renderer
-- [ ] 评估并收口 PDF.js 官方 viewer 的文案、工具栏裁剪与本地化策略
-- [ ] 评估视频、音频 renderer 的产品优先级与协议扩展方式
+- [x] 实现视频 renderer，作为 viewer 的第四种正式 renderer
+- [x] 实现音频 renderer，作为 viewer 的第五种正式 renderer
+- [x] 收口 PDF.js 官方 viewer 的薄适配边界，工具栏裁剪改由同步脚本与 `pdfjs-overrides` 维护
+- [x] 脚本化 PDF.js 升级与验证链路，确保 vendor 保持官方 release、补丁在构建时自动应用
+- [ ] 评估视频转码、封面图、时长元数据和更强多媒体协议扩展方式

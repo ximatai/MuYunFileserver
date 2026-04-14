@@ -9,6 +9,7 @@
 - 官方产物以 **vendor 版本目录** 形式固定在仓库内
 - 运行时路径保持稳定为 `/viewer/pdfjs/...`
 - 构建前通过脚本把当前锁定版本同步到 `frontend/viewer/public/pdfjs/`
+- 同步脚本会在 `public/pdfjs/` 上应用 MuYun 的极薄适配，不直接维护一套 fork 版 vendor
 - 当前启用版本由 `frontend/viewer/pdfjs-version.json` 单点维护
 
 ## 当前锁定版本
@@ -16,9 +17,29 @@
 - `PDF.js 5.6.205`
 - 当前版本文件：`frontend/viewer/pdfjs-version.json`
 - vendor 源目录：`frontend/viewer/vendor/pdfjs/5.6.205/`
+- 本地适配资源：`frontend/viewer/pdfjs-overrides/`
 - 构建同步脚本：`frontend/viewer/scripts/sync-pdfjs-vendor.mjs`
 - 升级脚本：`scripts/upgrade-pdfjs.sh`
 - 验证脚本：`scripts/verify-pdfjs.sh`
+
+## 本地适配边界
+
+当前对官方 viewer 的本地适配只允许落在同步阶段，不允许长期直接手改 vendor。
+
+当前同步脚本会自动做的事情：
+
+- 将 `viewer.html` 标题改为 `MuYun PDF Viewer`
+- 向 `viewer.html` 注入项目 favicon
+- 向 `viewer.html` 注入 `muyun-overrides.css`
+- 将 `frontend/viewer/pdfjs-overrides/muyun-overrides.css` 复制到 `public/pdfjs/web/`
+
+当前 `muyun-overrides.css` 的策略是“只做最少量隐藏，不改官方交互主路径”：
+
+- 隐藏侧栏入口按钮
+- 隐藏签名、批注、自由文本、墨迹、图章等编辑能力
+- 保留阅读主路径：翻页、缩放、搜索、打印、下载、更多菜单
+
+如果后续还要继续收口工具栏，优先修改 `frontend/viewer/pdfjs-overrides/muyun-overrides.css`，不要直接改 vendor 下的 `web/viewer.css` 或 `web/viewer.html`。
 
 ## 为什么不用二次封装包
 
@@ -51,6 +72,12 @@
 
 3. 如需本地浏览器联调，再启动服务并验证 `/view/...`
 
+说明：
+
+- 升级脚本会覆盖 `vendor/pdfjs/<version>/` 为官方 release 内容
+- MuYun 的标题、favicon、工具栏裁剪不会写回 vendor，而是在 `npm run build` 时由同步脚本重新应用
+- 因此升级完成后不需要手工重新编辑 `viewer.html`
+
 ## 升级回归清单
 
 每次升级 PDF.js 后，至少回归以下场景：
@@ -71,10 +98,12 @@
 - 调整 iframe 嵌入方式
 - 调整 vendor 同步脚本
 - 调整 PDF.js 版本号与 vendor 目录
+- 调整 `frontend/viewer/pdfjs-overrides/` 中的极薄样式覆盖
 
 不建议的修改：
 
 - 直接手改 vendor 目录中的官方源码
+- 手改 `frontend/viewer/public/pdfjs/` 下由同步脚本生成的产物
 - 重新把官方 viewer 再打包进自定义 webpack 流水线
 - 再次引入社区 wrapper 作为官方 viewer 的中间层
 

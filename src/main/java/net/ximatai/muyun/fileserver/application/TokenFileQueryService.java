@@ -148,7 +148,7 @@ public class TokenFileQueryService {
                     preview.inputStream()
             );
         }
-        if (viewerType == ViewerType.IMAGE) {
+        if (viewerType == ViewerType.IMAGE || viewerType == ViewerType.VIDEO || viewerType == ViewerType.AUDIO) {
             if (!storageProvider.exists(metadata.storageKey())) {
                 throw new NotFoundException("file not found");
             }

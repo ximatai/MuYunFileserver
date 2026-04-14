@@ -17,7 +17,7 @@ ZIP_NAME="pdfjs-${VERSION}-dist.zip"
 DOWNLOAD_URL="https://github.com/mozilla/pdf.js/releases/download/v${VERSION}/${ZIP_NAME}"
 TARGET_DIR="$VIEWER_DIR/vendor/pdfjs/$VERSION"
 
-for command in curl unzip rsync node; do
+for command in curl unzip rsync; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "Missing required command: $command" >&2
     exit 1
@@ -41,12 +41,10 @@ rsync -a --delete "$TMP_DIR/release/build/" "$TARGET_DIR/build/"
 rsync -a --delete "$TMP_DIR/release/web/" "$TARGET_DIR/web/"
 cp "$TMP_DIR/release/LICENSE" "$TARGET_DIR/LICENSE"
 
-node <<'EOF' "$VERSION_FILE" "$VERSION"
-const fs = require('node:fs');
-const filePath = process.argv[1];
-const version = process.argv[2];
-const content = JSON.stringify({ version }, null, 2) + '\n';
-fs.writeFileSync(filePath, content, 'utf8');
+cat > "$VERSION_FILE" <<EOF
+{
+  "version": "$VERSION"
+}
 EOF
 
 echo "Updated current PDF.js version to ${VERSION}"

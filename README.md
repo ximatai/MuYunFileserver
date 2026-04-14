@@ -395,9 +395,10 @@ Content-Disposition, Content-Length, Content-Type
 - `GET /view` 推荐作为前端统一展示入口
 - `GET /view/content` 是内置 viewer 消费的稳定 PDF 内容地址，避免第三方 viewer 对 query token 的兼容问题
 - `GET /api/v1/.../view` 返回 viewer descriptor，是 viewer 页面唯一正式协议
-- 当前 viewer 已正式支持 `PDF`、`Office -> PDF`、主流图片和纯文本在线查看
+- 当前 viewer 已正式支持 `PDF`、`Office -> PDF`、主流图片、纯文本、原始音频和原始视频在线查看
 - 纯文本 viewer 首版覆盖 `txt / md / json / xml / csv / log`
 - 纯文本 viewer 首版仅支持安全 UTF-8 内联展示，超大文本会直接引导下载
+- 音频与视频 viewer 首版直接使用浏览器原生能力播放原始媒体流，不做转码、封面提取或 HLS/DASH 分发
 
 如果启用了 Office 预览，请确保运行环境中存在可执行的 `soffice` 命令。
 

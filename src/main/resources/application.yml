@@ -68,8 +68,11 @@ mfs:
       - audio/mpeg
       - audio/mp4
       - audio/ogg
+      - audio/vnd.wave
       - audio/wav
+      - audio/wave
       - audio/webm
+      - audio/x-wav
       - video/mp4
       - video/ogg
       - video/quicktime

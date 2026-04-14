@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public enum ViewerType {
     PDF("pdf"),
     IMAGE("image"),
+    VIDEO("video"),
+    AUDIO("audio"),
     TEXT("text"),
     FALLBACK("fallback");
 

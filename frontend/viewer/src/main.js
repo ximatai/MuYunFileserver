@@ -94,6 +94,8 @@ async function renderShell(descriptor, routeConfig) {
   const renderers = {
     pdf: renderPdfViewer,
     image: renderImageViewer,
+    video: renderVideoViewer,
+    audio: renderAudioViewer,
     text: renderTextViewer,
     fallback: renderFallback
   };
@@ -194,6 +196,53 @@ function renderImageViewer(target, descriptor) {
       <section class="empty-state">
         <h2>图片加载失败</h2>
         <p>文件服务已经返回图片查看地址，但浏览器未能成功加载当前图片内容。你仍然可以直接下载原文件。</p>
+        <div class="empty-state-actions">
+          <a class="button" href="${descriptor.downloadUrl}" target="_blank" rel="noopener">下载原文件</a>
+        </div>
+      </section>
+    `;
+  });
+}
+
+function renderVideoViewer(target, descriptor) {
+  renderMediaViewer(target, descriptor, {
+    title: '在线视频查看',
+    tagName: 'video',
+    attributes: 'controls playsinline preload="metadata"'
+  });
+}
+
+function renderAudioViewer(target, descriptor) {
+  renderMediaViewer(target, descriptor, {
+    title: '在线音频播放',
+    tagName: 'audio',
+    attributes: 'controls preload="metadata"'
+  });
+}
+
+function renderMediaViewer(target, descriptor, options) {
+  target.innerHTML = `
+    <section class="media-viewer-shell panel">
+      <div class="media-viewer-toolbar">
+        <div class="media-viewer-toolbar-title">${escapeHtml(options.title)}</div>
+        <div class="media-viewer-toolbar-meta">${escapeHtml(descriptor.contentMimeType)}</div>
+      </div>
+      <div class="media-viewer-stage">
+        <${options.tagName}
+          class="media-viewer-player"
+          ${options.attributes}
+          src="${descriptor.contentUrl}"
+        ></${options.tagName}>
+      </div>
+    </section>
+  `;
+
+  const player = target.querySelector('.media-viewer-player');
+  player.addEventListener('error', () => {
+    target.innerHTML = `
+      <section class="empty-state">
+        <h2>媒体加载失败</h2>
+        <p>文件服务已经返回媒体查看地址，但浏览器未能成功播放当前内容。你仍然可以直接下载原文件。</p>
         <div class="empty-state-actions">
           <a class="button" href="${descriptor.downloadUrl}" target="_blank" rel="noopener">下载原文件</a>
         </div>
