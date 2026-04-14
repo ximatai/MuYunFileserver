@@ -10,6 +10,21 @@
 - `application.minio.example.yml`：MinIO 示例配置
 - `compose.yaml`：本地开发用 MinIO
 
+## 零配置模式
+
+当前 release 包默认采用“零配置文件类型策略”：
+
+- 文件上传、预览和 viewer 的类型支持矩阵由服务内部固定维护
+- 常见 `MIME` 别名兼容也由服务内部处理
+- 默认支持的文件类型会随 release 版本演进而扩展
+
+大多数部署场景下，你只需要关注：
+
+- 存储模式和目录
+- 数据库路径
+- 上传大小限制
+- Office 预览是否启用
+
 ## Local 模式
 
 1. 准备目录：
@@ -84,3 +99,8 @@ curl -I http://127.0.0.1:8080/api/v1/files/<fileId>/preview \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123'
 ```
+
+说明：
+
+- 默认支持的文件类型由服务版本决定，而不是由 release 配置枚举
+- 若未来版本扩展更多图片、文本或媒体别名，通常只需升级 release 包
