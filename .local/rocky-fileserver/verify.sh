@@ -158,7 +158,7 @@ print(json.dumps(result, ensure_ascii=False, indent=2))
 assert result["remark"] == "rocky verify"
 assert result["uploaded_by"] == user
 assert result["download_body"] == "rocky verify upload"
-assert result["viewer_type"] == "fallback"
+assert result["viewer_type"] == "text"
 assert result["viewer_title_found"] is True
 assert result["delete_status"] == "DELETED"
 assert result["query_after_delete_status"] == 404
