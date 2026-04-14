@@ -520,6 +520,40 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldReturnImageViewDescriptorForSupportedImageType() {
+        String fileId = uploadSingleFile("photo.png", minimalPngBytes(), "image/png");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.fileId", equalTo(fileId))
+                .body("data.viewerType", equalTo("image"))
+                .body("data.sourceMimeType", equalTo("image/png"))
+                .body("data.contentMimeType", equalTo("image/png"))
+                .body("data.contentUrl", equalTo("/api/v1/files/" + fileId + "/view/content"))
+                .body("data.downloadUrl", equalTo("/api/v1/files/" + fileId + "/download"))
+                .body("data.capabilities.download", equalTo(true))
+                .body("data.capabilities.zoom", equalTo(true))
+                .body("data.capabilities.pageNavigate", equalTo(false));
+    }
+
+    @Test
+    void shouldServeImageViewContentInline() {
+        String fileId = uploadSingleFile("photo.png", minimalPngBytes(), "image/png");
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view/content", fileId)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("image/png"))
+                .header("Content-Disposition", Matchers.containsString("inline;"));
+    }
+
+    @Test
     void shouldRejectOversizedFile() {
         byte[] oversized = new byte[MAX_FILE_SIZE_BYTES + 1];
         Arrays.fill(oversized, (byte) 'a');
@@ -1093,6 +1127,37 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldReturnImageViewDescriptorByToken() throws Exception {
+        String fileId = uploadSingleFile("token-image.png", minimalPngBytes(), "image/png");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.viewerType", equalTo("image"))
+                .body("data.contentUrl", equalTo("/api/v1/public/files/" + fileId + "/view/content/" + accessToken))
+                .body("data.downloadUrl", equalTo("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken));
+    }
+
+    @Test
+    void shouldServeImageViewContentByToken() throws Exception {
+        String fileId = uploadSingleFile("token-image-content.png", minimalPngBytes(), "image/png");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .when()
+                .get("/api/v1/public/files/{fileId}/view/content/{accessToken}", fileId, accessToken)
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("image/png"))
+                .header("Content-Disposition", Matchers.containsString("inline;"));
+    }
+
+    @Test
     void shouldRejectPreviewTokenForAnotherFile() throws Exception {
         String firstFileId = uploadSingleFile("a.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
         String secondFileId = uploadSingleFile("b.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
@@ -1345,6 +1410,12 @@ class FileResourceTest {
             throw new IllegalStateException("failed to build minimal docx", exception);
         }
         return output.toByteArray();
+    }
+
+    private byte[] minimalPngBytes() {
+        return Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0XcAAAAASUVORK5CYII="
+        );
     }
 
     private void writeZipEntry(ZipOutputStream zip, String name, String content) throws Exception {

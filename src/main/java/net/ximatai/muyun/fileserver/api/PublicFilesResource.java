@@ -64,16 +64,9 @@ public class PublicFilesResource {
 
     @GET
     @Path("/{fileId}/view/content/{accessToken}")
-    @Produces("application/pdf")
+    @Produces(MediaType.WILDCARD)
     public Response viewContent(@RestPath String fileId, @RestPath String accessToken) {
-        PreviewResolution preview = tokenFileQueryService.openPreview(fileId, accessToken);
-        return DownloadResponses.inline(new DownloadFile(
-                fileId,
-                preview.originalFilename(),
-                preview.mimeType(),
-                preview.sizeBytes(),
-                preview.inputStream()
-        ));
+        return DownloadResponses.inline(tokenFileQueryService.openViewContent(fileId, accessToken));
     }
 
     @GET

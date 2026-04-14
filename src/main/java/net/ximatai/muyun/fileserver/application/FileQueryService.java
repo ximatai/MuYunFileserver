@@ -135,6 +135,55 @@ public class FileQueryService {
         return descriptor;
     }
 
+    public DownloadFile openViewContent(String fileId) {
+        FileMetadata metadata = requireAccessibleFile(fileId);
+        ViewerType viewerType = viewDescriptorService.resolveViewerType(metadata.mimeType());
+        RequestContext requestContext = requestContextHolder.getRequired();
+        if (viewerType == ViewerType.PDF) {
+            PreviewResolution preview = previewService.openPreview(metadata);
+            LOG.info(OperationLog.format(
+                    "view_content",
+                    "success",
+                    "file_id", fileId,
+                    "tenant_id", requestContext.tenantId(),
+                    "user_id", requestContext.userId(),
+                    "request_id", requestContext.requestId(),
+                    "storage_provider", metadata.storageProvider(),
+                    "viewer_type", viewerType.value()
+            ));
+            return new DownloadFile(
+                    fileId,
+                    preview.originalFilename(),
+                    preview.mimeType(),
+                    preview.sizeBytes(),
+                    preview.inputStream()
+            );
+        }
+        if (viewerType == ViewerType.IMAGE) {
+            if (!storageProvider.exists(metadata.storageKey())) {
+                throw new NotFoundException("file not found");
+            }
+            LOG.info(OperationLog.format(
+                    "view_content",
+                    "success",
+                    "file_id", fileId,
+                    "tenant_id", requestContext.tenantId(),
+                    "user_id", requestContext.userId(),
+                    "request_id", requestContext.requestId(),
+                    "storage_provider", metadata.storageProvider(),
+                    "viewer_type", viewerType.value()
+            ));
+            return new DownloadFile(
+                    metadata.id(),
+                    metadata.originalFilename(),
+                    metadata.mimeType(),
+                    metadata.sizeBytes(),
+                    storageProvider.open(metadata.storageKey())
+            );
+        }
+        throw new NotFoundException("view content is not available for current file");
+    }
+
     private FileMetadata requireAccessibleFile(String fileId) {
         if (!ulidGenerator.isValid(fileId)) {
             throw new ValidationException("invalid fileId");

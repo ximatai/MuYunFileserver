@@ -16,7 +16,7 @@ if (!route) {
 
 async function bootstrap(routeConfig) {
   renderLoading();
-  const descriptor = await fetchDescriptor(routeConfig);
+  const descriptor = normalizeDescriptorUrls(await fetchDescriptor(routeConfig), routeConfig);
   renderShell(descriptor, routeConfig);
 }
 
@@ -93,6 +93,7 @@ function renderShell(descriptor, routeConfig) {
   const target = document.querySelector('#viewer-main');
   const renderers = {
     pdf: renderPdfViewer,
+    image: renderImageViewer,
     fallback: renderFallback
   };
   const renderer = renderers[descriptor.viewerType] || renderFallback;
@@ -114,6 +115,92 @@ function renderPdfViewer(target, descriptor, routeConfig) {
   `;
 }
 
+function renderImageViewer(target, descriptor) {
+  target.innerHTML = `
+    <section class="image-viewer-shell panel">
+      <div class="image-viewer-toolbar">
+        <div class="image-viewer-toolbar-group">
+          <button class="button button-secondary" type="button" data-action="fit">适配窗口</button>
+          <button class="button button-secondary" type="button" data-action="actual">原始尺寸</button>
+        </div>
+        <div class="image-viewer-toolbar-group">
+          <button class="button button-secondary" type="button" data-action="zoom-out">缩小</button>
+          <span class="image-viewer-scale" data-role="scale-label">适配窗口</span>
+          <button class="button button-secondary" type="button" data-action="zoom-in">放大</button>
+        </div>
+      </div>
+      <div class="image-viewer-stage" data-role="stage">
+        <div class="image-viewer-canvas is-fit" data-role="canvas">
+          <img
+            class="image-viewer-image"
+            data-role="image"
+            alt="${escapeHtml(descriptor.displayName)}"
+            src="${descriptor.contentUrl}"
+            loading="eager"
+          />
+        </div>
+      </div>
+    </section>
+  `;
+
+  const stage = target.querySelector('[data-role="stage"]');
+  const canvas = target.querySelector('[data-role="canvas"]');
+  const image = target.querySelector('[data-role="image"]');
+  const scaleLabel = target.querySelector('[data-role="scale-label"]');
+  const state = {
+    fit: true,
+    scale: 1
+  };
+
+  const applyState = () => {
+    if (state.fit) {
+      canvas.classList.add('is-fit');
+      image.style.removeProperty('--image-scale');
+      scaleLabel.textContent = '适配窗口';
+      return;
+    }
+    canvas.classList.remove('is-fit');
+    image.style.setProperty('--image-scale', String(state.scale));
+    scaleLabel.textContent = `${Math.round(state.scale * 100)}%`;
+  };
+
+  target.querySelectorAll('[data-action]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const action = button.getAttribute('data-action');
+      if (action === 'fit') {
+        state.fit = true;
+      } else if (action === 'actual') {
+        state.fit = false;
+        state.scale = 1;
+      } else if (action === 'zoom-in') {
+        state.fit = false;
+        state.scale = Math.min(4, Number((state.scale + 0.25).toFixed(2)));
+      } else if (action === 'zoom-out') {
+        state.fit = false;
+        state.scale = Math.max(0.25, Number((state.scale - 0.25).toFixed(2)));
+      }
+      applyState();
+    });
+  });
+
+  image.addEventListener('load', () => {
+    stage.classList.add('is-ready');
+    applyState();
+  });
+
+  image.addEventListener('error', () => {
+    target.innerHTML = `
+      <section class="empty-state">
+        <h2>图片加载失败</h2>
+        <p>文件服务已经返回图片查看地址，但浏览器未能成功加载当前图片内容。你仍然可以直接下载原文件。</p>
+        <div class="empty-state-actions">
+          <a class="button" href="${descriptor.downloadUrl}" target="_blank" rel="noopener">下载原文件</a>
+        </div>
+      </section>
+    `;
+  });
+}
+
 function renderFallback(target, descriptor) {
   target.innerHTML = `
     <section class="empty-state">
@@ -124,6 +211,33 @@ function renderFallback(target, descriptor) {
       </div>
     </section>
   `;
+}
+
+function normalizeDescriptorUrls(descriptor, routeConfig) {
+  return {
+    ...descriptor,
+    contentUrl: normalizeServiceUrl(descriptor.contentUrl, routeConfig.pathPrefix),
+    downloadUrl: normalizeServiceUrl(descriptor.downloadUrl, routeConfig.pathPrefix)
+  };
+}
+
+function normalizeServiceUrl(url, pathPrefix) {
+  if (!url) {
+    return url;
+  }
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+  if (!url.startsWith('/')) {
+    return url;
+  }
+  if (!pathPrefix) {
+    return url;
+  }
+  if (url.startsWith(`${pathPrefix}/`)) {
+    return url;
+  }
+  return `${pathPrefix}${url}`;
 }
 
 function renderError(title, message) {

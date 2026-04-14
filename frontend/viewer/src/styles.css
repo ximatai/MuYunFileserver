@@ -141,6 +141,12 @@ body {
   transform: translateY(-1px);
 }
 
+.button-secondary {
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(208, 215, 222, 0.88);
+}
+
 .pdf-viewer-frame-shell {
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid rgba(208, 215, 222, 0.88);
@@ -158,6 +164,71 @@ body {
   background: #fff;
 }
 
+.image-viewer-shell {
+  overflow: hidden;
+}
+
+.image-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(208, 215, 222, 0.88);
+  background: rgba(248, 250, 252, 0.88);
+  flex-wrap: wrap;
+}
+
+.image-viewer-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.image-viewer-scale {
+  min-width: 72px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.image-viewer-stage {
+  min-height: calc(100vh - 260px);
+  overflow: auto;
+  background:
+    linear-gradient(45deg, rgba(208, 215, 222, 0.28) 25%, transparent 25%, transparent 75%, rgba(208, 215, 222, 0.28) 75%, rgba(208, 215, 222, 0.28)),
+    linear-gradient(45deg, rgba(208, 215, 222, 0.28) 25%, transparent 25%, transparent 75%, rgba(208, 215, 222, 0.28) 75%, rgba(208, 215, 222, 0.28));
+  background-position: 0 0, 12px 12px;
+  background-size: 24px 24px;
+  padding: 20px;
+}
+
+.image-viewer-canvas {
+  min-height: calc(100vh - 300px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.image-viewer-canvas.is-fit .image-viewer-image {
+  max-width: 100%;
+  height: auto;
+  transform: none;
+}
+
+.image-viewer-image {
+  display: block;
+  max-width: none;
+  height: auto;
+  box-shadow: 0 22px 56px rgba(15, 23, 42, 0.16);
+  border-radius: 18px;
+  background: white;
+  transform: scale(var(--image-scale, 1));
+  transform-origin: top center;
+  transition: transform 120ms ease;
+}
+
 @media (max-width: 900px) {
   .viewer-header {
     align-items: flex-start;
@@ -171,5 +242,10 @@ body {
   .pdf-viewer-frame-shell,
   .pdf-viewer-frame {
     min-height: calc(100vh - 220px);
+  }
+
+  .image-viewer-stage {
+    min-height: calc(100vh - 300px);
+    padding: 14px;
   }
 }

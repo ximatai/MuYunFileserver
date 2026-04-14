@@ -144,6 +144,7 @@
 - [x] `PDF.js` 已改为官方 viewer vendor 集成，不再依赖 wrapper 与 webpack
 - [x] viewer 前端已接入正式构建链并可随 release 一起发布
 - [x] Rocky 环境已完成 viewer 与 `LibreOffice` 闭环验证
+- [x] 图片 renderer 已落地，viewer 已支持主流图片在线查看
 
 ---
 
@@ -187,6 +188,6 @@
 - [ ] 评估并设计“短时签名下载 token”模式，降低业务网关下载转发负担
 - [ ] 若采用下载 token，补充配置模型、验签组件、公开下载入口与集成测试
 - [ ] 评估并设计“删除 token”模式，明确 `purpose=delete`、有效期、幂等语义与接口形态
-- [ ] 实现图片 renderer，作为 viewer 的第二种正式 renderer
+- [x] 实现图片 renderer，作为 viewer 的第二种正式 renderer
 - [ ] 评估并收口 PDF.js 官方 viewer 的文案、工具栏裁剪与本地化策略
 - [ ] 评估视频、音频、文本 renderer 的产品优先级与协议扩展方式

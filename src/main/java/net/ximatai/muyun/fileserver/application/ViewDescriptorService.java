@@ -19,8 +19,18 @@ public class ViewDescriptorService {
     private static final String PDF_MIME_TYPE = "application/pdf";
     private static final ViewCapabilitiesResponse PDF_CAPABILITIES =
             new ViewCapabilitiesResponse(true, true, true);
+    private static final ViewCapabilitiesResponse IMAGE_CAPABILITIES =
+            new ViewCapabilitiesResponse(true, true, false);
     private static final ViewCapabilitiesResponse FALLBACK_CAPABILITIES =
             new ViewCapabilitiesResponse(true, false, false);
+    private static final Set<String> IMAGE_MIME_TYPES = Set.of(
+            "image/bmp",
+            "image/gif",
+            "image/jpeg",
+            "image/png",
+            "image/svg+xml",
+            "image/webp"
+    );
 
     @Inject
     FileServiceConfig config;
@@ -33,17 +43,19 @@ public class ViewDescriptorService {
         if (viewerType == ViewerType.PDF) {
             previewService.ensurePreviewReady(metadata);
         }
+        String contentUrl = switch (viewerType) {
+            case PDF, IMAGE -> "/api/v1/files/" + metadata.id() + "/view/content";
+            case FALLBACK -> null;
+        };
         return new FileViewResponse(
                 metadata.id(),
                 metadata.originalFilename(),
                 viewerType,
                 metadata.mimeType(),
-                viewerType == ViewerType.PDF ? PDF_MIME_TYPE : metadata.mimeType(),
-                viewerType == ViewerType.PDF
-                        ? "/api/v1/files/" + metadata.id() + "/view/content"
-                        : null,
+                resolveContentMimeType(viewerType, metadata.mimeType()),
+                contentUrl,
                 "/api/v1/files/" + metadata.id() + "/download",
-                viewerType == ViewerType.PDF ? PDF_CAPABILITIES : FALLBACK_CAPABILITIES
+                resolveCapabilities(viewerType)
         );
     }
 
@@ -55,30 +67,52 @@ public class ViewDescriptorService {
 
         String encodedToken = URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
         String query = "?access_token=" + encodedToken;
+        String contentUrl = switch (viewerType) {
+            case PDF, IMAGE -> "/api/v1/public/files/" + metadata.id() + "/view/content/" + accessToken;
+            case FALLBACK -> null;
+        };
         return new FileViewResponse(
                 metadata.id(),
                 metadata.originalFilename(),
                 viewerType,
                 metadata.mimeType(),
-                viewerType == ViewerType.PDF ? PDF_MIME_TYPE : metadata.mimeType(),
-                viewerType == ViewerType.PDF
-                        ? "/api/v1/public/files/" + metadata.id() + "/view/content/" + accessToken
-                        : null,
+                resolveContentMimeType(viewerType, metadata.mimeType()),
+                contentUrl,
                 "/api/v1/public/files/" + metadata.id() + "/download" + query,
-                viewerType == ViewerType.PDF ? PDF_CAPABILITIES : FALLBACK_CAPABILITIES
+                resolveCapabilities(viewerType)
         );
     }
 
-    private ViewerType resolveViewerType(String mimeType) {
+    ViewerType resolveViewerType(String mimeType) {
+        String normalizedMimeType = mimeType.toLowerCase(Locale.ROOT);
+        if (IMAGE_MIME_TYPES.contains(normalizedMimeType)) {
+            return ViewerType.IMAGE;
+        }
         if (!config.preview().enabled()) {
             return ViewerType.FALLBACK;
         }
         Set<String> allowedMimeTypes = config.preview().allowedMimeTypes().stream()
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .collect(Collectors.toUnmodifiableSet());
-        if (allowedMimeTypes.contains(mimeType.toLowerCase(Locale.ROOT))) {
+        if (allowedMimeTypes.contains(normalizedMimeType)) {
             return ViewerType.PDF;
         }
         return ViewerType.FALLBACK;
+    }
+
+    private String resolveContentMimeType(ViewerType viewerType, String sourceMimeType) {
+        return switch (viewerType) {
+            case PDF -> PDF_MIME_TYPE;
+            case IMAGE -> sourceMimeType;
+            case FALLBACK -> sourceMimeType;
+        };
+    }
+
+    private ViewCapabilitiesResponse resolveCapabilities(ViewerType viewerType) {
+        return switch (viewerType) {
+            case PDF -> PDF_CAPABILITIES;
+            case IMAGE -> IMAGE_CAPABILITIES;
+            case FALLBACK -> FALLBACK_CAPABILITIES;
+        };
     }
 }

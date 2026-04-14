@@ -123,6 +123,52 @@ public class TokenFileQueryService {
         return descriptor;
     }
 
+    public DownloadFile openViewContent(String fileId, String accessToken) {
+        FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
+        ViewerType viewerType = viewDescriptorService.resolveViewerType(metadata.mimeType());
+        if (viewerType == ViewerType.PDF) {
+            PreviewResolution preview = previewService.openPreview(metadata);
+            LOG.info(OperationLog.format(
+                    "view_content_by_token",
+                    "success",
+                    "file_id", fileId,
+                    "tenant_id", metadata.tenantId(),
+                    "request_id", null,
+                    "storage_provider", metadata.storageProvider(),
+                    "viewer_type", viewerType.value()
+            ));
+            return new DownloadFile(
+                    fileId,
+                    preview.originalFilename(),
+                    preview.mimeType(),
+                    preview.sizeBytes(),
+                    preview.inputStream()
+            );
+        }
+        if (viewerType == ViewerType.IMAGE) {
+            if (!storageProvider.exists(metadata.storageKey())) {
+                throw new NotFoundException("file not found");
+            }
+            LOG.info(OperationLog.format(
+                    "view_content_by_token",
+                    "success",
+                    "file_id", fileId,
+                    "tenant_id", metadata.tenantId(),
+                    "request_id", null,
+                    "storage_provider", metadata.storageProvider(),
+                    "viewer_type", viewerType.value()
+            ));
+            return new DownloadFile(
+                    metadata.id(),
+                    metadata.originalFilename(),
+                    metadata.mimeType(),
+                    metadata.sizeBytes(),
+                    storageProvider.open(metadata.storageKey())
+            );
+        }
+        throw new NotFoundException("view content is not available for current file");
+    }
+
     private FileMetadata requireAccessibleFile(String fileId, String accessToken) {
         if (!downloadTokenVerifier.isEnabled()) {
             throw new NotFoundException("resource not found");

@@ -395,7 +395,7 @@ Content-Disposition, Content-Length, Content-Type
 - `GET /view` 推荐作为前端统一展示入口
 - `GET /view/content` 是内置 viewer 消费的稳定 PDF 内容地址，避免第三方 viewer 对 query token 的兼容问题
 - `GET /api/v1/.../view` 返回 viewer descriptor，是 viewer 页面唯一正式协议
-- 一期 viewer 只正式保证 `PDF` 和 `Office -> PDF`
+- 当前 viewer 已正式支持 `PDF`、`Office -> PDF` 和主流图片在线查看
 
 如果启用了 Office 预览，请确保运行环境中存在可执行的 `soffice` 命令。
 
