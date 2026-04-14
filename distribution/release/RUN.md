@@ -105,6 +105,34 @@ curl -I http://127.0.0.1:8080/api/v1/files/<fileId>/preview \
 - 默认支持的文件类型由服务版本决定，而不是由 release 配置枚举
 - 若未来版本扩展更多图片、文本或媒体别名，通常只需升级 release 包
 
+## 仓库维护者本地 demo
+
+如果你是在源码仓库里维护项目，并且已经准备好了 `demo-files/`，可以直接运行：
+
+```sh
+./scripts/demo-view.sh
+```
+
+这个脚本会：
+
+- 启动一个独立的本地 demo 环境
+- 自动开启 token 模式
+- 使用本机 `soffice` 做 Office 预览
+- 批量上传 `demo-files/` 里的非隐藏文件
+- 输出每个文件对应的 `/view/public/...` 链接
+
+如果 `soffice` 不在 `PATH`，可以显式指定：
+
+```sh
+SOFFICE_COMMAND=/opt/homebrew/bin/soffice ./scripts/demo-view.sh
+```
+
+停止 demo 环境：
+
+```sh
+./scripts/demo-view-stop.sh
+```
+
 ## Docker 运行
 
 当前 Docker 交付采用单容器模式，镜像内已包含：

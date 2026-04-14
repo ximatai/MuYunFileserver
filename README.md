@@ -208,6 +208,40 @@ curl -X POST http://127.0.0.1:8080/api/v1/files \
   -F 'files=@/path/to/contract.pdf'
 ```
 
+### 本地 demo 浏览
+
+如果仓库根目录下有 `demo-files/`，可以直接用脚本拉起一个独立的本地 demo 环境，并批量输出每个文件的 `/view/public/...` 链接：
+
+```sh
+./scripts/demo-view.sh
+```
+
+默认行为：
+
+- 使用独立 demo 数据目录，不影响常规本地库和存储
+- 自动打开 token 模式
+- 自动使用本机 `soffice` 做 Office 预览转换
+- 批量上传 `demo-files/` 里的非隐藏文件
+- 输出 `filename / mimeType / viewerType / viewUrl`
+
+如果 demo 目录不在默认位置，可以显式传路径：
+
+```sh
+./scripts/demo-view.sh /absolute/path/to/demo-files
+```
+
+如果本机 `soffice` 不在 `PATH` 中，可以显式指定：
+
+```sh
+SOFFICE_COMMAND=/opt/homebrew/bin/soffice ./scripts/demo-view.sh
+```
+
+停止这个 demo 环境：
+
+```sh
+./scripts/demo-view-stop.sh
+```
+
 其他常用命令：
 
 运行测试：

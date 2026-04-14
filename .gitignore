@@ -36,6 +36,14 @@ nb-configuration.xml
 .env
 var/
 .codex/
+demo-files/*
+!demo-files/
+!demo-files/*.doc
+!demo-files/*.docx
+!demo-files/*.xls
+!demo-files/*.xlsx
+!demo-files/*.ppt
+!demo-files/*.pptx
 
 # Plugin directory
 /.quarkus/cli/plugins/

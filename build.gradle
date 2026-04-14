@@ -83,7 +83,9 @@ tasks.register('buildViewer', Exec) {
 
 tasks.register('syncPrebuiltViewer', Copy) {
     onlyIf { prebuiltViewerResourcesDir != null && !prebuiltViewerResourcesDir.trim().isEmpty() }
-    from(prebuiltViewerResourcesDir)
+    if (prebuiltViewerResourcesDir != null && !prebuiltViewerResourcesDir.trim().isEmpty()) {
+        from(prebuiltViewerResourcesDir)
+    }
     into(viewerOutputDir)
 }
 
