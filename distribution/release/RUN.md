@@ -8,7 +8,7 @@
 - `application.yml`：默认配置
 - `application.local.example.yml`：本地文件系统示例配置
 - `application.minio.example.yml`：MinIO 示例配置
-- `compose.yaml`：本地开发用 MinIO
+- `compose.yaml`：单容器 Docker 运行模板
 
 ## 零配置模式
 
@@ -104,3 +104,67 @@ curl -I http://127.0.0.1:8080/api/v1/files/<fileId>/preview \
 
 - 默认支持的文件类型由服务版本决定，而不是由 release 配置枚举
 - 若未来版本扩展更多图片、文本或媒体别名，通常只需升级 release 包
+
+## Docker 运行
+
+当前 Docker 交付采用单容器模式，镜像内已包含：
+
+- Quarkus 应用
+- 内置 viewer 静态资源
+- `LibreOffice`
+- 中文字体 `fonts-noto-cjk`
+
+推荐为以下目录挂载数据卷：
+
+- `/app/var/data`
+- `/app/var/storage`
+- `/app/var/tmp`
+
+构建镜像：
+
+```sh
+./gradlew quarkusBuild -x test
+docker build -f src/main/docker/Dockerfile.jvm -t muyun-fileserver:latest .
+```
+
+运行容器：
+
+```sh
+docker run -d \
+  --name muyun-fileserver \
+  -p 8080:8080 \
+  -e QUARKUS_CONFIG_LOCATIONS=/app/application.yml \
+  -v $(pwd)/var/data:/app/var/data \
+  -v $(pwd)/var/storage:/app/var/storage \
+  -v $(pwd)/var/tmp:/app/var/tmp \
+  -v $(pwd)/application.yml:/app/application.yml:ro \
+  muyun-fileserver:latest
+```
+
+说明：
+
+- 容器内默认工作目录为 `/app`
+- 若继续使用 SQLite 与本地存储，建议保持单实例部署
+- 容器内已包含 `soffice`，适合直接启用 `Office -> PDF` 预览
+- 中文 Office 文档依赖镜像内置的 `fonts-noto-cjk` 进行基础字体兜底
+
+仓库维护者也可以直接使用脚本：
+
+```sh
+./scripts/docker-build.sh
+./scripts/docker-run.sh
+./scripts/docker-verify.sh
+```
+
+其中 `docker-verify.sh` 会覆盖：
+
+- readiness
+- `soffice` 可执行检查
+- 文本 viewer
+- `docx -> pdf` 预览链路
+
+如果你希望用 compose 启动，可以使用：
+
+```sh
+docker compose -f distribution/release/compose.yaml up -d
+```

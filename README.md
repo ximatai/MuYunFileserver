@@ -118,6 +118,35 @@ curl -X POST http://127.0.0.1:8080/api/v1/files \
 }
 ```
 
+### 5. Docker
+
+当前 Docker 交付采用单容器模式，镜像内已包含：
+
+- Quarkus 应用
+- viewer 静态资源
+- `LibreOffice`
+- 中文字体 `fonts-noto-cjk`
+
+推荐构建路径：
+
+```sh
+./gradlew quarkusBuild -x test
+docker build -f src/main/docker/Dockerfile.jvm -t muyun-fileserver:latest .
+```
+
+推荐验收路径：
+
+```sh
+./scripts/docker-verify.sh muyun-fileserver:latest
+```
+
+这条路径会验证：
+
+- 容器 readiness
+- `soffice` 可执行
+- 文本 viewer
+- `docx -> pdf` 预览链路
+
 如果你只想快速验证项目，到这里就够了。
 
 试预览一个文件：

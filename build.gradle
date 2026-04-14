@@ -50,6 +50,7 @@ compileTestJava {
 def viewerDir = file("$projectDir/frontend/viewer")
 def viewerGeneratedResourcesDir = file("$buildDir/generated-resources/viewer")
 def viewerOutputDir = file("$viewerGeneratedResourcesDir/META-INF/resources/viewer")
+def prebuiltViewerResourcesDir = providers.environmentVariable('VIEWER_PREBUILT_RESOURCES_DIR').orNull
 def npmCommand = Os.isFamily(Os.FAMILY_WINDOWS) ? 'npm.cmd' : 'npm'
 
 sourceSets {
@@ -80,8 +81,18 @@ tasks.register('buildViewer', Exec) {
     commandLine npmCommand, 'run', 'build'
 }
 
+tasks.register('syncPrebuiltViewer', Copy) {
+    onlyIf { prebuiltViewerResourcesDir != null && !prebuiltViewerResourcesDir.trim().isEmpty() }
+    from(prebuiltViewerResourcesDir)
+    into(viewerOutputDir)
+}
+
 tasks.named('processResources') {
-    dependsOn tasks.named('buildViewer')
+    if (prebuiltViewerResourcesDir != null && !prebuiltViewerResourcesDir.trim().isEmpty()) {
+        dependsOn tasks.named('syncPrebuiltViewer')
+    } else {
+        dependsOn tasks.named('buildViewer')
+    }
 }
 
 tasks.named('clean') {

@@ -175,7 +175,7 @@
 - [ ] 统一关键日志字段：`operation`、`file_id`、`tenant_id`、`user_id`、`request_id`、`result`、`reason`
 - [ ] 增补部署与运维文档，覆盖环境变量、目录准备、SQLite 使用边界和备份建议
 - [ ] 复查清理任务日志，区分可重试失败与需要人工介入的失败
-- [ ] 补齐 Docker 交付中 viewer 静态资源与 `LibreOffice` 的正式验收说明
+- [x] 补齐 Docker 交付中 viewer 静态资源与 `LibreOffice` 的正式验收说明
 
 ### P2 安全与规则增强
 
@@ -200,6 +200,6 @@
 
 当前阶段建议：
 
-- 优先补齐 Docker 交付中的 viewer 静态资源与 `LibreOffice` 验收说明
-- 其次推进视频封面图、时长元数据与大文件媒体体验边界
+- 优先推进视频封面图、时长元数据与大文件媒体体验边界
+- 持续收口 Docker 文档与交付模板表达
 - 暂不进入视频转码，除非业务需求明确要求

@@ -1,0 +1,14 @@
+services:
+  muyun-fileserver:
+    image: muyun-fileserver:latest
+    container_name: muyun-fileserver
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      QUARKUS_CONFIG_LOCATIONS: /app/application.yml
+    volumes:
+      - ./application.yml:/app/application.yml:ro
+      - ./var/data:/app/var/data
+      - ./var/storage:/app/var/storage
+      - ./var/tmp:/app/var/tmp
