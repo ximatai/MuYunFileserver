@@ -133,6 +133,21 @@ SOFFICE_COMMAND=/opt/homebrew/bin/soffice ./scripts/demo-view.sh
 ./scripts/demo-view-stop.sh
 ```
 
+如果你在源码仓库里需要实时调试 viewer 前端样式和交互，建议再开一个终端运行：
+
+```sh
+cd frontend/viewer
+npm run dev
+```
+
+然后把 `demo-view.sh` 输出链接中的 host 改成 `http://127.0.0.1:5173` 后再打开，例如：
+
+```text
+http://127.0.0.1:5173/view/public/files/{fileId}?access_token=...
+```
+
+这样浏览器加载的是最新前端源码，而 `/api/...` 请求会自动代理到本地后端 `http://127.0.0.1:8080`。
+
 ## Docker 运行
 
 当前 Docker 交付采用单容器模式，镜像内已包含：

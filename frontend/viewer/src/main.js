@@ -78,12 +78,11 @@ async function renderShell(descriptor, routeConfig) {
     <main class="viewer-shell">
       <header class="viewer-header">
         <div class="viewer-title">
-          <div class="viewer-kicker">MuYun File Viewer</div>
           <h1>${escapeHtml(descriptor.displayName)}</h1>
-          <div class="viewer-meta">${escapeHtml(descriptor.sourceMimeType)} · ${escapeHtml(descriptor.viewerType)}</div>
+          <div class="viewer-meta">${escapeHtml(formatBytes(descriptor.sizeBytes))}</div>
         </div>
         <div class="viewer-actions">
-          <a class="button" href="${descriptor.downloadUrl}" target="_blank" rel="noopener">下载原文件</a>
+          <a class="button" href="${descriptor.downloadUrl}" target="_blank" rel="noopener">下载</a>
         </div>
       </header>
       <section class="viewer-main" id="viewer-main"></section>
@@ -133,7 +132,7 @@ function renderImageViewer(target, descriptor) {
         </div>
       </div>
       <div class="image-viewer-stage" data-role="stage">
-        <div class="image-viewer-canvas is-fit" data-role="canvas">
+        <div class="image-viewer-canvas" data-role="canvas">
           <img
             class="image-viewer-image"
             data-role="image"
@@ -151,44 +150,186 @@ function renderImageViewer(target, descriptor) {
   const image = target.querySelector('[data-role="image"]');
   const scaleLabel = target.querySelector('[data-role="scale-label"]');
   const state = {
-    fit: true,
-    scale: 1
+    scale: 1,
+    fitScale: 1,
+    minScale: 0.25,
+    maxScale: 6,
+    tx: 0,
+    ty: 0,
+    naturalWidth: 0,
+    naturalHeight: 0,
+    isDragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    dragOriginX: 0,
+    dragOriginY: 0
   };
 
-  const applyState = () => {
-    if (state.fit) {
-      canvas.classList.add('is-fit');
-      image.style.removeProperty('--image-scale');
-      scaleLabel.textContent = '适配窗口';
-      return;
-    }
-    canvas.classList.remove('is-fit');
-    image.style.setProperty('--image-scale', String(state.scale));
+  const updateScaleLabel = () => {
     scaleLabel.textContent = `${Math.round(state.scale * 100)}%`;
   };
+
+  const getStageMetrics = () => {
+    const rect = stage.getBoundingClientRect();
+    const styles = window.getComputedStyle(stage);
+    const paddingLeft = parseFloat(styles.paddingLeft) || 0;
+    const paddingRight = parseFloat(styles.paddingRight) || 0;
+    const paddingTop = parseFloat(styles.paddingTop) || 0;
+    const paddingBottom = parseFloat(styles.paddingBottom) || 0;
+    return {
+      rect,
+      paddingLeft,
+      paddingRight,
+      paddingTop,
+      paddingBottom,
+      width: Math.max(1, Math.min(rect.width, window.innerWidth - rect.left) - paddingLeft - paddingRight),
+      height: Math.max(1, Math.min(rect.height, window.innerHeight - rect.top) - paddingTop - paddingBottom)
+    };
+  };
+
+  const constrainTranslation = () => {
+    const { width: stageWidth, height: stageHeight } = getStageMetrics();
+    const scaledWidth = state.naturalWidth * state.scale;
+    const scaledHeight = state.naturalHeight * state.scale;
+
+    if (scaledWidth <= stageWidth) {
+      state.tx = 0;
+    } else {
+      state.tx = Math.min(0, Math.max(stageWidth - scaledWidth, state.tx));
+    }
+
+    if (scaledHeight <= stageHeight) {
+      state.ty = 0;
+    } else {
+      state.ty = Math.min(0, Math.max(stageHeight - scaledHeight, state.ty));
+    }
+  };
+
+  const applyTransform = () => {
+    canvas.style.width = `${state.naturalWidth}px`;
+    canvas.style.height = `${state.naturalHeight}px`;
+    image.style.transform = `translate(${state.tx}px, ${state.ty}px) scale(${state.scale})`;
+    stage.classList.toggle('is-interactive', state.scale > state.fitScale + 0.001);
+    updateScaleLabel();
+  };
+
+  const setScale = (nextScale, anchorX, anchorY) => {
+    const metrics = getStageMetrics();
+    const pointX = anchorX ?? metrics.rect.left + metrics.paddingLeft + metrics.width / 2;
+    const pointY = anchorY ?? metrics.rect.top + metrics.paddingTop + metrics.height / 2;
+    const localX = pointX - metrics.rect.left - metrics.paddingLeft;
+    const localY = pointY - metrics.rect.top - metrics.paddingTop;
+    const clampedScale = Math.min(state.maxScale, Math.max(state.minScale, nextScale));
+    const contentX = (localX - state.tx) / state.scale;
+    const contentY = (localY - state.ty) / state.scale;
+
+    state.scale = clampedScale;
+    state.tx = localX - contentX * state.scale;
+    state.ty = localY - contentY * state.scale;
+    constrainTranslation();
+    applyTransform();
+  };
+
+  const resetToScale = (nextScale) => {
+    state.scale = nextScale;
+    state.tx = 0;
+    state.ty = 0;
+    constrainTranslation();
+    applyTransform();
+  };
+
+  const zoomByStep = (step, anchorX, anchorY) => {
+    const nextScale = Number((state.scale + step).toFixed(2));
+    setScale(nextScale, anchorX, anchorY);
+  };
+
+  stage.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    const delta = event.deltaY === 0 && event.deltaX ? event.deltaX : event.deltaY;
+    const direction = delta < 0 ? 1 : -1;
+    const ratio = Math.exp((direction * 0.16) / 3);
+    setScale(state.scale * ratio, event.clientX, event.clientY);
+  }, { passive: false });
+
+  stage.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || state.scale <= state.fitScale + 0.001) {
+      return;
+    }
+    state.isDragging = true;
+    state.dragStartX = event.clientX;
+    state.dragStartY = event.clientY;
+    state.dragOriginX = state.tx;
+    state.dragOriginY = state.ty;
+    stage.classList.add('is-dragging');
+    stage.setPointerCapture(event.pointerId);
+  });
+
+  stage.addEventListener('pointermove', (event) => {
+    if (!state.isDragging) {
+      return;
+    }
+    state.tx = state.dragOriginX + (event.clientX - state.dragStartX);
+    state.ty = state.dragOriginY + (event.clientY - state.dragStartY);
+    constrainTranslation();
+    applyTransform();
+  });
+
+  const stopDragging = (event) => {
+    if (!state.isDragging) {
+      return;
+    }
+    state.isDragging = false;
+    stage.classList.remove('is-dragging');
+    if (event && stage.hasPointerCapture(event.pointerId)) {
+      stage.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  stage.addEventListener('pointerup', stopDragging);
+  stage.addEventListener('pointercancel', stopDragging);
 
   target.querySelectorAll('[data-action]').forEach((button) => {
     button.addEventListener('click', () => {
       const action = button.getAttribute('data-action');
       if (action === 'fit') {
-        state.fit = true;
+        resetToScale(state.fitScale);
       } else if (action === 'actual') {
-        state.fit = false;
-        state.scale = 1;
+        resetToScale(1);
       } else if (action === 'zoom-in') {
-        state.fit = false;
-        state.scale = Math.min(4, Number((state.scale + 0.25).toFixed(2)));
+        zoomByStep(0.25);
       } else if (action === 'zoom-out') {
-        state.fit = false;
-        state.scale = Math.max(0.25, Number((state.scale - 0.25).toFixed(2)));
+        zoomByStep(-0.25);
       }
-      applyState();
     });
+  });
+
+  image.addEventListener('dblclick', (event) => {
+    event.preventDefault();
+    if (Math.abs(state.scale - state.fitScale) < 0.01) {
+      setScale(1, event.clientX, event.clientY);
+      return;
+    }
+    if (Math.abs(state.scale - 1) < 0.01) {
+      setScale(Math.min(2, Math.max(1.25, state.fitScale * 1.5)), event.clientX, event.clientY);
+      return;
+    }
+    resetToScale(state.fitScale);
   });
 
   image.addEventListener('load', () => {
     stage.classList.add('is-ready');
-    applyState();
+    state.naturalWidth = image.naturalWidth;
+    state.naturalHeight = image.naturalHeight;
+    const metrics = getStageMetrics();
+    const availableWidth = metrics.width;
+    const availableHeight = metrics.height;
+    const fitScale = Math.min(
+      availableWidth / image.naturalWidth,
+      availableHeight / image.naturalHeight,
+      1
+    );
+    state.fitScale = Number.isFinite(fitScale) && fitScale > 0 ? fitScale : 1;
+    resetToScale(state.fitScale);
   });
 
   image.addEventListener('error', () => {
@@ -389,4 +530,25 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function formatBytes(sizeBytes) {
+  const size = Number(sizeBytes);
+  if (!Number.isFinite(size) || size < 0) {
+    return '-';
+  }
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = size / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const digits = value >= 10 ? 1 : 2;
+  const formatted = value.toFixed(digits).replace(/\.0+$|(\.\d*[1-9])0+$/u, '$1');
+  return `${formatted} ${units[unitIndex]}`;
 }

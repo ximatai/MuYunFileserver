@@ -242,6 +242,29 @@ SOFFICE_COMMAND=/opt/homebrew/bin/soffice ./scripts/demo-view.sh
 ./scripts/demo-view-stop.sh
 ```
 
+如果需要实时调试 viewer 前端样式和交互，推荐双终端方式：
+
+终端 A：
+
+```sh
+./scripts/demo-view.sh
+```
+
+终端 B：
+
+```sh
+cd frontend/viewer
+npm run dev
+```
+
+然后将 `demo-view.sh` 输出的链接中的 host 改成 `http://127.0.0.1:5173` 再打开，例如：
+
+```text
+http://127.0.0.1:5173/view/public/files/{fileId}?access_token=...
+```
+
+此时页面始终使用最新前端源码，`/api/...` 请求会自动代理到本地后端 `http://127.0.0.1:8080`。
+
 其他常用命令：
 
 运行测试：

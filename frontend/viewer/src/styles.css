@@ -6,8 +6,8 @@
   --line: #d0d7de;
   --text: #0f172a;
   --muted: #475569;
-  --accent: #0f766e;
-  --accent-soft: #ccfbf1;
+  --accent: #2563eb;
+  --accent-soft: #dbeafe;
   --danger: #b91c1c;
   font-family: "IBM Plex Sans", "Noto Sans SC", sans-serif;
 }
@@ -34,38 +34,32 @@ body {
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 .viewer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px 24px;
+  gap: 12px;
+  padding: 10px 18px;
   border-bottom: 1px solid rgba(208, 215, 222, 0.85);
   backdrop-filter: blur(16px);
   background: rgba(255, 255, 255, 0.82);
   position: sticky;
   top: 0;
   z-index: 10;
+  min-width: 0;
 }
 
 .viewer-title {
   min-width: 0;
 }
 
-.viewer-kicker {
-  font-size: 12px;
-  line-height: 1;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 8px;
-}
-
 .viewer-title h1 {
-  font-size: 20px;
-  line-height: 1.2;
+  font-size: 17px;
+  line-height: 1.15;
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -74,19 +68,23 @@ body {
 
 .viewer-meta {
   color: var(--muted);
-  font-size: 13px;
-  margin-top: 6px;
+  font-size: 12px;
+  margin-top: 2px;
 }
 
 .viewer-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .viewer-main {
-  padding: 20px 24px 24px;
+  min-height: 0;
+  padding: 0;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
 }
 
 .panel,
@@ -124,8 +122,10 @@ body {
 .button {
   border: 0;
   border-radius: 999px;
-  padding: 10px 16px;
+  padding: 8px 14px;
   font: inherit;
+  font-size: 14px;
+  line-height: 1.1;
   cursor: pointer;
   text-decoration: none;
   transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
@@ -134,7 +134,7 @@ body {
 .button {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.18);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
 }
 
 .button:hover {
@@ -148,24 +148,34 @@ body {
 }
 
 .pdf-viewer-frame-shell {
+  height: 100%;
   background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(208, 215, 222, 0.88);
-  border-radius: 20px;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
-  min-height: calc(100vh - 180px);
 }
 
 .pdf-viewer-frame {
   width: 100%;
-  min-height: calc(100vh - 180px);
+  height: 100%;
   border: 0;
   display: block;
   background: #fff;
 }
 
 .image-viewer-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .image-viewer-toolbar {
@@ -194,8 +204,10 @@ body {
 }
 
 .image-viewer-stage {
-  min-height: calc(100vh - 260px);
-  overflow: auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  width: 100%;
   background:
     linear-gradient(45deg, rgba(208, 215, 222, 0.28) 25%, transparent 25%, transparent 75%, rgba(208, 215, 222, 0.28) 75%, rgba(208, 215, 222, 0.28)),
     linear-gradient(45deg, rgba(208, 215, 222, 0.28) 25%, transparent 25%, transparent 75%, rgba(208, 215, 222, 0.28) 75%, rgba(208, 215, 222, 0.28));
@@ -205,33 +217,48 @@ body {
 }
 
 .image-viewer-canvas {
-  min-height: calc(100vh - 300px);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-}
-
-.image-viewer-canvas.is-fit .image-viewer-image {
-  max-width: 100%;
-  height: auto;
-  transform: none;
+  position: relative;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 .image-viewer-image {
+  position: absolute;
+  left: 0;
+  top: 0;
   display: block;
   max-width: none;
+  max-height: none;
   height: auto;
   box-shadow: 0 22px 56px rgba(15, 23, 42, 0.16);
   border-radius: 18px;
   background: white;
-  transform: scale(var(--image-scale, 1));
-  transform-origin: top center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  transform-origin: 0 0;
   transition: transform 120ms ease;
+}
+
+.image-viewer-stage.is-interactive {
+  cursor: grab;
+}
+
+.image-viewer-stage.is-dragging {
+  cursor: grabbing;
 }
 
 .media-viewer-shell,
 .text-viewer-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .media-viewer-toolbar,
@@ -259,7 +286,8 @@ body {
 
 .media-viewer-stage,
 .text-viewer-stage {
-  min-height: calc(100vh - 260px);
+  min-height: 0;
+  height: 100%;
   padding: 0;
   overflow: auto;
   background: linear-gradient(180deg, #fbfdff 0%, #f6f8fb 100%);
@@ -274,9 +302,9 @@ body {
 
 .media-viewer-player {
   width: min(100%, 1080px);
-  max-height: calc(100vh - 320px);
+  max-height: 100%;
   background: #020617;
-  border-radius: 18px;
+  border-radius: 0;
   box-shadow: 0 22px 56px rgba(15, 23, 42, 0.16);
 }
 
@@ -294,7 +322,7 @@ body {
 .text-viewer-content {
   margin: 0;
   padding: 24px;
-  min-height: calc(100vh - 260px);
+  min-height: 100%;
   overflow: auto;
   white-space: pre;
   font: 14px/1.65 "IBM Plex Mono", "SFMono-Regular", monospace;
@@ -305,25 +333,18 @@ body {
   .viewer-header {
     align-items: flex-start;
     flex-direction: column;
+    padding: 12px 14px;
   }
 
   .viewer-main {
-    padding: 16px;
+    padding: 0;
   }
 
-  .pdf-viewer-frame-shell,
-  .pdf-viewer-frame {
-    min-height: calc(100vh - 220px);
+  .viewer-title h1 {
+    font-size: 16px;
   }
 
   .image-viewer-stage {
-    min-height: calc(100vh - 300px);
     padding: 14px;
-  }
-
-  .media-viewer-stage,
-  .text-viewer-stage,
-  .text-viewer-content {
-    min-height: calc(100vh - 300px);
   }
 }

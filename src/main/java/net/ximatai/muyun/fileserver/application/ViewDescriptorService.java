@@ -47,6 +47,7 @@ public class ViewDescriptorService {
         return new FileViewResponse(
                 metadata.id(),
                 metadata.originalFilename(),
+                metadata.sizeBytes(),
                 viewerType,
                 metadata.mimeType(),
                 resolveContentMimeType(viewerType, metadata.mimeType()),
@@ -71,6 +72,7 @@ public class ViewDescriptorService {
         return new FileViewResponse(
                 metadata.id(),
                 metadata.originalFilename(),
+                metadata.sizeBytes(),
                 viewerType,
                 metadata.mimeType(),
                 resolveContentMimeType(viewerType, metadata.mimeType()),

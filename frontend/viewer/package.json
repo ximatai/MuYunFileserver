@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "prepare:pdfjs": "node scripts/sync-pdfjs-vendor.mjs",
+    "dev": "npm run prepare:pdfjs && vite",
     "build": "npm run prepare:pdfjs && vite build"
   },
   "devDependencies": {
