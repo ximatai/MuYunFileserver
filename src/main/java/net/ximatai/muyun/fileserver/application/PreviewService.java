@@ -96,20 +96,29 @@ public class PreviewService {
         previewArtifactRepository.touchAccessedAt(metadata.id(), DEFAULT_ARTIFACT_KEY, Instant.now());
 
         String filename = previewPathResolver.previewFilename(metadata);
-        InputStream inputStream = switch (artifact.sourceKind()) {
-            case ORIGINAL_PDF -> storageProvider.open(metadata.storageKey());
+        InputStreamSupplier inputStreamSupplier = switch (artifact.sourceKind()) {
+            case ORIGINAL_PDF -> () -> storageProvider.open(metadata.storageKey());
             case GENERATED_PDF -> {
                 if (artifact.storageKey() == null || !storageProvider.exists(artifact.storageKey())) {
                     throw new NotFoundException("preview not found");
                 }
-                yield storageProvider.open(artifact.storageKey());
+                yield () -> storageProvider.open(artifact.storageKey());
+            }
+        };
+        RangeInputStreamSupplier rangeInputStreamSupplier = switch (artifact.sourceKind()) {
+            case ORIGINAL_PDF -> (start, length) -> storageProvider.openRange(metadata.storageKey(), start, length);
+            case GENERATED_PDF -> {
+                if (artifact.storageKey() == null || !storageProvider.exists(artifact.storageKey())) {
+                    throw new NotFoundException("preview not found");
+                }
+                yield (start, length) -> storageProvider.openRange(artifact.storageKey(), start, length);
             }
         };
 
         long sizeBytes = artifact.sourceKind() == PreviewSourceKind.ORIGINAL_PDF
                 ? metadata.sizeBytes()
                 : artifact.sizeBytes() == null ? 0L : artifact.sizeBytes();
-        return new PreviewResolution(filename, PDF_MIME_TYPE, sizeBytes, inputStream);
+        return new PreviewResolution(filename, PDF_MIME_TYPE, sizeBytes, inputStreamSupplier, rangeInputStreamSupplier);
     }
 
     public void deletePreviewIfExists(FileMetadata metadata) {

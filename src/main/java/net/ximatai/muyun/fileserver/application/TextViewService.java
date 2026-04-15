@@ -47,7 +47,7 @@ public class TextViewService {
                 metadata.originalFilename(),
                 contentMimeType(metadata.mimeType()),
                 normalizedBytes.length,
-                new ByteArrayInputStream(normalizedBytes)
+                () -> new ByteArrayInputStream(normalizedBytes)
         );
     }
 

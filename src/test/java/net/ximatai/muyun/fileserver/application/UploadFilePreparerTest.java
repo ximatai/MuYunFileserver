@@ -280,6 +280,11 @@ class UploadFilePreparerTest {
         }
 
         @Override
+        public InputStream openRange(String storageKey, long start, long length) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public void deleteIfExists(String storageKey) {
             throw new UnsupportedOperationException();
         }

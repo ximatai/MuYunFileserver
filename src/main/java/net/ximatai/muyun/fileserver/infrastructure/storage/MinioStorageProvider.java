@@ -114,6 +114,20 @@ public class MinioStorageProvider implements StorageProvider {
     }
 
     @Override
+    public InputStream openRange(String storageKey, long start, long length) {
+        try {
+            return client().getObject(GetObjectArgs.builder()
+                    .bucket(bucket())
+                    .object(storageKey)
+                    .offset(start)
+                    .length(length)
+                    .build());
+        } catch (Exception exception) {
+            throw new StorageException("failed to open stored file range", exception);
+        }
+    }
+
+    @Override
     public void deleteIfExists(String storageKey) {
         try {
             client().removeObject(RemoveObjectArgs.builder()

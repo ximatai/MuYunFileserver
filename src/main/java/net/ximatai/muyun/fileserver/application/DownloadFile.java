@@ -7,6 +7,21 @@ public record DownloadFile(
         String originalFilename,
         String mimeType,
         long sizeBytes,
-        InputStream inputStream
+        InputStreamSupplier inputStreamSupplier,
+        RangeInputStreamSupplier rangeInputStreamSupplier
 ) {
+
+    public DownloadFile(
+            String fileId,
+            String originalFilename,
+            String mimeType,
+            long sizeBytes,
+            InputStreamSupplier inputStreamSupplier
+    ) {
+        this(fileId, originalFilename, mimeType, sizeBytes, inputStreamSupplier, null);
+    }
+
+    public boolean supportsRange() {
+        return rangeInputStreamSupplier != null;
+    }
 }

@@ -4,6 +4,11 @@ public record PreviewResolution(
         String originalFilename,
         String mimeType,
         long sizeBytes,
-        java.io.InputStream inputStream
+        InputStreamSupplier inputStreamSupplier,
+        RangeInputStreamSupplier rangeInputStreamSupplier
 ) {
+
+    public boolean supportsRange() {
+        return rangeInputStreamSupplier != null;
+    }
 }

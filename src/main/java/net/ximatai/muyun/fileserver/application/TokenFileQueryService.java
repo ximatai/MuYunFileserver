@@ -75,7 +75,8 @@ public class TokenFileQueryService {
                 metadata.originalFilename(),
                 metadata.mimeType(),
                 metadata.sizeBytes(),
-                storageProvider.open(metadata.storageKey())
+                () -> storageProvider.open(metadata.storageKey()),
+                (start, length) -> storageProvider.openRange(metadata.storageKey(), start, length)
         );
     }
 
@@ -145,7 +146,8 @@ public class TokenFileQueryService {
                     preview.originalFilename(),
                     preview.mimeType(),
                     preview.sizeBytes(),
-                    preview.inputStream()
+                    preview.inputStreamSupplier(),
+                    preview.rangeInputStreamSupplier()
             );
         }
         if (viewerType == ViewerType.IMAGE || viewerType == ViewerType.VIDEO || viewerType == ViewerType.AUDIO) {
@@ -166,7 +168,8 @@ public class TokenFileQueryService {
                     metadata.originalFilename(),
                     metadata.mimeType(),
                     metadata.sizeBytes(),
-                    storageProvider.open(metadata.storageKey())
+                    () -> storageProvider.open(metadata.storageKey()),
+                    (start, length) -> storageProvider.openRange(metadata.storageKey(), start, length)
             );
         }
         if (viewerType == ViewerType.TEXT) {

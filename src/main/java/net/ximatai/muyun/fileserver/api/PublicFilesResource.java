@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Produces;
@@ -65,16 +66,25 @@ public class PublicFilesResource {
     @GET
     @Path("/{fileId}/view/content/{accessToken}")
     @Produces(MediaType.WILDCARD)
-    public Response viewContent(@RestPath String fileId, @RestPath String accessToken) {
-        return DownloadResponses.inline(tokenFileQueryService.openViewContent(fileId, accessToken));
+    public Response viewContent(@RestPath String fileId, @RestPath String accessToken, @HeaderParam("Range") String rangeHeader) {
+        DownloadFile file = tokenFileQueryService.openViewContent(fileId, accessToken);
+        try {
+            return DownloadResponses.inline(file, rangeHeader);
+        } catch (DownloadResponses.InvalidRangeException exception) {
+            return DownloadResponses.invalidRange(file.sizeBytes());
+        }
     }
 
     @GET
     @Path("/{fileId}/download")
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    public Response download(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
+    public Response download(@RestPath String fileId, @QueryParam("access_token") String accessToken, @HeaderParam("Range") String rangeHeader) {
         DownloadFile file = tokenFileQueryService.openDownload(fileId, accessToken);
-        return DownloadResponses.ok(file);
+        try {
+            return DownloadResponses.ok(file, rangeHeader);
+        } catch (DownloadResponses.InvalidRangeException exception) {
+            return DownloadResponses.invalidRange(file.sizeBytes());
+        }
     }
 
     @GET
@@ -89,15 +99,21 @@ public class PublicFilesResource {
     @GET
     @Path("/{fileId}/preview/content")
     @Produces("application/pdf")
-    public Response previewContent(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
+    public Response previewContent(@RestPath String fileId, @QueryParam("access_token") String accessToken, @HeaderParam("Range") String rangeHeader) {
         PreviewResolution preview = tokenFileQueryService.openPreview(fileId, accessToken);
-        return DownloadResponses.inline(new DownloadFile(
+        DownloadFile file = new DownloadFile(
                 fileId,
                 preview.originalFilename(),
                 preview.mimeType(),
                 preview.sizeBytes(),
-                preview.inputStream()
-        ));
+                preview.inputStreamSupplier(),
+                preview.rangeInputStreamSupplier()
+        );
+        try {
+            return DownloadResponses.inline(file, rangeHeader);
+        } catch (DownloadResponses.InvalidRangeException exception) {
+            return DownloadResponses.invalidRange(file.sizeBytes());
+        }
     }
 
     @DELETE

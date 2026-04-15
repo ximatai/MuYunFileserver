@@ -9,6 +9,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import net.ximatai.muyun.fileserver.api.dto.DeleteFileResult;
@@ -66,16 +67,25 @@ public class FilesResource {
     @GET
     @Path("/{fileId}/view/content")
     @Produces(MediaType.WILDCARD)
-    public Response viewContent(@RestPath String fileId) {
-        return DownloadResponses.inline(fileQueryService.openViewContent(fileId));
+    public Response viewContent(@RestPath String fileId, @HeaderParam("Range") String rangeHeader) {
+        DownloadFile file = fileQueryService.openViewContent(fileId);
+        try {
+            return DownloadResponses.inline(file, rangeHeader);
+        } catch (DownloadResponses.InvalidRangeException exception) {
+            return DownloadResponses.invalidRange(file.sizeBytes());
+        }
     }
 
     @GET
     @Path("/{fileId}/download")
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    public Response download(@RestPath String fileId) {
+    public Response download(@RestPath String fileId, @HeaderParam("Range") String rangeHeader) {
         DownloadFile file = fileQueryService.openDownload(fileId);
-        return DownloadResponses.ok(file);
+        try {
+            return DownloadResponses.ok(file, rangeHeader);
+        } catch (DownloadResponses.InvalidRangeException exception) {
+            return DownloadResponses.invalidRange(file.sizeBytes());
+        }
     }
 
     @GET
@@ -90,15 +100,21 @@ public class FilesResource {
     @GET
     @Path("/{fileId}/preview/content")
     @Produces("application/pdf")
-    public Response previewContent(@RestPath String fileId) {
+    public Response previewContent(@RestPath String fileId, @HeaderParam("Range") String rangeHeader) {
         PreviewResolution preview = fileQueryService.openPreview(fileId);
-        return DownloadResponses.inline(new DownloadFile(
+        DownloadFile file = new DownloadFile(
                 fileId,
                 preview.originalFilename(),
                 preview.mimeType(),
                 preview.sizeBytes(),
-                preview.inputStream()
-        ));
+                preview.inputStreamSupplier(),
+                preview.rangeInputStreamSupplier()
+        );
+        try {
+            return DownloadResponses.inline(file, rangeHeader);
+        } catch (DownloadResponses.InvalidRangeException exception) {
+            return DownloadResponses.invalidRange(file.sizeBytes());
+        }
     }
 
     @PUT

@@ -10,9 +10,13 @@ import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.FilterInputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.StandardCopyOption;
 
 @ApplicationScoped
@@ -91,6 +95,44 @@ public class LocalStorageProvider implements StorageProvider {
             return Files.newInputStream(resolve(storageKey));
         } catch (IOException exception) {
             throw new StorageException("failed to open stored file", exception);
+        }
+    }
+
+    @Override
+    public InputStream openRange(String storageKey, long start, long length) {
+        try {
+            SeekableByteChannel channel = Files.newByteChannel(resolve(storageKey), StandardOpenOption.READ);
+            channel.position(start);
+            InputStream inputStream = Channels.newInputStream(channel);
+            return new FilterInputStream(inputStream) {
+                private long remaining = length;
+
+                @Override
+                public int read() throws IOException {
+                    if (remaining <= 0) {
+                        return -1;
+                    }
+                    int value = super.read();
+                    if (value != -1) {
+                        remaining--;
+                    }
+                    return value;
+                }
+
+                @Override
+                public int read(byte[] b, int off, int len) throws IOException {
+                    if (remaining <= 0) {
+                        return -1;
+                    }
+                    int read = super.read(b, off, (int) Math.min(len, remaining));
+                    if (read > 0) {
+                        remaining -= read;
+                    }
+                    return read;
+                }
+            };
+        } catch (IOException exception) {
+            throw new StorageException("failed to open stored file range", exception);
         }
     }
 

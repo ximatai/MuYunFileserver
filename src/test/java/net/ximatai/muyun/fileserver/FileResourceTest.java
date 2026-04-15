@@ -133,6 +133,36 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldSupportRangeDownloadForTrustedRequest() {
+        String fileId = uploadSingleFile("range.txt", "0123456789".getBytes(StandardCharsets.UTF_8), "text/plain");
+
+        givenAuthenticated()
+                .header("Range", "bytes=3-6")
+                .when()
+                .get("/api/v1/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(206)
+                .header("Accept-Ranges", equalTo("bytes"))
+                .header("Content-Range", equalTo("bytes 3-6/10"))
+                .header("Content-Length", equalTo("4"))
+                .body(equalTo("3456"));
+    }
+
+    @Test
+    void shouldReturnInvalidRangeForDownloadWhenRangeIsMalformed() {
+        String fileId = uploadSingleFile("range-invalid.txt", "0123456789".getBytes(StandardCharsets.UTF_8), "text/plain");
+
+        givenAuthenticated()
+                .header("Range", "bytes=10-3")
+                .when()
+                .get("/api/v1/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(416)
+                .header("Accept-Ranges", equalTo("bytes"))
+                .header("Content-Range", equalTo("bytes */10"));
+    }
+
+    @Test
     void shouldPromoteTemporaryFilesInBatch() {
         String firstFileId = uploadSingleFile("draft-a.txt", "a".getBytes(), "text/plain", true);
         String secondFileId = uploadSingleFile("draft-b.txt", "b".getBytes(), "text/plain", true);
@@ -424,6 +454,47 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldSupportRangeViewContentForVideoFile() {
+        byte[] content = minimalMp4Bytes();
+        String fileId = uploadSingleFile("clip.mp4", content, "video/mp4");
+
+        byte[] response = givenAuthenticated()
+                .header("Range", "bytes=5-9")
+                .when()
+                .get("/api/v1/files/{fileId}/view/content", fileId)
+                .then()
+                .statusCode(206)
+                .header("Accept-Ranges", equalTo("bytes"))
+                .header("Content-Range", equalTo("bytes 5-9/" + content.length))
+                .header("Content-Length", equalTo("5"))
+                .extract()
+                .asByteArray();
+
+        org.junit.jupiter.api.Assertions.assertArrayEquals(Arrays.copyOfRange(content, 5, 10), response);
+    }
+
+    @Test
+    void shouldSupportRangeViewContentForVideoFileByToken() throws Exception {
+        byte[] content = minimalMp4Bytes();
+        String fileId = uploadSingleFile("token-range.mp4", content, "video/mp4");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        byte[] response = given()
+                .header("Range", "bytes=4-8")
+                .when()
+                .get("/api/v1/public/files/{fileId}/view/content/{accessToken}", fileId, accessToken)
+                .then()
+                .statusCode(206)
+                .header("Accept-Ranges", equalTo("bytes"))
+                .header("Content-Range", equalTo("bytes 4-8/" + content.length))
+                .header("Content-Length", equalTo("5"))
+                .extract()
+                .asByteArray();
+
+        org.junit.jupiter.api.Assertions.assertArrayEquals(Arrays.copyOfRange(content, 4, 9), response);
+    }
+
+    @Test
     void shouldGeneratePreviewForOfficeFileAndReuseCachedPdf() {
         String fileId = uploadSingleFile(
                 "report.docx",
@@ -667,6 +738,20 @@ class FileResourceTest {
                 .statusCode(200)
                 .header("Content-Type", Matchers.containsString("text/plain"))
                 .header("Content-Disposition", Matchers.containsString("inline;"))
+                .body(equalTo("viewer text"));
+    }
+
+    @Test
+    void shouldIgnoreMalformedRangeForTextViewContent() {
+        String fileId = uploadSingleFile("notes-range.txt", "viewer text".getBytes(StandardCharsets.UTF_8), "text/plain");
+
+        givenAuthenticated()
+                .header("Range", "bytes=8-2")
+                .when()
+                .get("/api/v1/files/{fileId}/view/content", fileId)
+                .then()
+                .statusCode(200)
+                .header("Accept-Ranges", Matchers.nullValue())
                 .body(equalTo("viewer text"));
     }
 

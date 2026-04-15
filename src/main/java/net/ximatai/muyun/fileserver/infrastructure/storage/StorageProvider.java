@@ -17,6 +17,8 @@ public interface StorageProvider {
 
     InputStream open(String storageKey);
 
+    InputStream openRange(String storageKey, long start, long length);
+
     void deleteIfExists(String storageKey);
 
     void deleteTempFile(Path tempFile);
