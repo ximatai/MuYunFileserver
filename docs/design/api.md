@@ -207,6 +207,22 @@ viewer 页面入口：
 - `GET /view/files/{fileId}`
 - `GET /view/public/files/{fileId}?access_token=...`
 
+viewer 页面 URL 参数：
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `showHeader` | `true` | 是否展示 MuYun viewer 自带顶部 header 区域 |
+| `showDownloadButton` | `true` | 是否展示下载按钮 |
+| `watermark` | 空 | 若非空，则在预览主区域叠加重复斜向水印 |
+
+说明：
+
+- 当前推荐布尔写法为 `showHeader=false`、`showDownloadButton=false`
+- 运行时同时兼容 `true/false`、`on/off`、`1/0`、`yes/no`
+- 当 `showHeader=false` 且 `showDownloadButton=true` 时，下载按钮固定悬浮在整个浏览器窗口右下角
+- 这个右下角悬浮布局对 `PDF`、图片、纯文本、音频、视频 viewer 保持一致
+- 这些参数只影响 `/view/...` 页面渲染，不影响 `GET /api/v1/.../view` descriptor 的返回结构
+
 说明：
 
 - 可信身份头模式依赖统一网关或受控上游注入身份上下文

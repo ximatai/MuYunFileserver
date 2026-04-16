@@ -22,6 +22,12 @@ async function bootstrap(routeConfig) {
 
 function parseRoute(location) {
   const pathname = location.pathname.replace(/\/+$/, '');
+  const searchParams = new URLSearchParams(location.search);
+  const viewOptions = {
+    showHeader: parseToggleParam(searchParams.get('showHeader'), true),
+    showDownloadButton: parseToggleParam(searchParams.get('showDownloadButton'), true),
+    watermark: normalizeWatermark(searchParams.get('watermark'))
+  };
   const internalMatch = pathname.match(/^(.*)\/view\/files\/([^/]+)$/);
   if (internalMatch) {
     return {
@@ -29,7 +35,8 @@ function parseRoute(location) {
       pathPrefix: internalMatch[1] || '',
       fileId: decodeURIComponent(internalMatch[2]),
       accessToken: null,
-      viewerBasePath: `${internalMatch[1] || ''}/viewer`
+      viewerBasePath: `${internalMatch[1] || ''}/viewer`,
+      viewOptions
     };
   }
   const publicMatch = pathname.match(/^(.*)\/view\/public\/files\/([^/]+)$/);
@@ -38,8 +45,9 @@ function parseRoute(location) {
       mode: 'public',
       pathPrefix: publicMatch[1] || '',
       fileId: decodeURIComponent(publicMatch[2]),
-      accessToken: new URLSearchParams(location.search).get('access_token'),
-      viewerBasePath: `${publicMatch[1] || ''}/viewer`
+      accessToken: searchParams.get('access_token'),
+      viewerBasePath: `${publicMatch[1] || ''}/viewer`,
+      viewOptions
     };
   }
   return null;
@@ -74,18 +82,48 @@ function renderLoading() {
 }
 
 async function renderShell(descriptor, routeConfig) {
-  app.innerHTML = `
-    <main class="viewer-shell">
+  const shellClassNames = ['viewer-shell'];
+  if (!routeConfig.viewOptions.showHeader) {
+    shellClassNames.push('viewer-shell-headerless');
+  }
+
+  const headerHtml = routeConfig.viewOptions.showHeader ? `
       <header class="viewer-header">
         <div class="viewer-title">
           <h1>${escapeHtml(descriptor.displayName)}</h1>
           <div class="viewer-meta">${escapeHtml(formatBytes(descriptor.sizeBytes))}</div>
         </div>
         <div class="viewer-actions">
-          <a class="button" href="${descriptor.downloadUrl}" target="_blank" rel="noopener">下载</a>
+          ${renderDownloadAction(descriptor.downloadUrl, {
+            compact: false,
+            hidden: !routeConfig.viewOptions.showDownloadButton
+          })}
         </div>
       </header>
-      <section class="viewer-main" id="viewer-main"></section>
+    ` : '';
+
+  const floatingDownloadHtml = !routeConfig.viewOptions.showHeader
+    ? renderDownloadAction(descriptor.downloadUrl, {
+      compact: true,
+      hidden: !routeConfig.viewOptions.showDownloadButton,
+      viewerType: descriptor.viewerType
+    })
+    : '';
+
+  const watermarkHtml = routeConfig.viewOptions.watermark
+    ? renderWatermark(routeConfig.viewOptions.watermark)
+    : '';
+
+  app.innerHTML = `
+    <main class="${shellClassNames.join(' ')}">
+      ${headerHtml}
+      <section class="viewer-main">
+        ${floatingDownloadHtml}
+        <div class="viewer-stage" id="viewer-stage">
+          <div class="viewer-content" id="viewer-main"></div>
+          ${watermarkHtml}
+        </div>
+      </section>
     </main>
   `;
 
@@ -113,6 +151,49 @@ function renderPdfViewer(target, descriptor, routeConfig) {
         loading="eager"
         referrerpolicy="same-origin"
       ></iframe>
+    </div>
+  `;
+}
+
+function renderDownloadAction(downloadUrl, options) {
+  if (options.hidden) {
+    return '';
+  }
+
+  if (options.compact) {
+    return `
+      <a
+        class="floating-download-button"
+        href="${downloadUrl}"
+        target="_blank"
+        rel="noopener"
+        aria-label="下载文件"
+        title="下载文件"
+      >
+        <svg
+          class="floating-download-button-icon"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M12 3.5a1 1 0 0 1 1 1v7.59l2.3-2.29a1 1 0 1 1 1.4 1.41l-4 3.99a1 1 0 0 1-1.4 0l-4-3.99a1 1 0 1 1 1.4-1.41L11 12.09V4.5a1 1 0 0 1 1-1Zm-6 13a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"
+            fill="currentColor"
+          />
+        </svg>
+      </a>
+    `;
+  }
+
+  return `<a class="button" href="${downloadUrl}" target="_blank" rel="noopener">下载</a>`;
+}
+
+function renderWatermark(value) {
+  const escaped = escapeHtml(value);
+  const items = Array.from({ length: 12 }, () => `<span class="viewer-watermark-item">${escaped}</span>`).join('');
+  return `
+    <div class="viewer-watermark-layer" aria-hidden="true">
+      <div class="viewer-watermark-grid">${items}</div>
     </div>
   `;
 }
@@ -551,4 +632,26 @@ function formatBytes(sizeBytes) {
   const digits = value >= 10 ? 1 : 2;
   const formatted = value.toFixed(digits).replace(/\.0+$|(\.\d*[1-9])0+$/u, '$1');
   return `${formatted} ${units[unitIndex]}`;
+}
+
+function parseToggleParam(value, defaultValue) {
+  if (value == null || value === '') {
+    return defaultValue;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (['off', 'false', '0', 'no'].includes(normalized)) {
+    return false;
+  }
+  if (['on', 'true', '1', 'yes'].includes(normalized)) {
+    return true;
+  }
+  return defaultValue;
+}
+
+function normalizeWatermark(value) {
+  if (value == null) {
+    return '';
+  }
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, 80) : '';
 }

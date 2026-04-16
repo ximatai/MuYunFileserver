@@ -465,6 +465,22 @@ Content-Disposition, Content-Length, Content-Type
 - `GET /view/files/{fileId}`
 - `GET /view/public/files/{fileId}?access_token=...`
 
+viewer 页面支持以下 URL 参数：
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `showHeader` | `true` | 是否展示 MuYun viewer 自带顶部 header 区域 |
+| `showDownloadButton` | `true` | 是否展示下载按钮 |
+| `watermark` | 空 | 若非空，则在预览主区域叠加重复斜向水印 |
+
+补充说明：
+
+- 当前推荐使用 `true/false` 作为布尔值写法，例如 `showHeader=false`
+- 为了兼容临时链接生成，也兼容 `on/off`、`1/0`、`yes/no`
+- 当 `showHeader=false` 且 `showDownloadButton=true` 时，下载按钮固定悬浮在整个浏览器窗口右下角
+- 这个右下角悬浮定位对 `PDF`、图片、文本、音频、视频 viewer 保持一致
+- 这些参数只作用于 `/view/...` 页面本身，不会改变 `GET /api/v1/.../view` 返回的 descriptor 协议
+
 可信身份头模式：
 
 - 适合已有统一网关、BFF 或受控后端注入 `X-Tenant-Id` / `X-User-Id` 的场景
