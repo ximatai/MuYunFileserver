@@ -32,7 +32,7 @@ public class TokenFileQueryService {
     StorageProvider storageProvider;
 
     @Inject
-    PreviewService previewService;
+    RenderedPdfService renderedPdfService;
 
     @Inject
     ViewDescriptorService viewDescriptorService;
@@ -80,13 +80,13 @@ public class TokenFileQueryService {
         );
     }
 
-    public PreviewResolution openPreview(String fileId, String accessToken) {
+    public RenderedPdfResolution openRenderedPdf(String fileId, String accessToken) {
         FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
 
-        PreviewResolution preview = previewService.openPreview(metadata);
+        RenderedPdfResolution renderedPdf = renderedPdfService.openRenderedPdf(metadata);
 
         LOG.info(OperationLog.format(
-                "preview_by_token",
+                "rendered_pdf_by_token",
                 "success",
                 "file_id", fileId,
                 "tenant_id", metadata.tenantId(),
@@ -94,15 +94,15 @@ public class TokenFileQueryService {
                 "storage_provider", metadata.storageProvider()
         ));
 
-        return preview;
+        return renderedPdf;
     }
 
-    public void ensurePreviewReady(String fileId, String accessToken) {
+    public void ensureRenderedPdfReady(String fileId, String accessToken) {
         FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
-        previewService.ensurePreviewReady(metadata);
+        renderedPdfService.ensureRenderedPdfReady(metadata);
 
         LOG.info(OperationLog.format(
-                "preview_ready_by_token",
+                "rendered_pdf_ready_by_token",
                 "success",
                 "file_id", fileId,
                 "tenant_id", metadata.tenantId(),
@@ -112,8 +112,17 @@ public class TokenFileQueryService {
     }
 
     public FileViewResponse getView(String fileId, String accessToken) {
-        FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
-        FileViewResponse descriptor = viewDescriptorService.describePublic(metadata, accessToken);
+        if (!downloadTokenVerifier.isEnabled()) {
+            throw new NotFoundException("resource not found");
+        }
+        if (!ulidGenerator.isValid(fileId)) {
+            throw new ValidationException("invalid fileId");
+        }
+
+        DownloadTokenClaims claims = downloadTokenVerifier.verify(accessToken);
+        FileMetadata metadata = requireAccessibleFile(fileId, claims);
+        requireViewPurpose(claims);
+        FileViewResponse descriptor = viewDescriptorService.describePublic(metadata, claims);
 
         LOG.info(OperationLog.format(
                 "view_descriptor_by_token",
@@ -131,7 +140,7 @@ public class TokenFileQueryService {
         FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
         ViewerType viewerType = viewDescriptorService.resolveViewerType(metadata.mimeType());
         if (viewerType == ViewerType.PDF) {
-            PreviewResolution preview = previewService.openPreview(metadata);
+            RenderedPdfResolution renderedPdf = renderedPdfService.openRenderedPdf(metadata);
             LOG.info(OperationLog.format(
                     "view_content_by_token",
                     "success",
@@ -143,11 +152,11 @@ public class TokenFileQueryService {
             ));
             return new DownloadFile(
                     fileId,
-                    preview.originalFilename(),
-                    preview.mimeType(),
-                    preview.sizeBytes(),
-                    preview.inputStreamSupplier(),
-                    preview.rangeInputStreamSupplier()
+                    renderedPdf.originalFilename(),
+                    renderedPdf.mimeType(),
+                    renderedPdf.sizeBytes(),
+                    renderedPdf.inputStreamSupplier(),
+                    renderedPdf.rangeInputStreamSupplier()
             );
         }
         if (viewerType == ViewerType.IMAGE || viewerType == ViewerType.VIDEO || viewerType == ViewerType.AUDIO) {
@@ -196,6 +205,16 @@ public class TokenFileQueryService {
         }
 
         DownloadTokenClaims claims = downloadTokenVerifier.verify(accessToken);
+        return requireAccessibleFile(fileId, claims);
+    }
+
+    private void requireViewPurpose(DownloadTokenClaims claims) {
+        if (DownloadTokenSigner.VIEWER_PURPOSE.equals(claims.purpose())) {
+            throw new ForbiddenException("download token purpose is not valid for view");
+        }
+    }
+
+    private FileMetadata requireAccessibleFile(String fileId, DownloadTokenClaims claims) {
         if (!fileId.equals(claims.fileId())) {
             throw new ForbiddenException("download token does not match requested file");
         }

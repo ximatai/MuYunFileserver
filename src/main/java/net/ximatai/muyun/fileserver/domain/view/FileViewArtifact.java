@@ -1,13 +1,13 @@
-package net.ximatai.muyun.fileserver.domain.preview;
+package net.ximatai.muyun.fileserver.domain.view;
 
 import java.time.Instant;
 
-public record FilePreviewArtifact(
+public record FileViewArtifact(
         String fileId,
         String artifactKey,
         String tenantId,
-        PreviewSourceKind sourceKind,
-        PreviewArtifactStatus status,
+        ViewArtifactSourceKind sourceKind,
+        ViewArtifactStatus status,
         String targetMimeType,
         String storageProvider,
         String storageBucket,
@@ -16,7 +16,7 @@ public record FilePreviewArtifact(
         String sha256,
         Instant generatedAt,
         Instant lastAccessedAt,
-        PreviewFailureCode failureCode,
+        ViewArtifactFailureCode failureCode,
         String failureMessage
 ) {
 }

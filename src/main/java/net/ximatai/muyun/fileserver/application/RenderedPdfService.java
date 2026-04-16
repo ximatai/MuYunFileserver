@@ -10,11 +10,11 @@ import net.ximatai.muyun.fileserver.common.exception.UnprocessableEntityExceptio
 import net.ximatai.muyun.fileserver.common.exception.UnsupportedMediaTypeException;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
-import net.ximatai.muyun.fileserver.domain.preview.FilePreviewArtifact;
-import net.ximatai.muyun.fileserver.domain.preview.PreviewArtifactStatus;
-import net.ximatai.muyun.fileserver.domain.preview.PreviewFailureCode;
-import net.ximatai.muyun.fileserver.domain.preview.PreviewSourceKind;
-import net.ximatai.muyun.fileserver.infrastructure.persistence.FilePreviewArtifactRepository;
+import net.ximatai.muyun.fileserver.domain.view.FileViewArtifact;
+import net.ximatai.muyun.fileserver.domain.view.ViewArtifactFailureCode;
+import net.ximatai.muyun.fileserver.domain.view.ViewArtifactSourceKind;
+import net.ximatai.muyun.fileserver.domain.view.ViewArtifactStatus;
+import net.ximatai.muyun.fileserver.infrastructure.persistence.FileViewArtifactRepository;
 import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
 
 import java.io.InputStream;
@@ -25,82 +25,82 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @ApplicationScoped
-public class PreviewService {
+public class RenderedPdfService {
 
     private static final String PDF_MIME_TYPE = "application/pdf";
-    private static final String DEFAULT_ARTIFACT_KEY = "preview_pdf";
+    private static final String DEFAULT_ARTIFACT_KEY = "view_pdf";
 
     @Inject
     FileServiceConfig config;
 
     @Inject
-    FilePreviewArtifactRepository previewArtifactRepository;
+    FileViewArtifactRepository viewArtifactRepository;
 
     @Inject
     StorageProvider storageProvider;
 
     @Inject
-    OfficePreviewConverter officePreviewConverter;
+    OfficePdfRenderer officePdfRenderer;
 
     @Inject
-    PreviewPathResolver previewPathResolver;
+    RenderedPdfPathResolver renderedPdfPathResolver;
 
     @Inject
     SupportedFileTypes supportedFileTypes;
 
-    private final ConcurrentHashMap<String, Object> previewLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Object> renderedPdfLocks = new ConcurrentHashMap<>();
 
-    public void ensurePreviewReady(FileMetadata metadata) {
-        if (!config.preview().enabled()) {
+    public void ensureRenderedPdfReady(FileMetadata metadata) {
+        if (!config.renderedPdf().enabled()) {
             throw new NotFoundException("resource not found");
         }
-        ensurePreviewable(metadata);
+        ensurePdfRenderable(metadata);
 
-        Optional<FilePreviewArtifact> existingArtifact = previewArtifactRepository.findByFileIdAndArtifactKey(metadata.id(), DEFAULT_ARTIFACT_KEY);
+        Optional<FileViewArtifact> existingArtifact = viewArtifactRepository.findByFileIdAndArtifactKey(metadata.id(), DEFAULT_ARTIFACT_KEY);
         if (existingArtifact.isPresent()) {
-            FilePreviewArtifact artifact = existingArtifact.get();
-            if (artifact.status() == PreviewArtifactStatus.READY && isArtifactAvailable(metadata, artifact)) {
-                previewArtifactRepository.touchAccessedAt(metadata.id(), DEFAULT_ARTIFACT_KEY, Instant.now());
+            FileViewArtifact artifact = existingArtifact.get();
+            if (artifact.status() == ViewArtifactStatus.READY && isArtifactAvailable(metadata, artifact)) {
+                viewArtifactRepository.touchAccessedAt(metadata.id(), DEFAULT_ARTIFACT_KEY, Instant.now());
                 return;
             }
-            if (artifact.status() == PreviewArtifactStatus.FAILED && !shouldRetry(artifact)) {
+            if (artifact.status() == ViewArtifactStatus.FAILED && !shouldRetry(artifact)) {
                 throw failureToException(artifact);
             }
         }
 
-        Object lock = previewLocks.computeIfAbsent(metadata.id(), ignored -> new Object());
+        Object lock = renderedPdfLocks.computeIfAbsent(metadata.id(), ignored -> new Object());
         synchronized (lock) {
             try {
-                Optional<FilePreviewArtifact> reloadedArtifact = previewArtifactRepository.findByFileIdAndArtifactKey(metadata.id(), DEFAULT_ARTIFACT_KEY);
+                Optional<FileViewArtifact> reloadedArtifact = viewArtifactRepository.findByFileIdAndArtifactKey(metadata.id(), DEFAULT_ARTIFACT_KEY);
                 if (reloadedArtifact.isPresent()) {
-                    FilePreviewArtifact artifact = reloadedArtifact.get();
-                    if (artifact.status() == PreviewArtifactStatus.READY && isArtifactAvailable(metadata, artifact)) {
-                        previewArtifactRepository.touchAccessedAt(metadata.id(), DEFAULT_ARTIFACT_KEY, Instant.now());
+                    FileViewArtifact artifact = reloadedArtifact.get();
+                    if (artifact.status() == ViewArtifactStatus.READY && isArtifactAvailable(metadata, artifact)) {
+                        viewArtifactRepository.touchAccessedAt(metadata.id(), DEFAULT_ARTIFACT_KEY, Instant.now());
                         return;
                     }
-                    if (artifact.status() == PreviewArtifactStatus.FAILED && !shouldRetry(artifact)) {
+                    if (artifact.status() == ViewArtifactStatus.FAILED && !shouldRetry(artifact)) {
                         throw failureToException(artifact);
                     }
                 }
                 generateOrRegister(metadata);
             } finally {
-                previewLocks.remove(metadata.id(), lock);
+                renderedPdfLocks.remove(metadata.id(), lock);
             }
         }
     }
 
-    public PreviewResolution openPreview(FileMetadata metadata) {
-        ensurePreviewReady(metadata);
-        FilePreviewArtifact artifact = previewArtifactRepository.findByFileIdAndArtifactKey(metadata.id(), DEFAULT_ARTIFACT_KEY)
-                .orElseThrow(() -> new NotFoundException("preview not found"));
-        previewArtifactRepository.touchAccessedAt(metadata.id(), DEFAULT_ARTIFACT_KEY, Instant.now());
+    public RenderedPdfResolution openRenderedPdf(FileMetadata metadata) {
+        ensureRenderedPdfReady(metadata);
+        FileViewArtifact artifact = viewArtifactRepository.findByFileIdAndArtifactKey(metadata.id(), DEFAULT_ARTIFACT_KEY)
+                .orElseThrow(() -> new NotFoundException("rendered pdf not found"));
+        viewArtifactRepository.touchAccessedAt(metadata.id(), DEFAULT_ARTIFACT_KEY, Instant.now());
 
-        String filename = previewPathResolver.previewFilename(metadata);
+        String filename = renderedPdfPathResolver.renderedPdfFilename(metadata);
         InputStreamSupplier inputStreamSupplier = switch (artifact.sourceKind()) {
             case ORIGINAL_PDF -> () -> storageProvider.open(metadata.storageKey());
             case GENERATED_PDF -> {
                 if (artifact.storageKey() == null || !storageProvider.exists(artifact.storageKey())) {
-                    throw new NotFoundException("preview not found");
+                    throw new NotFoundException("rendered pdf not found");
                 }
                 yield () -> storageProvider.open(artifact.storageKey());
             }
@@ -109,68 +109,68 @@ public class PreviewService {
             case ORIGINAL_PDF -> (start, length) -> storageProvider.openRange(metadata.storageKey(), start, length);
             case GENERATED_PDF -> {
                 if (artifact.storageKey() == null || !storageProvider.exists(artifact.storageKey())) {
-                    throw new NotFoundException("preview not found");
+                    throw new NotFoundException("rendered pdf not found");
                 }
                 yield (start, length) -> storageProvider.openRange(artifact.storageKey(), start, length);
             }
         };
 
-        long sizeBytes = artifact.sourceKind() == PreviewSourceKind.ORIGINAL_PDF
+        long sizeBytes = artifact.sourceKind() == ViewArtifactSourceKind.ORIGINAL_PDF
                 ? metadata.sizeBytes()
                 : artifact.sizeBytes() == null ? 0L : artifact.sizeBytes();
-        return new PreviewResolution(filename, PDF_MIME_TYPE, sizeBytes, inputStreamSupplier, rangeInputStreamSupplier);
+        return new RenderedPdfResolution(filename, PDF_MIME_TYPE, sizeBytes, inputStreamSupplier, rangeInputStreamSupplier);
     }
 
-    public void deletePreviewIfExists(FileMetadata metadata) {
-        if (!config.preview().cache().cleanupOrphanPreviewOnFileDelete()) {
+    public void deleteRenderedPdfIfExists(FileMetadata metadata) {
+        if (!config.renderedPdf().artifactCache().cleanupOrphanViewArtifactOnFileDelete()) {
             return;
         }
-        previewArtifactRepository.findByFileIdAndArtifactKey(metadata.id(), DEFAULT_ARTIFACT_KEY).ifPresent(artifact -> {
-            if (artifact.sourceKind() == PreviewSourceKind.GENERATED_PDF
+        viewArtifactRepository.findByFileIdAndArtifactKey(metadata.id(), DEFAULT_ARTIFACT_KEY).ifPresent(artifact -> {
+            if (artifact.sourceKind() == ViewArtifactSourceKind.GENERATED_PDF
                     && artifact.storageKey() != null
                     && storageProvider.exists(artifact.storageKey())) {
                 storageProvider.deleteIfExists(artifact.storageKey());
             }
-            previewArtifactRepository.deleteByFileId(metadata.id());
+            viewArtifactRepository.deleteByFileId(metadata.id());
         });
     }
 
-    private void ensurePreviewable(FileMetadata metadata) {
-        if (!isPreviewableMimeType(metadata.mimeType())) {
-            throw new UnsupportedMediaTypeException("preview is not supported for current file type");
+    private void ensurePdfRenderable(FileMetadata metadata) {
+        if (!supportsRenderedPdfMimeType(metadata.mimeType())) {
+            throw new UnsupportedMediaTypeException("rendered pdf is not supported for current file type");
         }
         if (PDF_MIME_TYPE.equalsIgnoreCase(metadata.mimeType())) {
             return;
         }
-        if (!config.preview().officeEnabled()) {
-            throw new UnsupportedMediaTypeException("preview is not supported for current file type");
+        if (!config.renderedPdf().officeRenderingEnabled()) {
+            throw new UnsupportedMediaTypeException("rendered pdf is not supported for current file type");
         }
     }
 
-    private boolean isPreviewableMimeType(String mimeType) {
-        return supportedFileTypes.isPreviewableMimeType(mimeType);
+    private boolean supportsRenderedPdfMimeType(String mimeType) {
+        return supportedFileTypes.supportsRenderedPdfMimeType(mimeType);
     }
 
-    private boolean shouldRetry(FilePreviewArtifact artifact) {
-        Instant retryAfter = artifact.generatedAt().plus(config.preview().libreoffice().retryFailureAfter());
+    private boolean shouldRetry(FileViewArtifact artifact) {
+        Instant retryAfter = artifact.generatedAt().plus(config.renderedPdf().libreoffice().retryFailureAfter());
         return Instant.now().isAfter(retryAfter);
     }
 
-    private RuntimeException failureToException(FilePreviewArtifact artifact) {
+    private RuntimeException failureToException(FileViewArtifact artifact) {
         return switch (artifact.failureCode()) {
-            case CONVERTER_UNAVAILABLE -> new ServiceUnavailableException("preview converter is not available");
-            case CONVERSION_TIMEOUT -> new GatewayTimeoutException("preview conversion timed out");
+            case CONVERTER_UNAVAILABLE -> new ServiceUnavailableException("pdf renderer is not available");
+            case CONVERSION_TIMEOUT -> new GatewayTimeoutException("pdf rendering timed out");
             case CONVERSION_FAILED, INVALID_OUTPUT ->
                     new UnprocessableEntityException(artifact.failureMessage() == null
-                            ? "preview conversion failed"
+                            ? "pdf rendering failed"
                             : artifact.failureMessage());
             case null -> new UnprocessableEntityException(artifact.failureMessage() == null
-                    ? "preview conversion failed"
+                    ? "pdf rendering failed"
                     : artifact.failureMessage());
         };
     }
 
-    private boolean isArtifactAvailable(FileMetadata metadata, FilePreviewArtifact artifact) {
+    private boolean isArtifactAvailable(FileMetadata metadata, FileViewArtifact artifact) {
         return switch (artifact.sourceKind()) {
             case ORIGINAL_PDF -> storageProvider.exists(metadata.storageKey());
             case GENERATED_PDF -> artifact.storageKey() != null && storageProvider.exists(artifact.storageKey());
@@ -180,12 +180,12 @@ public class PreviewService {
     private void generateOrRegister(FileMetadata metadata) {
         if (PDF_MIME_TYPE.equalsIgnoreCase(metadata.mimeType())) {
             Instant now = Instant.now();
-            previewArtifactRepository.save(new FilePreviewArtifact(
+            viewArtifactRepository.save(new FileViewArtifact(
                     metadata.id(),
                     DEFAULT_ARTIFACT_KEY,
                     metadata.tenantId(),
-                    PreviewSourceKind.ORIGINAL_PDF,
-                    PreviewArtifactStatus.READY,
+                    ViewArtifactSourceKind.ORIGINAL_PDF,
+                    ViewArtifactStatus.READY,
                     PDF_MIME_TYPE,
                     metadata.storageProvider(),
                     metadata.storageBucket(),
@@ -204,17 +204,17 @@ public class PreviewService {
         Path pdfTemp = null;
         try {
             sourceTemp = createSourceTempFile(metadata);
-            PreviewConversionResult result = officePreviewConverter.convert(sourceTemp, metadata.originalFilename());
+            RenderedPdfConversionResult result = officePdfRenderer.convert(sourceTemp, metadata.originalFilename());
             pdfTemp = result.outputFile();
-            String storageKey = previewPathResolver.storageKey(metadata);
+            String storageKey = renderedPdfPathResolver.storageKey(metadata);
             storageProvider.moveToPermanent(pdfTemp, storageKey);
             Instant now = Instant.now();
-            previewArtifactRepository.save(new FilePreviewArtifact(
+            viewArtifactRepository.save(new FileViewArtifact(
                     metadata.id(),
                     DEFAULT_ARTIFACT_KEY,
                     metadata.tenantId(),
-                    PreviewSourceKind.GENERATED_PDF,
-                    PreviewArtifactStatus.READY,
+                    ViewArtifactSourceKind.GENERATED_PDF,
+                    ViewArtifactStatus.READY,
                     PDF_MIME_TYPE,
                     storageProvider.providerName(),
                     storageProvider.storageBucket(),
@@ -227,13 +227,13 @@ public class PreviewService {
                     null
             ));
         } catch (ServiceUnavailableException exception) {
-            saveFailure(metadata, PreviewFailureCode.CONVERTER_UNAVAILABLE, "preview converter is not available");
+            saveFailure(metadata, ViewArtifactFailureCode.CONVERTER_UNAVAILABLE, "pdf renderer is not available");
             throw exception;
         } catch (GatewayTimeoutException exception) {
-            saveFailure(metadata, PreviewFailureCode.CONVERSION_TIMEOUT, "preview conversion timed out");
+            saveFailure(metadata, ViewArtifactFailureCode.CONVERSION_TIMEOUT, "pdf rendering timed out");
             throw exception;
         } catch (UnprocessableEntityException exception) {
-            saveFailure(metadata, PreviewFailureCode.CONVERSION_FAILED, exception.getMessage());
+            saveFailure(metadata, ViewArtifactFailureCode.CONVERSION_FAILED, exception.getMessage());
             throw exception;
         } finally {
             if (sourceTemp != null) {
@@ -263,18 +263,18 @@ public class PreviewService {
             throw exception;
         } catch (java.io.IOException exception) {
             storageProvider.deleteTempFile(tempFile);
-            throw new net.ximatai.muyun.fileserver.common.exception.StorageException("failed to stage preview source file", exception);
+            throw new net.ximatai.muyun.fileserver.common.exception.StorageException("failed to stage source file for pdf rendering", exception);
         }
     }
 
-    private void saveFailure(FileMetadata metadata, PreviewFailureCode code, String message) {
+    private void saveFailure(FileMetadata metadata, ViewArtifactFailureCode code, String message) {
         Instant now = Instant.now();
-        previewArtifactRepository.save(new FilePreviewArtifact(
+        viewArtifactRepository.save(new FileViewArtifact(
                 metadata.id(),
                 DEFAULT_ARTIFACT_KEY,
                 metadata.tenantId(),
-                PreviewSourceKind.GENERATED_PDF,
-                PreviewArtifactStatus.FAILED,
+                ViewArtifactSourceKind.GENERATED_PDF,
+                ViewArtifactStatus.FAILED,
                 PDF_MIME_TYPE,
                 null,
                 null,

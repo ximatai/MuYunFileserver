@@ -21,7 +21,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 @ApplicationScoped
-public class LibreOfficePreviewConverter implements OfficePreviewConverter {
+public class LibreOfficePdfRenderer implements OfficePdfRenderer {
 
     private static final String PDF_MIME_TYPE = "application/pdf";
 
@@ -33,12 +33,12 @@ public class LibreOfficePreviewConverter implements OfficePreviewConverter {
 
     @Override
     public void verifyReadiness() {
-        resolveCommand(config.preview().libreoffice().command());
-        ensureDirectory(config.preview().libreoffice().profileRoot());
+        resolveCommand(config.renderedPdf().libreoffice().command());
+        ensureDirectory(config.renderedPdf().libreoffice().profileRoot());
     }
 
     @Override
-    public PreviewConversionResult convert(Path sourceFile, String originalFilename) {
+    public RenderedPdfConversionResult convert(Path sourceFile, String originalFilename) {
         Objects.requireNonNull(sourceFile, "sourceFile");
         Objects.requireNonNull(originalFilename, "originalFilename");
         verifyReadiness();
@@ -47,14 +47,14 @@ public class LibreOfficePreviewConverter implements OfficePreviewConverter {
         Path workDir = null;
         Path profileDir = null;
         try {
-            workDir = Files.createTempDirectory(config.storage().tempDir(), "preview-work-");
-            profileDir = Files.createDirectories(config.preview().libreoffice().profileRoot()
+            workDir = Files.createTempDirectory(config.storage().tempDir(), "rendered-pdf-work-");
+            profileDir = Files.createDirectories(config.renderedPdf().libreoffice().profileRoot()
                     .resolve("profile-" + Instant.now().toEpochMilli() + "-" + Thread.currentThread().threadId()));
             Path sourceCopy = workDir.resolve(sanitizeFilename(originalFilename));
             Files.copy(sourceFile, sourceCopy);
 
             Process process = new ProcessBuilder(
-                    resolveCommand(config.preview().libreoffice().command()).toString(),
+                    resolveCommand(config.renderedPdf().libreoffice().command()).toString(),
                     "--headless",
                     "-env:UserInstallation=" + profileDir.toUri(),
                     "--convert-to",
@@ -64,44 +64,44 @@ public class LibreOfficePreviewConverter implements OfficePreviewConverter {
                     sourceCopy.toString()
             ).redirectErrorStream(true).start();
 
-            boolean finished = process.waitFor(config.preview().libreoffice().timeout().toMillis(), TimeUnit.MILLISECONDS);
+            boolean finished = process.waitFor(config.renderedPdf().libreoffice().timeout().toMillis(), TimeUnit.MILLISECONDS);
             if (!finished) {
                 process.destroyForcibly();
-                throw new GatewayTimeoutException("preview conversion timed out");
+                throw new GatewayTimeoutException("pdf rendering timed out");
             }
 
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             if (process.exitValue() != 0) {
-                throw new UnprocessableEntityException("preview conversion failed: " + summarizeOutput(output));
+                throw new UnprocessableEntityException("pdf rendering failed: " + summarizeOutput(output));
             }
 
             Path pdfFile = workDir.resolve(toPdfFilename(sourceCopy.getFileName().toString()));
             if (!Files.exists(pdfFile) || Files.size(pdfFile) == 0L) {
-                throw new UnprocessableEntityException("preview conversion failed: generated pdf is missing");
+                throw new UnprocessableEntityException("pdf rendering failed: generated pdf is missing");
             }
 
             String detectedMimeType = tika.detect(pdfFile);
             if (!PDF_MIME_TYPE.equalsIgnoreCase(detectedMimeType)) {
-                throw new UnprocessableEntityException("preview conversion failed: generated pdf is invalid");
+                throw new UnprocessableEntityException("pdf rendering failed: generated pdf is invalid");
             }
 
-            return new PreviewConversionResult(pdfFile, Files.size(pdfFile), sha256(pdfFile));
+            return new RenderedPdfConversionResult(pdfFile, Files.size(pdfFile), sha256(pdfFile));
         } catch (ServiceUnavailableException | GatewayTimeoutException | UnprocessableEntityException exception) {
             throw exception;
         } catch (IOException exception) {
-            throw new ServiceUnavailableException("preview converter is not available");
+            throw new ServiceUnavailableException("pdf renderer is not available");
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new GatewayTimeoutException("preview conversion timed out");
+            throw new GatewayTimeoutException("pdf rendering timed out");
         } catch (RuntimeException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new UnprocessableEntityException("preview conversion failed");
+            throw new UnprocessableEntityException("pdf rendering failed");
         } finally {
             release();
             deleteDirectory(profileDir);
             // Keep work dir for returned output only on success.
-            if (workDir != null && !containsPreviewOutput(workDir)) {
+            if (workDir != null && !containsRenderedPdfOutput(workDir)) {
                 deleteDirectory(workDir);
             }
         }
@@ -112,7 +112,7 @@ public class LibreOfficePreviewConverter implements OfficePreviewConverter {
             semaphore().acquire();
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new GatewayTimeoutException("preview conversion timed out");
+            throw new GatewayTimeoutException("pdf rendering timed out");
         }
     }
 
@@ -124,7 +124,7 @@ public class LibreOfficePreviewConverter implements OfficePreviewConverter {
         if (semaphore == null) {
             synchronized (this) {
                 if (semaphore == null) {
-                    semaphore = new Semaphore(config.preview().libreoffice().maxConcurrency(), true);
+                    semaphore = new Semaphore(config.renderedPdf().libreoffice().maxConcurrency(), true);
                 }
             }
         }
@@ -137,12 +137,12 @@ public class LibreOfficePreviewConverter implements OfficePreviewConverter {
             if (Files.isExecutable(directPath)) {
                 return directPath;
             }
-            throw new ServiceUnavailableException("preview converter is not available");
+            throw new ServiceUnavailableException("pdf renderer is not available");
         }
 
         String pathValue = System.getenv("PATH");
         if (pathValue == null || pathValue.isBlank()) {
-            throw new ServiceUnavailableException("preview converter is not available");
+            throw new ServiceUnavailableException("pdf renderer is not available");
         }
         for (String directory : pathValue.split(java.io.File.pathSeparator)) {
             Path candidate = Path.of(directory, configuredCommand);
@@ -150,14 +150,14 @@ public class LibreOfficePreviewConverter implements OfficePreviewConverter {
                 return candidate;
             }
         }
-        throw new ServiceUnavailableException("preview converter is not available");
+        throw new ServiceUnavailableException("pdf renderer is not available");
     }
 
     private void ensureDirectory(Path path) {
         try {
             Files.createDirectories(path);
         } catch (IOException exception) {
-            throw new ServiceUnavailableException("preview converter is not available");
+            throw new ServiceUnavailableException("pdf renderer is not available");
         }
     }
 
@@ -188,7 +188,7 @@ public class LibreOfficePreviewConverter implements OfficePreviewConverter {
         return HexFormat.of().formatHex(digest.digest()).toLowerCase(Locale.ROOT);
     }
 
-    private boolean containsPreviewOutput(Path workDir) {
+    private boolean containsRenderedPdfOutput(Path workDir) {
         try (var stream = Files.list(workDir)) {
             return stream.anyMatch(path -> path.getFileName().toString().endsWith(".pdf"));
         } catch (IOException exception) {

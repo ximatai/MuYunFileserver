@@ -37,7 +37,7 @@ public class FileCommandService {
     UlidGenerator ulidGenerator;
 
     @Inject
-    PreviewService previewService;
+    RenderedPdfService renderedPdfService;
 
     public PromoteFilesResponse promote(List<String> fileIds) {
         List<String> normalizedFileIds = normalizeFileIds(fileIds);
@@ -109,7 +109,7 @@ public class FileCommandService {
         if (!deleted) {
             throw new NotFoundException("file not found");
         }
-        previewService.deletePreviewIfExists(metadata);
+        renderedPdfService.deleteRenderedPdfIfExists(metadata);
 
         LOG.info(OperationLog.format(
                 "delete",

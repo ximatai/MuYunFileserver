@@ -22,7 +22,6 @@ import net.ximatai.muyun.fileserver.api.dto.UploadFilesResponse;
 import net.ximatai.muyun.fileserver.application.DownloadFile;
 import net.ximatai.muyun.fileserver.application.FileCommandService;
 import net.ximatai.muyun.fileserver.application.FileQueryService;
-import net.ximatai.muyun.fileserver.application.PreviewResolution;
 import net.ximatai.muyun.fileserver.application.UploadService;
 import net.ximatai.muyun.fileserver.common.api.ApiResponses;
 import net.ximatai.muyun.fileserver.common.api.DownloadResponses;
@@ -83,35 +82,6 @@ public class FilesResource {
         DownloadFile file = fileQueryService.openDownload(fileId);
         try {
             return DownloadResponses.ok(file, rangeHeader);
-        } catch (DownloadResponses.InvalidRangeException exception) {
-            return DownloadResponses.invalidRange(file.sizeBytes());
-        }
-    }
-
-    @GET
-    @Path("/{fileId}/preview")
-    public Response preview(@RestPath String fileId) {
-        fileQueryService.ensurePreviewReady(fileId);
-        return Response.status(Response.Status.FOUND)
-                .header("Location", "preview/content")
-                .build();
-    }
-
-    @GET
-    @Path("/{fileId}/preview/content")
-    @Produces("application/pdf")
-    public Response previewContent(@RestPath String fileId, @HeaderParam("Range") String rangeHeader) {
-        PreviewResolution preview = fileQueryService.openPreview(fileId);
-        DownloadFile file = new DownloadFile(
-                fileId,
-                preview.originalFilename(),
-                preview.mimeType(),
-                preview.sizeBytes(),
-                preview.inputStreamSupplier(),
-                preview.rangeInputStreamSupplier()
-        );
-        try {
-            return DownloadResponses.inline(file, rangeHeader);
         } catch (DownloadResponses.InvalidRangeException exception) {
             return DownloadResponses.invalidRange(file.sizeBytes());
         }

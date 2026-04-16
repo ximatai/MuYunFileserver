@@ -13,7 +13,6 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import net.ximatai.muyun.fileserver.application.DownloadFile;
-import net.ximatai.muyun.fileserver.application.PreviewResolution;
 import net.ximatai.muyun.fileserver.application.TokenFileCommandService;
 import net.ximatai.muyun.fileserver.application.TokenFileQueryService;
 import net.ximatai.muyun.fileserver.application.TokenUploadService;
@@ -82,35 +81,6 @@ public class PublicFilesResource {
         DownloadFile file = tokenFileQueryService.openDownload(fileId, accessToken);
         try {
             return DownloadResponses.ok(file, rangeHeader);
-        } catch (DownloadResponses.InvalidRangeException exception) {
-            return DownloadResponses.invalidRange(file.sizeBytes());
-        }
-    }
-
-    @GET
-    @Path("/{fileId}/preview")
-    public Response preview(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
-        tokenFileQueryService.ensurePreviewReady(fileId, accessToken);
-        return Response.status(Response.Status.FOUND)
-                .header("Location", "preview/content?access_token=" + java.net.URLEncoder.encode(accessToken, java.nio.charset.StandardCharsets.UTF_8))
-                .build();
-    }
-
-    @GET
-    @Path("/{fileId}/preview/content")
-    @Produces("application/pdf")
-    public Response previewContent(@RestPath String fileId, @QueryParam("access_token") String accessToken, @HeaderParam("Range") String rangeHeader) {
-        PreviewResolution preview = tokenFileQueryService.openPreview(fileId, accessToken);
-        DownloadFile file = new DownloadFile(
-                fileId,
-                preview.originalFilename(),
-                preview.mimeType(),
-                preview.sizeBytes(),
-                preview.inputStreamSupplier(),
-                preview.rangeInputStreamSupplier()
-        );
-        try {
-            return DownloadResponses.inline(file, rangeHeader);
         } catch (DownloadResponses.InvalidRangeException exception) {
             return DownloadResponses.invalidRange(file.sizeBytes());
         }

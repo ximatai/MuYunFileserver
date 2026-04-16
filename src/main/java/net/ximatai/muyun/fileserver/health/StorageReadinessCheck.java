@@ -4,7 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import net.ximatai.muyun.fileserver.common.exception.StorageException;
-import net.ximatai.muyun.fileserver.application.OfficePreviewConverter;
+import net.ximatai.muyun.fileserver.application.OfficePdfRenderer;
 import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
@@ -28,7 +28,7 @@ public class StorageReadinessCheck implements HealthCheck {
     StorageProvider storageProvider;
 
     @Inject
-    OfficePreviewConverter officePreviewConverter;
+    OfficePdfRenderer officePdfRenderer;
 
     @Override
     public HealthCheckResponse call() {
@@ -51,12 +51,12 @@ public class StorageReadinessCheck implements HealthCheck {
                     .build();
         }
 
-        if (config.preview().enabled() && config.preview().officeEnabled()) {
+        if (config.renderedPdf().enabled() && config.renderedPdf().officeRenderingEnabled()) {
             try {
-                officePreviewConverter.verifyReadiness();
+                officePdfRenderer.verifyReadiness();
             } catch (RuntimeException exception) {
                 return builder.up()
-                        .withData("previewConverter", exception.getMessage())
+                        .withData("pdfRenderer", exception.getMessage())
                         .build();
             }
         }

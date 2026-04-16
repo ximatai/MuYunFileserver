@@ -1,6 +1,6 @@
 package net.ximatai.muyun.fileserver.application;
 
-public record PreviewResolution(
+public record RenderedPdfResolution(
         String originalFilename,
         String mimeType,
         long sizeBytes,

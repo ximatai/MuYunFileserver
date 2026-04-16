@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class LibreOfficePreviewConverterTest {
+class LibreOfficePdfRendererTest {
 
     @Test
     void shouldConvertWithExecutableCommand() throws Exception {
@@ -66,13 +66,13 @@ class LibreOfficePreviewConverterTest {
                 %%EOF
                 EOF
                 """);
-        LibreOfficePreviewConverter converter = new LibreOfficePreviewConverter();
-        converter.config = TestConfigs.fileServiceConfigWithPreviewCommand(script.toString());
+        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
+        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
 
-        Path source = Files.createTempFile("preview-converter", ".docx");
+        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
         Files.writeString(source, "fake");
 
-        PreviewConversionResult result = converter.convert(source, "contract.docx");
+        RenderedPdfConversionResult result = converter.convert(source, "contract.docx");
 
         assertTrue(Files.exists(result.outputFile()));
         assertEquals("application/pdf", new org.apache.tika.Tika().detect(result.outputFile()));
@@ -80,10 +80,10 @@ class LibreOfficePreviewConverterTest {
 
     @Test
     void shouldThrowServiceUnavailableWhenCommandIsMissing() throws Exception {
-        LibreOfficePreviewConverter converter = new LibreOfficePreviewConverter();
-        converter.config = TestConfigs.fileServiceConfigWithPreviewCommand("missing-soffice-command");
+        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
+        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand("missing-soffice-command");
 
-        Path source = Files.createTempFile("preview-converter", ".docx");
+        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
         Files.writeString(source, "fake");
 
         assertThrows(ServiceUnavailableException.class, () -> converter.convert(source, "contract.docx"));
@@ -95,10 +95,10 @@ class LibreOfficePreviewConverterTest {
                 #!/bin/sh
                 sleep 10
                 """);
-        LibreOfficePreviewConverter converter = new LibreOfficePreviewConverter();
-        converter.config = TestConfigs.fileServiceConfigWithPreviewCommand(script.toString());
+        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
+        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
 
-        Path source = Files.createTempFile("preview-converter", ".docx");
+        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
         Files.writeString(source, "fake");
 
         assertThrows(GatewayTimeoutException.class, () -> converter.convert(source, "contract.docx"));
@@ -110,10 +110,10 @@ class LibreOfficePreviewConverterTest {
                 #!/bin/sh
                 exit 0
                 """);
-        LibreOfficePreviewConverter converter = new LibreOfficePreviewConverter();
-        converter.config = TestConfigs.fileServiceConfigWithPreviewCommand(script.toString());
+        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
+        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
 
-        Path source = Files.createTempFile("preview-converter", ".docx");
+        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
         Files.writeString(source, "fake");
 
         assertThrows(UnprocessableEntityException.class, () -> converter.convert(source, "contract.docx"));

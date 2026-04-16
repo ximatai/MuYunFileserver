@@ -1,6 +1,6 @@
-package net.ximatai.muyun.fileserver.domain.preview;
+package net.ximatai.muyun.fileserver.domain.view;
 
-public enum PreviewFailureCode {
+public enum ViewArtifactFailureCode {
     CONVERTER_UNAVAILABLE,
     CONVERSION_TIMEOUT,
     CONVERSION_FAILED,

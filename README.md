@@ -149,10 +149,10 @@ docker build -f src/main/docker/Dockerfile.jvm -t muyun-fileserver:latest .
 
 如果你只想快速验证项目，到这里就够了。
 
-试预览一个文件：
+取统一 view descriptor：
 
 ```sh
-curl -I http://127.0.0.1:8080/api/v1/files/<fileId>/preview \
+curl http://127.0.0.1:8080/api/v1/files/<fileId>/view \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123'
 ```
@@ -458,8 +458,6 @@ Content-Disposition, Content-Length, Content-Type
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
 | 展示描述 | `GET /api/v1/files/{fileId}/view` | `GET /api/v1/public/files/{fileId}/view?access_token=...` |
 | viewer 内容 | `GET /api/v1/files/{fileId}/view/content` | `GET /api/v1/public/files/{fileId}/view/content/{accessToken}` |
-| 预览跳转 | `GET /api/v1/files/{fileId}/preview` | `GET /api/v1/public/files/{fileId}/preview?access_token=...` |
-| 预览内容 | `GET /api/v1/files/{fileId}/preview/content` | `GET /api/v1/public/files/{fileId}/preview/content?access_token=...` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
 
 内置 viewer 页面入口：
@@ -475,7 +473,7 @@ Content-Disposition, Content-Length, Content-Type
 短时 token 模式：
 
 - 适合业务后端先完成权限校验，再给前端一个短时访问地址或上传授权的场景
-- 当前覆盖“上传 + 单文件元数据查询 + 下载 + 预览 + 删除”
+- 当前覆盖“上传 + 单文件元数据查询 + 统一查看 + 下载 + 删除”
 - 业务后端负责校验“这个用户能不能访问这个附件”
 - `MuYunFileServer` 只负责校验 token 是否允许上传或访问这个文件
 - token 上传仍先进入 `MuYunFileServer`，不是对象存储直传
@@ -494,12 +492,10 @@ Content-Disposition, Content-Length, Content-Type
 - `application/pdf` 直接 inline 预览
 - `doc/docx/xls/xlsx/ppt/pptx/odt/ods/odp` 转 PDF 后 inline 预览
 
-预览行为：
+统一查看行为：
 
 - 首次访问时懒生成
 - 成功后缓存 PDF 预览产物
-- `GET /preview` 返回 `302`
-- `GET /preview/content` 直接返回 `application/pdf`
 - `GET /view` 推荐作为前端统一展示入口
 - `GET /view/content` 是内置 viewer 消费的稳定 PDF 内容地址，避免第三方 viewer 对 query token 的兼容问题
 - `GET /api/v1/.../view` 返回 viewer descriptor，是 viewer 页面唯一正式协议

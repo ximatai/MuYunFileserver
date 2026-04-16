@@ -2,6 +2,7 @@ package net.ximatai.muyun.fileserver.config;
 
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
+import io.smallrye.config.WithName;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
@@ -24,7 +25,8 @@ public interface FileServiceConfig {
 
     Token token();
 
-    Preview preview();
+    @WithName("preview")
+    RenderedPdf renderedPdf();
 
     Viewer viewer();
 
@@ -97,21 +99,27 @@ public interface FileServiceConfig {
 
         @WithDefault("5S")
         Duration allowedClockSkew();
+
+        @WithDefault("2H")
+        Duration viewerLinkTtl();
     }
 
-    interface Preview {
+    interface RenderedPdf {
         @WithDefault("true")
         boolean enabled();
 
+        @WithName("office-enabled")
         @WithDefault("true")
-        boolean officeEnabled();
+        boolean officeRenderingEnabled();
 
+        @WithName("converter")
         @WithDefault("libreoffice")
-        String converter();
+        String renderer();
 
         Libreoffice libreoffice();
 
-        Cache cache();
+        @WithName("cache")
+        ArtifactCache artifactCache();
     }
 
     interface Libreoffice {
@@ -131,9 +139,10 @@ public interface FileServiceConfig {
         Path profileRoot();
     }
 
-    interface Cache {
+    interface ArtifactCache {
+        @WithName("cleanup-orphan-preview-on-file-delete")
         @WithDefault("true")
-        boolean cleanupOrphanPreviewOnFileDelete();
+        boolean cleanupOrphanViewArtifactOnFileDelete();
     }
 
     interface Viewer {

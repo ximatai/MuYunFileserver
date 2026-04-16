@@ -35,7 +35,7 @@ public class FileQueryService {
     StorageProvider storageProvider;
 
     @Inject
-    PreviewService previewService;
+    RenderedPdfService renderedPdfService;
 
     @Inject
     ViewDescriptorService viewDescriptorService;
@@ -86,14 +86,14 @@ public class FileQueryService {
         );
     }
 
-    public PreviewResolution openPreview(String fileId) {
+    public RenderedPdfResolution openRenderedPdf(String fileId) {
         FileMetadata metadata = requireAccessibleFile(fileId);
 
-        PreviewResolution preview = previewService.openPreview(metadata);
+        RenderedPdfResolution renderedPdf = renderedPdfService.openRenderedPdf(metadata);
 
         RequestContext requestContext = requestContextHolder.getRequired();
         LOG.info(OperationLog.format(
-                "preview",
+                "rendered_pdf",
                 "success",
                 "file_id", fileId,
                 "tenant_id", requestContext.tenantId(),
@@ -102,16 +102,16 @@ public class FileQueryService {
                 "storage_provider", metadata.storageProvider()
         ));
 
-        return preview;
+        return renderedPdf;
     }
 
-    public void ensurePreviewReady(String fileId) {
+    public void ensureRenderedPdfReady(String fileId) {
         FileMetadata metadata = requireAccessibleFile(fileId);
-        previewService.ensurePreviewReady(metadata);
+        renderedPdfService.ensureRenderedPdfReady(metadata);
 
         RequestContext requestContext = requestContextHolder.getRequired();
         LOG.info(OperationLog.format(
-                "preview_ready",
+                "rendered_pdf_ready",
                 "success",
                 "file_id", fileId,
                 "tenant_id", requestContext.tenantId(),
@@ -144,7 +144,7 @@ public class FileQueryService {
         ViewerType viewerType = viewDescriptorService.resolveViewerType(metadata.mimeType());
         RequestContext requestContext = requestContextHolder.getRequired();
         if (viewerType == ViewerType.PDF) {
-            PreviewResolution preview = previewService.openPreview(metadata);
+            RenderedPdfResolution renderedPdf = renderedPdfService.openRenderedPdf(metadata);
             LOG.info(OperationLog.format(
                     "view_content",
                     "success",
@@ -157,11 +157,11 @@ public class FileQueryService {
             ));
             return new DownloadFile(
                     fileId,
-                    preview.originalFilename(),
-                    preview.mimeType(),
-                    preview.sizeBytes(),
-                    preview.inputStreamSupplier(),
-                    preview.rangeInputStreamSupplier()
+                    renderedPdf.originalFilename(),
+                    renderedPdf.mimeType(),
+                    renderedPdf.sizeBytes(),
+                    renderedPdf.inputStreamSupplier(),
+                    renderedPdf.rangeInputStreamSupplier()
             );
         }
         if (viewerType == ViewerType.IMAGE || viewerType == ViewerType.VIDEO || viewerType == ViewerType.AUDIO) {

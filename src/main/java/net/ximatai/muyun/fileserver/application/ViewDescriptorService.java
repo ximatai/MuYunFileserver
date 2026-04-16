@@ -30,15 +30,18 @@ public class ViewDescriptorService {
     FileServiceConfig config;
 
     @Inject
-    PreviewService previewService;
+    RenderedPdfService renderedPdfService;
 
     @Inject
     SupportedFileTypes supportedFileTypes;
 
+    @Inject
+    DownloadTokenSigner downloadTokenSigner;
+
     public FileViewResponse describeInternal(FileMetadata metadata) {
         ViewerType viewerType = resolveViewerType(metadata.mimeType());
         if (viewerType == ViewerType.PDF) {
-            previewService.ensurePreviewReady(metadata);
+            renderedPdfService.ensureRenderedPdfReady(metadata);
         }
         String contentUrl = switch (viewerType) {
             case PDF, IMAGE, VIDEO, AUDIO, TEXT -> "/api/v1/files/" + metadata.id() + "/view/content";
@@ -57,16 +60,17 @@ public class ViewDescriptorService {
         );
     }
 
-    public FileViewResponse describePublic(FileMetadata metadata, String accessToken) {
+    public FileViewResponse describePublic(FileMetadata metadata, DownloadTokenClaims claims) {
         ViewerType viewerType = resolveViewerType(metadata.mimeType());
         if (viewerType == ViewerType.PDF) {
-            previewService.ensurePreviewReady(metadata);
+            renderedPdfService.ensureRenderedPdfReady(metadata);
         }
 
-        String encodedToken = URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
+        String derivedToken = downloadTokenSigner.signViewerToken(claims);
+        String encodedToken = URLEncoder.encode(derivedToken, StandardCharsets.UTF_8);
         String query = "?access_token=" + encodedToken;
         String contentUrl = switch (viewerType) {
-            case PDF, IMAGE, VIDEO, AUDIO, TEXT -> "/api/v1/public/files/" + metadata.id() + "/view/content/" + accessToken;
+            case PDF, IMAGE, VIDEO, AUDIO, TEXT -> "/api/v1/public/files/" + metadata.id() + "/view/content/" + derivedToken;
             case FALLBACK -> null;
         };
         return new FileViewResponse(
@@ -96,10 +100,10 @@ public class ViewDescriptorService {
         if (supportedFileTypes.isTextMimeType(canonicalMimeType)) {
             return ViewerType.TEXT;
         }
-        if (!config.preview().enabled()) {
+        if (!config.renderedPdf().enabled()) {
             return ViewerType.FALLBACK;
         }
-        if (supportedFileTypes.isPreviewableMimeType(canonicalMimeType)) {
+        if (supportedFileTypes.supportsRenderedPdfMimeType(canonicalMimeType)) {
             return ViewerType.PDF;
         }
         return ViewerType.FALLBACK;

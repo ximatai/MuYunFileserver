@@ -167,7 +167,7 @@
 
 ### 5.3 后端产物模型演进方向
 
-当前 `preview artifact` 已可支撑 `PDF` 单产物，但后续应向多产物演进，目标包括：
+当前 `view artifact` 已可支撑 `PDF` 单产物，但后续应向多产物演进，目标包括：
 
 - `preview_pdf`
 - `thumbnail_small`
@@ -287,7 +287,7 @@
 交付物：
 
 - `pdf` renderer
-- 与后端 `preview/content` 的联通能力
+- 与后端 `view/content` 的联通能力
 
 执行项：
 
@@ -332,7 +332,7 @@
 
 验收标准：
 
-- 前端 viewer shell 不再直接拼 `/preview` 或 `/download` URL
+- 前端 viewer shell 不再直接拼 `/view/content` 或 `/download` URL
 - 所有 URL 都由 descriptor 返回
 - 后端能对“支持展示”和“不支持展示”给出清晰分流
 

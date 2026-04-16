@@ -17,7 +17,7 @@ public final class TestConfigs {
         return fileServiceConfig("local", null, null, null, null, "soffice");
     }
 
-    public static FileServiceConfig fileServiceConfigWithPreviewCommand(String command) {
+    public static FileServiceConfig fileServiceConfigWithRenderedPdfCommand(String command) {
         return fileServiceConfig("local", null, null, null, null, command);
     }
 
@@ -31,14 +31,14 @@ public final class TestConfigs {
             String accessKey,
             String secretKey,
             String bucket,
-            String previewCommand
+            String renderedPdfCommand
     ) {
         Path testRoot = Path.of(System.getProperty("user.dir"), "build", "test-config-storage");
         Path testTemp = Path.of(System.getProperty("user.dir"), "build", "test-config-tmp");
-        Path previewProfileRoot = Path.of(System.getProperty("user.dir"), "build", "test-config-libreoffice-profile");
+        Path renderedPdfProfileRoot = Path.of(System.getProperty("user.dir"), "build", "test-config-libreoffice-profile");
         ensureDirectory(testRoot);
         ensureDirectory(testTemp);
-        ensureDirectory(previewProfileRoot);
+        ensureDirectory(renderedPdfProfileRoot);
 
         FileServiceConfig.Storage storage = proxy(FileServiceConfig.Storage.class, methodName -> switch (methodName) {
             case "type" -> storageType;
@@ -88,20 +88,20 @@ public final class TestConfigs {
             default -> throw new UnsupportedOperationException(methodName);
         });
 
-        FileServiceConfig.Preview preview = proxy(FileServiceConfig.Preview.class, methodName -> switch (methodName) {
+        FileServiceConfig.RenderedPdf renderedPdf = proxy(FileServiceConfig.RenderedPdf.class, methodName -> switch (methodName) {
             case "enabled" -> true;
-            case "officeEnabled" -> true;
-            case "converter" -> "libreoffice";
-            case "libreoffice" -> proxy(FileServiceConfig.Libreoffice.class, previewMethod -> switch (previewMethod) {
-                case "command" -> previewCommand;
+            case "officeRenderingEnabled" -> true;
+            case "renderer" -> "libreoffice";
+            case "libreoffice" -> proxy(FileServiceConfig.Libreoffice.class, renderedPdfMethod -> switch (renderedPdfMethod) {
+                case "command" -> renderedPdfCommand;
                 case "timeout" -> Duration.ofSeconds(5);
                 case "maxConcurrency" -> 1;
                 case "retryFailureAfter" -> Duration.ofMinutes(5);
-                case "profileRoot" -> previewProfileRoot;
-                default -> throw new UnsupportedOperationException(previewMethod);
+                case "profileRoot" -> renderedPdfProfileRoot;
+                default -> throw new UnsupportedOperationException(renderedPdfMethod);
             });
-            case "cache" -> proxy(FileServiceConfig.Cache.class, cacheMethod -> switch (cacheMethod) {
-                case "cleanupOrphanPreviewOnFileDelete" -> true;
+            case "artifactCache" -> proxy(FileServiceConfig.ArtifactCache.class, cacheMethod -> switch (cacheMethod) {
+                case "cleanupOrphanViewArtifactOnFileDelete" -> true;
                 default -> throw new UnsupportedOperationException(cacheMethod);
             });
             default -> throw new UnsupportedOperationException(methodName);
@@ -114,7 +114,7 @@ public final class TestConfigs {
             case "cleanup" -> cleanup;
             case "security" -> security;
             case "token" -> token;
-            case "preview" -> preview;
+            case "renderedPdf" -> renderedPdf;
             default -> throw new UnsupportedOperationException(methodName);
         });
     }

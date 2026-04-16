@@ -4,13 +4,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 
 @ApplicationScoped
-public class PreviewPathResolver {
+public class RenderedPdfPathResolver {
 
     public String storageKey(FileMetadata metadata) {
-        return metadata.tenantId() + "/previews/" + metadata.id() + "/preview.pdf";
+        return metadata.tenantId() + "/view-artifacts/" + metadata.id() + "/rendered.pdf";
     }
 
-    public String previewFilename(FileMetadata metadata) {
+    public String renderedPdfFilename(FileMetadata metadata) {
         if ("application/pdf".equalsIgnoreCase(metadata.mimeType())) {
             return metadata.originalFilename();
         }

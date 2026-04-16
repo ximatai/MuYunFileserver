@@ -87,7 +87,7 @@
 - `pptx -> pdf` 预览能在 `/view/...` 正常打开
 - token 模式的 `contentUrl` 能被官方 viewer 正常读取
 - 反向代理前缀场景下，`/fileserver/view/...` 能正常打开
-- 官方 viewer 内的下载按钮仍能下载 PDF 预览内容
+- 官方 viewer 内的下载按钮仍能下载 `view/content` 返回的 PDF 内容
 - 外层 MuYun viewer 的“下载原文件”按钮仍能下载源文件
 
 ## 允许修改与禁止修改

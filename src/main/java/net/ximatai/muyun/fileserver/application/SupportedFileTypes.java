@@ -134,7 +134,7 @@ public class SupportedFileTypes {
         return ALLOWED_UPLOAD_MIME_TYPES.contains(canonicalize(mimeType));
     }
 
-    public boolean isPreviewableMimeType(String mimeType) {
+    public boolean supportsRenderedPdfMimeType(String mimeType) {
         String canonical = canonicalize(mimeType);
         return "application/pdf".equals(canonical) || OFFICE_MIME_TYPES.contains(canonical);
     }

@@ -380,7 +380,7 @@ class FileResourceTest {
     }
 
     @Test
-    void shouldPreviewPdfFileAndReturnInlineContent() {
+    void shouldServePdfViewContentInline() {
         byte[] pdfBytes = """
                 %PDF-1.4
                 1 0 obj
@@ -398,16 +398,8 @@ class FileResourceTest {
         String fileId = uploadSingleFile("contract.pdf", pdfBytes, "application/pdf");
 
         givenAuthenticated()
-                .redirects().follow(false)
                 .when()
-                .get("/api/v1/files/{fileId}/preview", fileId)
-                .then()
-                .statusCode(302)
-                .header("Location", equalTo("preview/content"));
-
-        givenAuthenticated()
-                .when()
-                .get("/api/v1/files/{fileId}/preview/content", fileId)
+                .get("/api/v1/files/{fileId}/view/content", fileId)
                 .then()
                 .statusCode(200)
                 .header("Content-Type", Matchers.containsString("application/pdf"))
@@ -495,7 +487,7 @@ class FileResourceTest {
     }
 
     @Test
-    void shouldGeneratePreviewForOfficeFileAndReuseCachedPdf() {
+    void shouldGenerateRenderedPdfForOfficeViewContentAndReuseCachedPdf() {
         String fileId = uploadSingleFile(
                 "report.docx",
                 minimalDocxBytes(),
@@ -503,12 +495,12 @@ class FileResourceTest {
         );
 
         givenAuthenticated()
-                .redirects().follow(false)
                 .when()
-                .get("/api/v1/files/{fileId}/preview", fileId)
+                .get("/api/v1/files/{fileId}/view/content", fileId)
                 .then()
-                .statusCode(302)
-                .header("Location", equalTo("preview/content"));
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("application/pdf"))
+                .header("Content-Disposition", Matchers.containsString("inline;"));
 
         Path previewPath = previewStoragePath(fileId);
         org.junit.jupiter.api.Assertions.assertTrue(Files.exists(previewPath));
@@ -517,19 +509,17 @@ class FileResourceTest {
 
         givenAuthenticated()
                 .when()
-                .get("/api/v1/files/{fileId}/preview/content", fileId)
+                .get("/api/v1/files/{fileId}/view/content", fileId)
                 .then()
                 .statusCode(200)
                 .header("Content-Type", Matchers.containsString("application/pdf"))
-                .header("Content-Disposition", Matchers.containsString("inline;"))
-                .body(Matchers.containsString("Fake Preview PDF"));
+                .header("Content-Disposition", Matchers.containsString("inline;"));
 
         givenAuthenticated()
-                .redirects().follow(false)
                 .when()
-                .get("/api/v1/files/{fileId}/preview", fileId)
+                .get("/api/v1/files/{fileId}/view/content", fileId)
                 .then()
-                .statusCode(302);
+                .statusCode(200);
 
         org.junit.jupiter.api.Assertions.assertEquals(modifiedTime, previewPath.toFile().lastModified());
     }
@@ -556,19 +546,6 @@ class FileResourceTest {
                 .body("data.downloadUrl", equalTo("/api/v1/files/" + fileId + "/download"));
 
         org.junit.jupiter.api.Assertions.assertTrue(Files.exists(previewStoragePath(fileId)));
-    }
-
-    @Test
-    void shouldRejectPreviewForUnsupportedFileType() {
-        String fileId = uploadSingleFile("image.png", "png".getBytes(StandardCharsets.UTF_8), "image/png");
-
-        givenAuthenticated()
-                .when()
-                .get("/api/v1/files/{fileId}/preview", fileId)
-                .then()
-                .statusCode(415)
-                .body("success", equalTo(false))
-                .body("message", equalTo("preview is not supported for current file type"));
     }
 
     @Test
@@ -1293,25 +1270,15 @@ class FileResourceTest {
     }
 
     @Test
-    void shouldPreviewFileByToken() throws Exception {
-        String fileId = uploadSingleFile("token-preview.pdf",
+    void shouldServePdfViewContentByToken() throws Exception {
+        String fileId = uploadSingleFile("token-rendered.pdf",
                 "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8),
                 "application/pdf");
         String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
 
         given()
-                .queryParam("access_token", accessToken)
-                .redirects().follow(false)
                 .when()
-                .get("/api/v1/public/files/{fileId}/preview", fileId)
-                .then()
-                .statusCode(302)
-                .header("Location", Matchers.startsWith("preview/content?access_token="));
-
-        given()
-                .queryParam("access_token", accessToken)
-                .when()
-                .get("/api/v1/public/files/{fileId}/preview/content", fileId)
+                .get("/api/v1/public/files/{fileId}/view/content/{accessToken}", fileId, accessToken)
                 .then()
                 .statusCode(200)
                 .header("Content-Type", Matchers.containsString("application/pdf"))
@@ -1325,7 +1292,7 @@ class FileResourceTest {
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
 
-        given()
+        String contentUrl = given()
                 .queryParam("access_token", accessToken)
                 .when()
                 .get("/api/v1/public/files/{fileId}/view", fileId)
@@ -1334,8 +1301,20 @@ class FileResourceTest {
                 .body("success", equalTo(true))
                 .body("data.fileId", equalTo(fileId))
                 .body("data.viewerType", equalTo("pdf"))
-                .body("data.contentUrl", equalTo("/api/v1/public/files/" + fileId + "/view/content/" + accessToken))
-                .body("data.downloadUrl", equalTo("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken));
+                .extract()
+                .path("data.contentUrl");
+        String downloadUrl = given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .extract()
+                .path("data.downloadUrl");
+
+        org.junit.jupiter.api.Assertions.assertNotEquals("/api/v1/public/files/" + fileId + "/view/content/" + accessToken, contentUrl);
+        org.junit.jupiter.api.Assertions.assertNotEquals("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken, downloadUrl);
+        org.junit.jupiter.api.Assertions.assertTrue(contentUrl.startsWith("/api/v1/public/files/" + fileId + "/view/content/"));
+        org.junit.jupiter.api.Assertions.assertTrue(downloadUrl.startsWith("/api/v1/public/files/" + fileId + "/download?access_token="));
     }
 
     @Test
@@ -1359,7 +1338,7 @@ class FileResourceTest {
         String fileId = uploadSingleFile("token-image.png", minimalPngBytes(), "image/png");
         String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
 
-        given()
+        String contentUrl = given()
                 .queryParam("access_token", accessToken)
                 .when()
                 .get("/api/v1/public/files/{fileId}/view", fileId)
@@ -1367,8 +1346,18 @@ class FileResourceTest {
                 .statusCode(200)
                 .body("success", equalTo(true))
                 .body("data.viewerType", equalTo("image"))
-                .body("data.contentUrl", equalTo("/api/v1/public/files/" + fileId + "/view/content/" + accessToken))
-                .body("data.downloadUrl", equalTo("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken));
+                .extract()
+                .path("data.contentUrl");
+        String downloadUrl = given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .extract()
+                .path("data.downloadUrl");
+
+        org.junit.jupiter.api.Assertions.assertNotEquals("/api/v1/public/files/" + fileId + "/view/content/" + accessToken, contentUrl);
+        org.junit.jupiter.api.Assertions.assertNotEquals("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken, downloadUrl);
     }
 
     @Test
@@ -1390,7 +1379,7 @@ class FileResourceTest {
         String fileId = uploadSingleFile("token-video.mp4", minimalMp4Bytes(), "video/mp4");
         String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
 
-        given()
+        String contentUrl = given()
                 .queryParam("access_token", accessToken)
                 .when()
                 .get("/api/v1/public/files/{fileId}/view", fileId)
@@ -1398,8 +1387,18 @@ class FileResourceTest {
                 .statusCode(200)
                 .body("success", equalTo(true))
                 .body("data.viewerType", equalTo("video"))
-                .body("data.contentUrl", equalTo("/api/v1/public/files/" + fileId + "/view/content/" + accessToken))
-                .body("data.downloadUrl", equalTo("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken));
+                .extract()
+                .path("data.contentUrl");
+        String downloadUrl = given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .extract()
+                .path("data.downloadUrl");
+
+        org.junit.jupiter.api.Assertions.assertNotEquals("/api/v1/public/files/" + fileId + "/view/content/" + accessToken, contentUrl);
+        org.junit.jupiter.api.Assertions.assertNotEquals("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken, downloadUrl);
     }
 
     @Test
@@ -1421,7 +1420,7 @@ class FileResourceTest {
         String fileId = uploadSingleFile("token-text.txt", "token text".getBytes(StandardCharsets.UTF_8), "text/plain");
         String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
 
-        given()
+        String contentUrl = given()
                 .queryParam("access_token", accessToken)
                 .when()
                 .get("/api/v1/public/files/{fileId}/view", fileId)
@@ -1429,8 +1428,108 @@ class FileResourceTest {
                 .statusCode(200)
                 .body("success", equalTo(true))
                 .body("data.viewerType", equalTo("text"))
-                .body("data.contentUrl", equalTo("/api/v1/public/files/" + fileId + "/view/content/" + accessToken))
-                .body("data.downloadUrl", equalTo("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken));
+                .extract()
+                .path("data.contentUrl");
+        String downloadUrl = given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .extract()
+                .path("data.downloadUrl");
+
+        org.junit.jupiter.api.Assertions.assertNotEquals("/api/v1/public/files/" + fileId + "/view/content/" + accessToken, contentUrl);
+        org.junit.jupiter.api.Assertions.assertNotEquals("/api/v1/public/files/" + fileId + "/download?access_token=" + accessToken, downloadUrl);
+    }
+
+    @Test
+    void shouldAllowDerivedViewerDownloadAfterOriginalReadTokenExpires() throws Exception {
+        String fileId = uploadSingleFile("derived-token.txt", "viewer token".getBytes(StandardCharsets.UTF_8), "text/plain");
+        String shortLivedAccessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(1));
+
+        String downloadUrl = given()
+                .queryParam("access_token", shortLivedAccessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("data.downloadUrl");
+
+        Thread.sleep(2200L);
+
+        given()
+                .queryParam("access_token", shortLivedAccessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(401);
+
+        given()
+                .when()
+                .get(downloadUrl)
+                .then()
+                .statusCode(200)
+                .body(equalTo("viewer token"));
+    }
+
+    @Test
+    void shouldUseSameDerivedViewerTokenForContentAndDownloadLinks() throws Exception {
+        String fileId = uploadSingleFile("derived-token-links.txt", "viewer token".getBytes(StandardCharsets.UTF_8), "text/plain");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        io.restassured.response.Response response = given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .extract().response();
+
+        String contentUrl = response.path("data.contentUrl");
+        String downloadUrl = response.path("data.downloadUrl");
+
+        String contentToken = contentUrl.substring(contentUrl.lastIndexOf('/') + 1);
+        String downloadToken = downloadUrl.substring(downloadUrl.indexOf("access_token=") + "access_token=".length());
+
+        org.junit.jupiter.api.Assertions.assertEquals(contentToken, downloadToken);
+        org.junit.jupiter.api.Assertions.assertNotEquals(accessToken, contentToken);
+    }
+
+    @Test
+    void shouldRejectViewerTokenForRefreshingViewDescriptor() throws Exception {
+        String fileId = uploadSingleFile("derived-view-refresh.txt", "viewer token".getBytes(StandardCharsets.UTF_8), "text/plain");
+        String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        String downloadUrl = given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("data.downloadUrl");
+
+        String viewerToken = downloadUrl.substring(downloadUrl.indexOf("access_token=") + "access_token=".length());
+
+        given()
+                .queryParam("access_token", viewerToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(403)
+                .body("message", equalTo("download token purpose is not valid for view"));
+    }
+
+    @Test
+    void shouldValidatePublicViewFileIdBeforeTokenParsing() {
+        given()
+                .queryParam("access_token", "invalid-token")
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", "not-a-ulid")
+                .then()
+                .statusCode(400)
+                .body("message", equalTo("invalid fileId"));
     }
 
     @Test
@@ -1449,15 +1548,14 @@ class FileResourceTest {
     }
 
     @Test
-    void shouldRejectPreviewTokenForAnotherFile() throws Exception {
+    void shouldRejectViewContentTokenForAnotherFile() throws Exception {
         String firstFileId = uploadSingleFile("a.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
         String secondFileId = uploadSingleFile("b.pdf", "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8), "application/pdf");
         String accessToken = signReadToken(TENANT_ID, firstFileId, Instant.now().plusSeconds(60));
 
         given()
-                .queryParam("access_token", accessToken)
                 .when()
-                .get("/api/v1/public/files/{fileId}/preview", secondFileId)
+                .get("/api/v1/public/files/{fileId}/view/content/{accessToken}", secondFileId, accessToken)
                 .then()
                 .statusCode(403)
                 .body("success", equalTo(false))
@@ -1508,16 +1606,15 @@ class FileResourceTest {
     }
 
     @Test
-    void shouldRejectExpiredPreviewToken() throws Exception {
-        String fileId = uploadSingleFile("expired-preview.pdf",
+    void shouldRejectExpiredViewContentToken() throws Exception {
+        String fileId = uploadSingleFile("expired-rendered.pdf",
                 "%PDF-1.4\n%%EOF\n".getBytes(StandardCharsets.UTF_8),
                 "application/pdf");
         String accessToken = signReadToken(TENANT_ID, fileId, Instant.now().minusSeconds(5));
 
         given()
-                .queryParam("access_token", accessToken)
                 .when()
-                .get("/api/v1/public/files/{fileId}/preview", fileId)
+                .get("/api/v1/public/files/{fileId}/view/content/{accessToken}", fileId, accessToken)
                 .then()
                 .statusCode(401)
                 .body("success", equalTo(false))
@@ -1525,16 +1622,16 @@ class FileResourceTest {
     }
 
     @Test
-    void shouldDeleteGeneratedPreviewWhenFileIsDeleted() throws Exception {
+    void shouldDeleteGeneratedRenderedPdfWhenFileIsDeleted() throws Exception {
         String fileId = uploadSingleFile(
-                "delete-preview.docx",
+                "delete-rendered.docx",
                 minimalDocxBytes(),
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         );
 
         givenAuthenticated()
                 .when()
-                .get("/api/v1/files/{fileId}/preview/content", fileId)
+                .get("/api/v1/files/{fileId}/view/content", fileId)
                 .then()
                 .statusCode(200);
 
@@ -1551,9 +1648,9 @@ class FileResourceTest {
     }
 
     @Test
-    void shouldCleanupGeneratedPreviewForTemporaryFile() throws Exception {
+    void shouldCleanupGeneratedRenderedPdfForTemporaryFile() throws Exception {
         String fileId = uploadSingleFile(
-                "cleanup-preview.docx",
+                "cleanup-rendered.docx",
                 minimalDocxBytes(),
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 true
@@ -1561,7 +1658,7 @@ class FileResourceTest {
 
         givenAuthenticated()
                 .when()
-                .get("/api/v1/files/{fileId}/preview/content", fileId)
+                .get("/api/v1/files/{fileId}/view/content", fileId)
                 .then()
                 .statusCode(200);
 
@@ -1616,9 +1713,9 @@ class FileResourceTest {
 
     private Path previewStoragePath(String fileId) {
         return STORAGE_ROOT.resolve(TENANT_ID)
-                .resolve("previews")
+                .resolve("view-artifacts")
                 .resolve(fileId)
-                .resolve("preview.pdf");
+                .resolve("rendered.pdf");
     }
 
     private String signReadToken(String tenantId, String fileId, Instant expiresAt) throws Exception {
@@ -1691,7 +1788,7 @@ class FileResourceTest {
                       <w:body>
                         <w:p>
                           <w:r>
-                            <w:t>Fake preview</w:t>
+                            <w:t>Fake rendered</w:t>
                           </w:r>
                         </w:p>
                       </w:body>

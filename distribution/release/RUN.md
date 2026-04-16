@@ -92,10 +92,10 @@ curl -X POST http://127.0.0.1:8080/api/v1/files \
   -F 'files=@/path/to/contract.pdf'
 ```
 
-预览跳转：
+取统一 view descriptor：
 
 ```sh
-curl -I http://127.0.0.1:8080/api/v1/files/<fileId>/preview \
+curl http://127.0.0.1:8080/api/v1/files/<fileId>/view \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123'
 ```
