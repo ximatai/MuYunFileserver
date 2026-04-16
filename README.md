@@ -1,6 +1,6 @@
 # MuYunFileServer
 
-`MuYunFileServer` 是一个基于 `Quarkus` 的轻量文件资产服务，当前提供文件上传、元数据查询、下载、预览、删除和健康检查能力。
+`MuYunFileServer` 是一个基于 `Quarkus` 的轻量文件资产服务，当前提供文件上传、元数据查询、统一查看、下载、删除和健康检查能力。
 
 它适合这类场景：
 
@@ -18,7 +18,7 @@
 - 整单成功 / 整单失败语义
 - 单文件元数据查询
 - 附件下载
-- 文档预览
+- 文档查看
 - 内置 file viewer 页面
 - 文件软删
 - 定时物理清理
@@ -145,7 +145,7 @@ docker build -f src/main/docker/Dockerfile.jvm -t muyun-fileserver:latest .
 - 容器 readiness
 - `soffice` 可执行
 - 文本 viewer
-- `docx -> pdf` 预览链路
+- `docx -> pdf` 查看链路
 
 如果你只想快速验证项目，到这里就够了。
 
@@ -220,7 +220,7 @@ curl -X POST http://127.0.0.1:8080/api/v1/files \
 
 - 使用独立 demo 数据目录，不影响常规本地库和存储
 - 自动打开 token 模式
-- 自动使用本机 `soffice` 做 Office 预览转换
+- 自动使用本机 `soffice` 做 Office PDF 渲染
 - 批量上传 `demo-files/` 里的非隐藏文件
 - 输出 `filename / mimeType / viewerType / viewUrl`
 
@@ -358,8 +358,8 @@ Readiness 在两种模式下的行为：
 - `mfs.storage.temp-dir`
 - `mfs.database.path`
 - `mfs.upload.max-file-size-bytes`
-- `mfs.preview.enabled`
-- `mfs.preview.office-enabled`
+- `mfs.viewer.pdf-rendering.enabled`
+- `mfs.viewer.pdf-rendering.office-enabled`
 
 只有切换到 `minio` 时，才需要额外关注：
 
@@ -375,8 +375,8 @@ Readiness 在两种模式下的行为：
 
 当前版本默认采用“零配置文件类型策略”：
 
-- 文件上传、预览和 viewer 的类型支持矩阵由产品内建
-- 运行时建议重点关注存储、数据库、大小限制和预览开关
+- 文件上传与统一查看的类型支持矩阵由产品内建
+- 运行时建议重点关注存储、数据库、大小限制和查看开关
 - 默认支持的文件类型会随服务版本演进而扩展
 
 默认行为：
@@ -387,8 +387,8 @@ Readiness 在两种模式下的行为：
 
 当前仍保留的主要能力开关是：
 
-- `mfs.preview.enabled`
-- `mfs.preview.office-enabled`
+- `mfs.viewer.pdf-rendering.enabled`
+- `mfs.viewer.pdf-rendering.office-enabled`
 
 如果你的目标只是“开箱即用”，保持默认即可。
 
@@ -485,17 +485,17 @@ Content-Disposition, Content-Length, Content-Type
 - 若业务网关长期转发下载流量太重，或前端只需要临时访问单文件能力，优先考虑短时 token 模式
 - 若现有系统已经稳定依赖网关注入身份头，继续使用可信身份头模式即可
 
-## 文档预览
+## 文档查看
 
-当前预览能力支持：
+当前文档查看能力支持：
 
-- `application/pdf` 直接 inline 预览
-- `doc/docx/xls/xlsx/ppt/pptx/odt/ods/odp` 转 PDF 后 inline 预览
+- `application/pdf` 直接 inline 查看
+- `doc/docx/xls/xlsx/ppt/pptx/odt/ods/odp` 渲染为 PDF 后 inline 查看
 
 统一查看行为：
 
 - 首次访问时懒生成
-- 成功后缓存 PDF 预览产物
+- 成功后缓存 PDF 查看产物
 - `GET /view` 推荐作为前端统一展示入口
 - `GET /view/content` 是内置 viewer 消费的稳定 PDF 内容地址，避免第三方 viewer 对 query token 的兼容问题
 - `GET /api/v1/.../view` 返回 viewer descriptor，是 viewer 页面唯一正式协议
@@ -504,7 +504,7 @@ Content-Disposition, Content-Length, Content-Type
 - 纯文本 viewer 首版仅支持安全 UTF-8 内联展示，超大文本会直接引导下载
 - 音频与视频 viewer 首版直接使用浏览器原生能力播放原始媒体流，不做转码、封面提取或 HLS/DASH 分发
 
-如果启用了 Office 预览，请确保运行环境中存在可执行的 `soffice` 命令。
+如果启用了 `mfs.viewer.pdf-rendering.office-enabled`，请确保运行环境中存在可执行的 `soffice` 命令。
 
 当前最小实现说明：
 

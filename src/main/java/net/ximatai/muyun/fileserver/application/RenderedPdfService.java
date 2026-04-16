@@ -51,7 +51,7 @@ public class RenderedPdfService {
     private final ConcurrentHashMap<String, Object> renderedPdfLocks = new ConcurrentHashMap<>();
 
     public void ensureRenderedPdfReady(FileMetadata metadata) {
-        if (!config.renderedPdf().enabled()) {
+        if (!config.viewer().pdfRendering().enabled()) {
             throw new NotFoundException("resource not found");
         }
         ensurePdfRenderable(metadata);
@@ -122,7 +122,7 @@ public class RenderedPdfService {
     }
 
     public void deleteRenderedPdfIfExists(FileMetadata metadata) {
-        if (!config.renderedPdf().artifactCache().cleanupOrphanViewArtifactOnFileDelete()) {
+        if (!config.viewer().pdfRendering().artifactCache().cleanupOrphanOnFileDelete()) {
             return;
         }
         viewArtifactRepository.findByFileIdAndArtifactKey(metadata.id(), DEFAULT_ARTIFACT_KEY).ifPresent(artifact -> {
@@ -142,7 +142,7 @@ public class RenderedPdfService {
         if (PDF_MIME_TYPE.equalsIgnoreCase(metadata.mimeType())) {
             return;
         }
-        if (!config.renderedPdf().officeRenderingEnabled()) {
+        if (!config.viewer().pdfRendering().officeEnabled()) {
             throw new UnsupportedMediaTypeException("rendered pdf is not supported for current file type");
         }
     }
@@ -152,7 +152,7 @@ public class RenderedPdfService {
     }
 
     private boolean shouldRetry(FileViewArtifact artifact) {
-        Instant retryAfter = artifact.generatedAt().plus(config.renderedPdf().libreoffice().retryFailureAfter());
+        Instant retryAfter = artifact.generatedAt().plus(config.viewer().pdfRendering().libreoffice().retryFailureAfter());
         return Instant.now().isAfter(retryAfter);
     }
 

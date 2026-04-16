@@ -14,7 +14,7 @@
 
 当前 release 包默认采用“零配置文件类型策略”：
 
-- 文件上传、预览和 viewer 的类型支持矩阵由服务内部固定维护
+- 文件上传与统一查看的类型支持矩阵由服务内部固定维护
 - 常见 `MIME` 别名兼容也由服务内部处理
 - 默认支持的文件类型会随 release 版本演进而扩展
 
@@ -23,7 +23,7 @@
 - 存储模式和目录
 - 数据库路径
 - 上传大小限制
-- Office 预览是否启用
+- Office PDF 渲染是否启用
 
 ## Local 模式
 
@@ -35,7 +35,7 @@ mkdir -p var/storage var/tmp var/data
 
 2. 按需参考 `application.local.example.yml` 调整 `application.yml`
 
-如果你要启用 Office 预览，请先安装 `LibreOffice`，并确保 `soffice` 可执行。
+如果你要启用 `mfs.viewer.pdf-rendering.office-enabled`，请先安装 `LibreOffice`，并确保 `soffice` 可执行。
 
 3. 启动：
 
@@ -67,7 +67,7 @@ mkdir -p var/tmp var/data
 
 3. 按需参考 `application.minio.example.yml` 调整 `application.yml`
 
-如果你要启用 Office 预览，请同时确保运行环境里可执行 `soffice`。
+如果你要启用 `mfs.viewer.pdf-rendering.office-enabled`，请同时确保运行环境里可执行 `soffice`。
 
 4. 启动：
 
@@ -117,7 +117,7 @@ curl http://127.0.0.1:8080/api/v1/files/<fileId>/view \
 
 - 启动一个独立的本地 demo 环境
 - 自动开启 token 模式
-- 使用本机 `soffice` 做 Office 预览
+- 使用本机 `soffice` 做 Office PDF 渲染
 - 批量上传 `demo-files/` 里的非隐藏文件
 - 输出每个文件对应的 `/view/public/...` 链接
 
@@ -188,7 +188,7 @@ docker run -d \
 
 - 容器内默认工作目录为 `/app`
 - 若继续使用 SQLite 与本地存储，建议保持单实例部署
-- 容器内已包含 `soffice`，适合直接启用 `Office -> PDF` 预览
+- 容器内已包含 `soffice`，适合直接启用 `Office -> PDF` 查看
 - 中文 Office 文档依赖镜像内置的 `fonts-noto-cjk` 进行基础字体兜底
 
 仓库维护者也可以直接使用脚本：
@@ -204,7 +204,7 @@ docker run -d \
 - readiness
 - `soffice` 可执行检查
 - 文本 viewer
-- `docx -> pdf` 预览链路
+- `docx -> pdf` 查看链路
 
 如果你希望用 compose 启动，可以使用：
 

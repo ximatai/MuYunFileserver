@@ -33,8 +33,8 @@ public class LibreOfficePdfRenderer implements OfficePdfRenderer {
 
     @Override
     public void verifyReadiness() {
-        resolveCommand(config.renderedPdf().libreoffice().command());
-        ensureDirectory(config.renderedPdf().libreoffice().profileRoot());
+        resolveCommand(config.viewer().pdfRendering().libreoffice().command());
+        ensureDirectory(config.viewer().pdfRendering().libreoffice().profileRoot());
     }
 
     @Override
@@ -48,13 +48,13 @@ public class LibreOfficePdfRenderer implements OfficePdfRenderer {
         Path profileDir = null;
         try {
             workDir = Files.createTempDirectory(config.storage().tempDir(), "rendered-pdf-work-");
-            profileDir = Files.createDirectories(config.renderedPdf().libreoffice().profileRoot()
+            profileDir = Files.createDirectories(config.viewer().pdfRendering().libreoffice().profileRoot()
                     .resolve("profile-" + Instant.now().toEpochMilli() + "-" + Thread.currentThread().threadId()));
             Path sourceCopy = workDir.resolve(sanitizeFilename(originalFilename));
             Files.copy(sourceFile, sourceCopy);
 
             Process process = new ProcessBuilder(
-                    resolveCommand(config.renderedPdf().libreoffice().command()).toString(),
+                    resolveCommand(config.viewer().pdfRendering().libreoffice().command()).toString(),
                     "--headless",
                     "-env:UserInstallation=" + profileDir.toUri(),
                     "--convert-to",
@@ -64,7 +64,7 @@ public class LibreOfficePdfRenderer implements OfficePdfRenderer {
                     sourceCopy.toString()
             ).redirectErrorStream(true).start();
 
-            boolean finished = process.waitFor(config.renderedPdf().libreoffice().timeout().toMillis(), TimeUnit.MILLISECONDS);
+            boolean finished = process.waitFor(config.viewer().pdfRendering().libreoffice().timeout().toMillis(), TimeUnit.MILLISECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 throw new GatewayTimeoutException("pdf rendering timed out");
@@ -124,7 +124,7 @@ public class LibreOfficePdfRenderer implements OfficePdfRenderer {
         if (semaphore == null) {
             synchronized (this) {
                 if (semaphore == null) {
-                    semaphore = new Semaphore(config.renderedPdf().libreoffice().maxConcurrency(), true);
+                    semaphore = new Semaphore(config.viewer().pdfRendering().libreoffice().maxConcurrency(), true);
                 }
             }
         }

@@ -5,3 +5,19 @@ mfs:
     temp-dir: ${user.dir}/var/tmp
   database:
     path: ${user.dir}/var/data/muyun-fileserver.db
+  viewer:
+    enabled: true
+    text:
+      max-inline-bytes: 1048576
+    pdf-rendering:
+      enabled: true
+      office-enabled: true
+      renderer: libreoffice
+      libreoffice:
+        command: soffice
+        timeout: 60S
+        max-concurrency: 1
+        retry-failure-after: 5M
+        profile-root: ${user.dir}/var/tmp/libreoffice-profile
+      artifact-cache:
+        cleanup-orphan-on-file-delete: true

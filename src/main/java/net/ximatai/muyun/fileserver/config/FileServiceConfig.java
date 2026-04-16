@@ -2,7 +2,6 @@ package net.ximatai.muyun.fileserver.config;
 
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
-import io.smallrye.config.WithName;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
@@ -24,9 +23,6 @@ public interface FileServiceConfig {
     Security security();
 
     Token token();
-
-    @WithName("preview")
-    RenderedPdf renderedPdf();
 
     Viewer viewer();
 
@@ -108,17 +104,14 @@ public interface FileServiceConfig {
         @WithDefault("true")
         boolean enabled();
 
-        @WithName("office-enabled")
         @WithDefault("true")
-        boolean officeRenderingEnabled();
+        boolean officeEnabled();
 
-        @WithName("converter")
         @WithDefault("libreoffice")
         String renderer();
 
         Libreoffice libreoffice();
 
-        @WithName("cache")
         ArtifactCache artifactCache();
     }
 
@@ -140,13 +133,18 @@ public interface FileServiceConfig {
     }
 
     interface ArtifactCache {
-        @WithName("cleanup-orphan-preview-on-file-delete")
         @WithDefault("true")
-        boolean cleanupOrphanViewArtifactOnFileDelete();
+        boolean cleanupOrphanOnFileDelete();
     }
 
     interface Viewer {
+        @WithDefault("true")
+        boolean enabled();
+
         Text text();
+
+        @io.smallrye.config.WithName("pdf-rendering")
+        RenderedPdf pdfRendering();
     }
 
     interface Text {

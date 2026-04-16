@@ -15,20 +15,21 @@ mfs:
     algorithm: hmac-sha256
     secret: test-token-secret
     allowed-clock-skew: 1S
-  preview:
-    enabled: true
-    office-enabled: true
-    libreoffice:
-      command: ${user.dir}/src/test/resources/bin/fake-soffice.sh
-      timeout: 5S
-      max-concurrency: 1
-      retry-failure-after: 5M
-      profile-root: ${user.dir}/build/test-libreoffice-profile
-    cache:
-      cleanup-orphan-preview-on-file-delete: true
   viewer:
+    enabled: true
     text:
       max-inline-bytes: 64
+    pdf-rendering:
+      enabled: true
+      office-enabled: true
+      libreoffice:
+        command: ${user.dir}/src/test/resources/bin/fake-soffice.sh
+        timeout: 5S
+        max-concurrency: 1
+        retry-failure-after: 5M
+        profile-root: ${user.dir}/build/test-libreoffice-profile
+      artifact-cache:
+        cleanup-orphan-on-file-delete: true
 
 quarkus:
   datasource:

@@ -100,7 +100,7 @@ public class ViewDescriptorService {
         if (supportedFileTypes.isTextMimeType(canonicalMimeType)) {
             return ViewerType.TEXT;
         }
-        if (!config.renderedPdf().enabled()) {
+        if (!config.viewer().pdfRendering().enabled()) {
             return ViewerType.FALLBACK;
         }
         if (supportedFileTypes.supportsRenderedPdfMimeType(canonicalMimeType)) {

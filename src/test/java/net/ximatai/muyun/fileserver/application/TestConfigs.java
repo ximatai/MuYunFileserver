@@ -90,7 +90,7 @@ public final class TestConfigs {
 
         FileServiceConfig.RenderedPdf renderedPdf = proxy(FileServiceConfig.RenderedPdf.class, methodName -> switch (methodName) {
             case "enabled" -> true;
-            case "officeRenderingEnabled" -> true;
+            case "officeEnabled" -> true;
             case "renderer" -> "libreoffice";
             case "libreoffice" -> proxy(FileServiceConfig.Libreoffice.class, renderedPdfMethod -> switch (renderedPdfMethod) {
                 case "command" -> renderedPdfCommand;
@@ -101,9 +101,19 @@ public final class TestConfigs {
                 default -> throw new UnsupportedOperationException(renderedPdfMethod);
             });
             case "artifactCache" -> proxy(FileServiceConfig.ArtifactCache.class, cacheMethod -> switch (cacheMethod) {
-                case "cleanupOrphanViewArtifactOnFileDelete" -> true;
+                case "cleanupOrphanOnFileDelete" -> true;
                 default -> throw new UnsupportedOperationException(cacheMethod);
             });
+            default -> throw new UnsupportedOperationException(methodName);
+        });
+
+        FileServiceConfig.Viewer viewer = proxy(FileServiceConfig.Viewer.class, methodName -> switch (methodName) {
+            case "enabled" -> true;
+            case "text" -> proxy(FileServiceConfig.Text.class, textMethod -> switch (textMethod) {
+                case "maxInlineBytes" -> 1024L * 1024;
+                default -> throw new UnsupportedOperationException(textMethod);
+            });
+            case "pdfRendering" -> renderedPdf;
             default -> throw new UnsupportedOperationException(methodName);
         });
 
@@ -114,7 +124,7 @@ public final class TestConfigs {
             case "cleanup" -> cleanup;
             case "security" -> security;
             case "token" -> token;
-            case "renderedPdf" -> renderedPdf;
+            case "viewer" -> viewer;
             default -> throw new UnsupportedOperationException(methodName);
         });
     }

@@ -51,7 +51,7 @@ public class StorageReadinessCheck implements HealthCheck {
                     .build();
         }
 
-        if (config.renderedPdf().enabled() && config.renderedPdf().officeRenderingEnabled()) {
+        if (config.viewer().pdfRendering().enabled() && config.viewer().pdfRendering().officeEnabled()) {
             try {
                 officePdfRenderer.verifyReadiness();
             } catch (RuntimeException exception) {
