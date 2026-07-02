@@ -9,17 +9,14 @@
 - 需要本地文件系统或 `MinIO` 对象存储
 - 需要清晰、可控的 `SQLite + JDBC` 实现，而不是重型基础设施
 
-## 你能直接用什么
+## 能力边界
 
 当前已经支持：
 
 - 单次多文件上传
 - 临时文件上传与批量转正
 - 整单成功 / 整单失败语义
-- 单文件元数据查询
-- 附件下载
-- 文档查看
-- 内置 file viewer 页面
+- 单文件元数据查询、下载和统一查看
 - 文件软删
 - 定时物理清理
 - `liveness / readiness` 健康检查
@@ -29,11 +26,11 @@
 
 - 分片上传
 - 断点续传
-- HTTP `Range`
-- 公开分享链接
 - 列表搜索
 - 业务对象引用治理
 - 对象存储直传
+
+查看能力当前覆盖 `PDF`、`Office -> PDF`、主流图片、纯文本、原始音频和原始视频。Office 预览依赖服务端 `LibreOffice`。
 
 ## 使用 Release 包
 
@@ -80,7 +77,7 @@ mkdir -p var/storage var/tmp var/data
 java -jar quarkus-app/quarkus-run.jar
 ```
 
-### 4. 验证
+### 4. 验证服务
 
 健康检查：
 
@@ -94,7 +91,7 @@ curl http://127.0.0.1:8080/q/health/ready
 {"status":"UP"}
 ```
 
-试传一个文件：
+上传文件并取回 `fileId`：
 
 ```sh
 curl -X POST http://127.0.0.1:8080/api/v1/files \
@@ -118,7 +115,21 @@ curl -X POST http://127.0.0.1:8080/api/v1/files \
 }
 ```
 
-### 5. Docker
+取统一 view descriptor：
+
+```sh
+curl http://127.0.0.1:8080/api/v1/files/<fileId>/view \
+  -H 'X-Tenant-Id: tenant-a' \
+  -H 'X-User-Id: u123'
+```
+
+打开内置 viewer 页面：
+
+```sh
+open http://127.0.0.1:8080/view/files/<fileId>
+```
+
+### 5. Docker 镜像
 
 当前 Docker 交付采用单容器模式，镜像内已包含：
 
@@ -147,31 +158,7 @@ docker build -f src/main/docker/Dockerfile.jvm -t muyun-fileserver:latest .
 - 文本 viewer
 - `docx -> pdf` 查看链路
 
-如果你只想快速验证项目，到这里就够了。
-
-取统一 view descriptor：
-
-```sh
-curl http://127.0.0.1:8080/api/v1/files/<fileId>/view \
-  -H 'X-Tenant-Id: tenant-a' \
-  -H 'X-User-Id: u123'
-```
-
-打开统一 viewer 页面：
-
-```sh
-open http://127.0.0.1:8080/view/files/<fileId>
-```
-
-如果上传的是草稿附件、富文本中转文件等临时资源，可以在上传时传 `temporary=true`。后续业务确认要保留这些文件时，再调用批量转正接口：
-
-```sh
-curl -X POST http://127.0.0.1:8080/api/v1/files/promote \
-  -H 'X-Tenant-Id: tenant-a' \
-  -H 'X-User-Id: u123' \
-  -H 'Content-Type: application/json' \
-  -d '{"fileIds":["01...","01..."]}'
-```
+如果你只想快速验证项目，到这里就够了。接口接入、Office 预览和排障说明见后文。
 
 ## 从源码运行
 
@@ -351,7 +338,7 @@ Readiness 在两种模式下的行为：
 
 ## 关键配置
 
-如果你只是首次运行，通常只需要关注下面这些：
+首次运行通常只需要关注这些配置：
 
 - `mfs.storage.type`
 - `mfs.storage.root-dir`
@@ -361,7 +348,7 @@ Readiness 在两种模式下的行为：
 - `mfs.viewer.pdf-rendering.enabled`
 - `mfs.viewer.pdf-rendering.office-enabled`
 
-只有切换到 `minio` 时，才需要额外关注：
+切换到 `minio` 时，再额外配置：
 
 - `mfs.storage.minio.endpoint`
 - `mfs.storage.minio.access-key`
@@ -373,183 +360,46 @@ Readiness 在两种模式下的行为：
 
 ### 零配置模式说明
 
-当前版本默认采用“零配置文件类型策略”：
+文件上传与统一查看的类型支持矩阵由系统内建维护，运行时不需要配置 MIME 白名单。常见 MIME 别名也由系统内部兼容；后续新增文件类型支持时，通常通过升级服务版本获得。
 
-- 文件上传与统一查看的类型支持矩阵由产品内建
-- 运行时建议重点关注存储、数据库、大小限制和查看开关
-- 默认支持的文件类型会随服务版本演进而扩展
+## 接口接入
 
-默认行为：
-
-- 默认支持的文档、图片、纯文本、音频、视频和压缩包类型由系统固定维护
-- 常见 `MIME` 别名兼容也由系统内部处理，例如 `wav` 的多种历史写法
-- 如果未来新增某些文件类型支持，通常只需要升级服务版本
-
-当前仍保留的主要能力开关是：
-
-- `mfs.viewer.pdf-rendering.enabled`
-- `mfs.viewer.pdf-rendering.office-enabled`
-
-如果你的目标只是“开箱即用”，保持默认即可。
-
-## 接口使用
-
-当前已实现接口：
-
-- `POST /api/v1/files`
-- `POST /api/v1/public/files?access_token=...`
-- `GET /api/v1/files/{fileId}`
-- `GET /api/v1/files/{fileId}/download`
-- `GET /api/v1/public/files/{fileId}?access_token=...`
-- `GET /api/v1/public/files/{fileId}/download?access_token=...`
-- `DELETE /api/v1/files/{fileId}`
-- `DELETE /api/v1/public/files/{fileId}?access_token=...`
-- `GET /q/health/live`
-- `GET /q/health/ready`
-
-调用接口时需要传请求头：
+服务端接入默认使用可信身份头模式。调用 `/api/v1/files...` 接口时需要传：
 
 - `X-Tenant-Id`
 - `X-User-Id`
 - `X-Request-Id` 可选
 - `X-Client-Id` 可选
 
-### 前端接入说明
+浏览器前端不应直接暴露这些身份头。推荐链路是：浏览器 -> 业务网关 / BFF -> `MuYunFileServer`，由网关、BFF 或受控后端注入身份头。
 
-如果你是浏览器前端，不要直接把 `X-Tenant-Id`、`X-User-Id` 这类身份头暴露给用户侧代码。
+### 访问模式
 
-- 推荐接入方式是：浏览器 -> 业务网关 / BFF -> `MuYunFileServer`
-- 这些身份头应由网关、BFF 或受控后端在服务端注入
-- README 里的 `curl` 示例面向联调和服务端接入，不代表浏览器应直接携带同名身份头访问文件服务
-
-如果你的浏览器前端需要下载文件名，请同时确认网关或上游已正确转发并暴露这些响应头：
-
-- `Content-Disposition`
-- `Content-Length`
-- `Content-Type`
-
-若存在跨域访问，网关还应显式配置 `Access-Control-Expose-Headers`，至少包含：
-
-```text
-Content-Disposition, Content-Length, Content-Type
-```
-
-当前默认上传限制如下，前端可以直接据此做表单校验：
-
-- 单次请求最多 `10` 个文件
-- 单文件最大 `524288000` 字节，也就是 `500 MB`
-- 默认允许的 MIME 类型：`application/pdf`、`image/png`、`image/jpeg`、`text/plain`
-
-错误处理建议：
-
-- 分支逻辑优先按 HTTP 状态码处理，不要依赖 `message` 文案做程序分支
-- `message` 更适合直接展示或写入日志
-- `request_id` 用于把前端报错和服务端日志关联起来
-- 多文件上传采用整单成功 / 整单失败语义，不会返回部分成功结果
-
-### 访问模式矩阵
-
-同一套文件能力目前支持两种访问模式：
+同一套文件能力支持两种访问模式：
 
 | 能力 | 可信身份头模式 | 短时 token 模式 |
 |---|---|---|
 | 上传 | `POST /api/v1/files` | `POST /api/v1/public/files?access_token=...` |
-| 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
+| 转正 | `POST /api/v1/files/promote` | 暂不支持 |
+| 元数据 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
 | 展示描述 | `GET /api/v1/files/{fileId}/view` | `GET /api/v1/public/files/{fileId}/view?access_token=...` |
 | viewer 内容 | `GET /api/v1/files/{fileId}/view/content` | `GET /api/v1/public/files/{fileId}/view/content/{accessToken}` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
 
-内置 viewer 页面入口：
+短时 token 模式适合业务后端先完成权限校验，再给前端一个临时上传、查看、下载或删除地址。token 模式默认关闭，需要显式开启 `mfs.token.enabled=true`。
 
-- `GET /view/files/{fileId}`
-- `GET /view/public/files/{fileId}?access_token=...`
+token 约束：
 
-viewer 页面支持以下 URL 参数：
-
-| 参数 | 默认值 | 说明 |
-|---|---|---|
-| `showHeader` | `true` | 是否展示 MuYun viewer 自带顶部 header 区域 |
-| `showDownloadButton` | `true` | 是否展示下载按钮 |
-| `watermark` | 空 | 若非空，则在预览主区域叠加重复斜向水印 |
-
-补充说明：
-
-- 当前推荐使用 `true/false` 作为布尔值写法，例如 `showHeader=false`
-- 为了兼容临时链接生成，也兼容 `on/off`、`1/0`、`yes/no`
-- 当 `showHeader=false` 且 `showDownloadButton=true` 时，下载按钮固定悬浮在整个浏览器窗口右下角
-- 这个右下角悬浮定位对 `PDF`、图片、文本、音频、视频 viewer 保持一致
-- 这些参数只作用于 `/view/...` 页面本身，不会改变 `GET /api/v1/.../view` 返回的 descriptor 协议
-
-可信身份头模式：
-
-- 适合已有统一网关、BFF 或受控后端注入 `X-Tenant-Id` / `X-User-Id` 的场景
-- 文件流通常经过业务网关或由业务网关代转发
-
-短时 token 模式：
-
-- 适合业务后端先完成权限校验，再给前端一个短时访问地址或上传授权的场景
-- 当前覆盖“上传 + 单文件元数据查询 + 统一查看 + 下载 + 删除”
-- 业务后端负责校验“这个用户能不能访问这个附件”
-- `MuYunFileServer` 只负责校验 token 是否允许上传或访问这个文件
-- token 上传仍先进入 `MuYunFileServer`，不是对象存储直传
-- token 上传当前不支持 `file_ids`
-- 同一文件一旦删除成功，后续查询和下载都会返回 `404`
-
-推荐做法：
-
-- 若业务网关长期转发下载流量太重，或前端只需要临时访问单文件能力，优先考虑短时 token 模式
-- 若现有系统已经稳定依赖网关注入身份头，继续使用可信身份头模式即可
-
-## 文档查看
-
-当前文档查看能力支持：
-
-- `application/pdf` 直接 inline 查看
-- `doc/docx/xls/xlsx/ppt/pptx/odt/ods/odp` 渲染为 PDF 后 inline 查看
-
-统一查看行为：
-
-- 首次访问时懒生成
-- 成功后缓存 PDF 查看产物
-- `GET /view` 推荐作为前端统一展示入口
-- `GET /view/content` 是内置 viewer 消费的稳定 PDF 内容地址，避免第三方 viewer 对 query token 的兼容问题
-- `GET /api/v1/.../view` 返回 viewer descriptor，是 viewer 页面唯一正式协议
-- 当前 viewer 已正式支持 `PDF`、`Office -> PDF`、主流图片、纯文本、原始音频和原始视频在线查看
-- 纯文本 viewer 首版覆盖 `txt / md / json / xml / csv / log`
-- 纯文本 viewer 首版仅支持安全 UTF-8 内联展示，超大文本会直接引导下载
-- 音频与视频 viewer 首版直接使用浏览器原生能力播放原始媒体流，不做转码、封面提取或 HLS/DASH 分发
-
-如果启用了 `mfs.viewer.pdf-rendering.office-enabled`，请确保运行环境中存在可执行的 `soffice` 命令。
-
-当前最小实现说明：
-
-- token 模式默认关闭，需要显式开启 `mfs.token.enabled=true`
-- 第一版只支持 `HMAC-SHA256`
-- 上传、查询、下载、删除 token 当前共用同一组 `mfs.token.secret`
-- 上传 token 至少应携带 `tenant_id`、`sub`、`purpose=upload`、`exp`
-- 查询 / 下载 token 至少应携带 `tenant_id`、`file_id`、`exp`
-- 上传 token 必须单独签发，并携带 `purpose=upload`
+- 当前只支持 `HMAC-SHA256`
+- 上传 token 至少携带 `tenant_id`、`sub`、`purpose=upload`、`exp`
+- 查询 / 下载 / 查看 token 至少携带 `tenant_id`、`file_id`、`exp`
 - 删除 token 必须单独签发，并携带 `purpose=delete`
-- 删除 token 第一版不做严格一次性消费
+- 公开 token 上传支持多文件和 `remark`，不支持显式 `file_ids`
 
-一个典型业务流程是：
+### 常用调用
 
-1. 前端向业务后端请求上传、查询、下载或删除某个附件
-2. 业务后端校验该用户是否有权访问该业务对象和附件
-3. 业务后端签发短时 `access_token`
-4. 业务后端返回可访问的短时 URL 或公开上传授权
-5. 前端最终访问：
-   - `POST /api/v1/public/files?access_token=...`
-   - `GET /api/v1/public/files/{fileId}?access_token=...`
-   - 或 `GET /api/v1/public/files/{fileId}/download?access_token=...`
-   - 或 `DELETE /api/v1/public/files/{fileId}?access_token=...`
-
-### 一条完整体验路径
-
-下面是一条从上传到删除的最短体验路径。
-
-#### 1. 上传文件并拿到 `fileId`
+上传并拿到 `fileId`：
 
 ```bash
 FILE_ID=$(
@@ -562,65 +412,123 @@ curl -s -X POST http://127.0.0.1:8080/api/v1/files \
 echo "$FILE_ID"
 ```
 
-#### 2. 查询元数据
+查询、下载、删除：
 
 ```bash
 curl http://127.0.0.1:8080/api/v1/files/$FILE_ID \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123'
-```
 
-#### 3. 下载文件
-
-```bash
 curl -OJ http://127.0.0.1:8080/api/v1/files/$FILE_ID/download \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123'
-```
 
-如果你采用短时 token 模式，业务后端应先签发一个短时地址，再由前端直接访问，例如：
-
-```text
-POST /api/v1/public/files?access_token=...
-GET /api/v1/public/files/{fileId}?access_token=...
-GET /api/v1/public/files/{fileId}/download?access_token=...
-DELETE /api/v1/public/files/{fileId}?access_token=...
-```
-
-这些入口都不再要求浏览器传 `X-Tenant-Id`、`X-User-Id`。
-
-#### 4. 删除文件
-
-```bash
 curl -X DELETE http://127.0.0.1:8080/api/v1/files/$FILE_ID \
   -H 'X-Tenant-Id: tenant-a' \
   -H 'X-User-Id: u123'
 ```
 
-如果你采用删除 token，业务后端应单独签发带 `purpose=delete` 的 token，再由前端显式发起：
+临时文件转正：
 
-```text
-DELETE /api/v1/public/files/{fileId}?access_token=...
+```sh
+curl -X POST http://127.0.0.1:8080/api/v1/files/promote \
+  -H 'X-Tenant-Id: tenant-a' \
+  -H 'X-User-Id: u123' \
+  -H 'Content-Type: application/json' \
+  -d '{"fileIds":["01...","01..."]}'
 ```
 
-如果你的环境没有 `jq`，也可以直接用固定 `{fileId}` 替换下面这些独立示例。
+多文件上传采用整单成功 / 整单失败语义，不会返回部分成功结果。当前默认限制是单次最多 `10` 个文件，单文件最大 `500 MB`。
 
-### 上传能力说明
+前端如果要从响应里读取下载文件名，网关需要转发并暴露这些响应头：
 
-上传链路当前支持：
+```text
+Content-Disposition, Content-Length, Content-Type
+```
 
-- 单次多文件上传
-- 可选显式 `file_ids`
-- `sha256` 计算
-- 内置文件类型安全校验
-- 临时文件落盘与失败回滚
+错误处理建议按 HTTP 状态码分支，`message` 用于展示或日志，`request_id` 用于关联服务端日志。
 
-公开 token 上传补充说明：
+## 文件查看
 
-- 入口为 `POST /api/v1/public/files?access_token=...`
-- 支持多文件整单上传和 `remark`
-- 不支持 `file_ids`
-- 上传成功后仍返回普通 `fileId`，后续可继续走可信身份头模式或短时只读 token 模式查询 / 下载
+内置 viewer 页面入口：
+
+- `GET /view/files/{fileId}`
+- `GET /view/public/files/{fileId}?access_token=...`
+
+viewer 页面支持这些 URL 参数：
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `showHeader` | `true` | 是否展示 MuYun viewer 自带顶部 header 区域 |
+| `showDownloadButton` | `true` | 是否展示下载按钮 |
+| `watermark` | 空 | 若非空，则在预览主区域叠加重复斜向水印 |
+
+布尔值推荐使用 `true/false`，同时兼容 `on/off`、`1/0`、`yes/no`。这些参数只作用于 `/view/...` 页面，不改变 `/api/v1/.../view` 返回的 descriptor。
+
+当前 viewer 支持：
+
+- `application/pdf` 直接 inline 查看
+- `doc/docx/xls/xlsx/ppt/pptx/odt/ods/odp` 转 PDF 后查看
+- 主流图片直接查看
+- `txt / md / json / xml / csv / log` 等 UTF-8 文本内联查看
+- 音频和视频使用浏览器原生能力播放原始媒体流
+
+Office 预览采用 `Office -> LibreOffice -> PDF -> PDF.js` 链路。首次访问时懒生成 PDF，成功后缓存预览产物。
+
+### Office 预览运维
+
+默认配置已经开启 Office 预览：
+
+```yaml
+mfs:
+  viewer:
+    pdf-rendering:
+      enabled: true
+      office-enabled: true
+      renderer: libreoffice
+      libreoffice:
+        command: soffice
+        timeout: 60S
+        max-concurrency: 1
+        retry-failure-after: 5M
+        profile-root: ${user.dir}/var/tmp/libreoffice-profile
+```
+
+关键配置：
+
+| 配置 | 说明 |
+|---|---|
+| `mfs.viewer.pdf-rendering.enabled` | 控制 PDF viewer；关闭后 PDF 和 Office 都不走内置 PDF 预览链路 |
+| `mfs.viewer.pdf-rendering.office-enabled` | 控制 Office 转 PDF；关闭后 Office 文件只能下载 |
+| `mfs.viewer.pdf-rendering.libreoffice.command` | `soffice` 可执行文件名或绝对路径 |
+| `mfs.viewer.pdf-rendering.libreoffice.timeout` | 单个 Office 文件转换超时时间 |
+| `mfs.viewer.pdf-rendering.libreoffice.max-concurrency` | 单实例同时转换的 Office 文件数 |
+| `mfs.viewer.pdf-rendering.libreoffice.profile-root` | LibreOffice 临时用户配置目录，运行用户必须可写 |
+
+部署注意事项：
+
+- JVM Docker 镜像内已包含 `LibreOffice` 和中文字体 `fonts-noto-cjk`。
+- release 包或裸机部署需要自行安装 `LibreOffice`，并确保服务进程能执行 `soffice`。
+- 如果 `soffice` 不在 `PATH` 中，把 `libreoffice.command` 配成绝对路径。
+- `mfs.storage.temp-dir` 和 `profile-root` 都需要给服务运行用户写权限。
+- 生产环境先保持 `max-concurrency=1`，再结合 CPU、内存和转换耗时逐步调大。
+
+上线前验证：
+
+```sh
+soffice --headless --version
+curl http://127.0.0.1:8080/q/health/ready
+```
+
+上传一个 `docx/xlsx/pptx` 文件后访问：
+
+```sh
+curl http://127.0.0.1:8080/api/v1/files/<fileId>/view \
+  -H 'X-Tenant-Id: tenant-a' \
+  -H 'X-User-Id: u123'
+```
+
+期望响应中的 `viewerType` 为 `pdf`，`contentMimeType` 为 `application/pdf`。浏览器打开 `http://127.0.0.1:8080/view/files/<fileId>` 应能看到转换后的 PDF 预览。
 
 ## 运行与排查
 
@@ -637,6 +545,14 @@ DELETE /api/v1/public/files/{fileId}?access_token=...
 - 检查 `mfs.storage.minio.endpoint`、`access-key`、`secret-key`、`bucket` 是否匹配
 - 若 `readiness` 为 `DOWN`，先看 `/q/health/ready` 返回的具体字段
 - 若上传失败，优先查看服务日志中的 `operation=upload`
+
+Office 预览常见错误：
+
+- readiness `DOWN` 且包含 `pdfRenderer`：检查 `soffice` 是否存在、是否可执行、`profile-root` 是否可写
+- `415`：通常是 `office-enabled=false` 或文件 MIME 不在当前支持列表中
+- `503`：通常是 `soffice` 不可用或路径配置错误
+- `504`：转换超时，可以先调大 `timeout`，同时排查文件大小、字体缺失或机器负载
+- `422`：LibreOffice 没有产出有效 PDF，优先在同一台机器上用 `soffice` 手工转换该文件复现
 
 关键业务日志已统一为 `key=value` 风格，便于 grep 和日志平台采集。常见字段包括：
 
