@@ -99,5 +99,5 @@ deploy-release:
   artifacts:
     when: always
     paths:
-      - release-package/
+      - release-package/*-manifest-*.json
     expire_in: 30 days
