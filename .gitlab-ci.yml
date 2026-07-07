@@ -16,7 +16,7 @@ cache:
 
 .node-runtime:
   before_script:
-    - command -v node >/dev/null 2>&1 || (apt-get update && apt-get install -y nodejs npm)
+    - command -v node >/dev/null 2>&1 && command -v zip >/dev/null 2>&1 || (apt-get update && apt-get install -y nodejs npm zip)
     - node --version
     - npm --version
 
