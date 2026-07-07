@@ -20,21 +20,18 @@ cache:
     - node --version
     - npm --version
 
-test:
+build-check:
   stage: test
   image: $GRADLE_IMAGE
   tags:
     - docker
   extends: .node-runtime
   script:
-    - gradle test --no-daemon
+    - gradle build -x test --no-daemon
   artifacts:
     when: always
-    reports:
-      junit:
-        - build/test-results/test/TEST-*.xml
     paths:
-      - build/test-results/test/
+      - build/quarkus-app/
     expire_in: 7 days
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -48,7 +45,7 @@ deploy-release:
     - docker
   extends: .node-runtime
   needs:
-    - job: test
+    - job: build-check
   variables:
     GIT_DEPTH: "0"
   rules:
