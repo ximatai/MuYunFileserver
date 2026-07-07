@@ -160,6 +160,35 @@ docker build -f src/main/docker/Dockerfile.jvm -t muyun-fileserver:latest .
 
 如果你只想快速验证项目，到这里就够了。接口接入、Office 预览和排障说明见后文。
 
+## 内网 Release 包
+
+内网 GitLab release 由 Git tag 触发，Tag 必须从已经合入 `main` 的提交创建，格式为：
+
+```bash
+muyunfileserver-<版本线>.<yyyymmdd>.<序号>
+```
+
+示例：
+
+```bash
+git switch main
+git pull --ff-only origin main
+git tag muyunfileserver-1.0.0.20260707.1
+git push origin muyunfileserver-1.0.0.20260707.1
+```
+
+Tag pipeline 会执行测试、构建 Quarkus release 包，并上传 GitLab Generic Package `muyunfileserver-release`：
+
+- `MuYunFileServer-<version>.tar.gz`
+- `MuYunFileServer-<version>.zip`
+- `muyunfileserver-manifest-<version>.json`
+
+`crm-package` 通过版本号拉取 fileserver release：
+
+```bash
+./bin/fetch-fileserver-release.sh --fileserver-version 1.0.0.20260707.1
+```
+
 ## 从源码运行
 
 默认配置文件是 [application.yml](./src/main/resources/application.yml)。

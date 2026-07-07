@@ -1,0 +1,106 @@
+stages:
+  - test
+  - deploy
+
+variables:
+  GRADLE_IMAGE: "gradle:8.14.3-jdk21"
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  RELEASE_PACKAGE_NAME: "muyunfileserver-release"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .gradle/caches/
+    - .gradle/wrapper/
+    - frontend/viewer/node_modules/
+
+.node-runtime:
+  before_script:
+    - command -v node >/dev/null 2>&1 || (apt-get update && apt-get install -y nodejs npm)
+    - node --version
+    - npm --version
+
+test:
+  stage: test
+  image: $GRADLE_IMAGE
+  tags:
+    - docker
+  extends: .node-runtime
+  script:
+    - gradle test --no-daemon
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - build/test-results/test/TEST-*.xml
+    paths:
+      - build/test-results/test/
+    expire_in: 7 days
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+
+deploy-release:
+  stage: deploy
+  image: $GRADLE_IMAGE
+  tags:
+    - docker
+  extends: .node-runtime
+  needs:
+    - job: test
+  variables:
+    GIT_DEPTH: "0"
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^muyunfileserver-[0-9]+(\.[0-9]+){2,}\.[0-9]{8}\.[0-9]+$/'
+  script:
+    - VERSION="${CI_COMMIT_TAG#muyunfileserver-}"
+    - RELEASE_LINE="$(echo "${VERSION}" | sed -E 's/\.[0-9]{8}\.[0-9]+$//')"
+    - test "${RELEASE_LINE}" != "${VERSION}" || (echo "Invalid release tag ${CI_COMMIT_TAG}" && exit 1)
+    - git fetch origin "+refs/heads/main:refs/remotes/origin/main"
+    - git merge-base --is-ancestor "${CI_COMMIT_SHA}" "origin/main" || (echo "Tag ${CI_COMMIT_TAG} must point to a commit on main" && exit 1)
+    - APP_VERSION="${VERSION}" gradle clean build --no-daemon
+    - command -v curl >/dev/null 2>&1 || (apt-get update && apt-get install -y curl)
+    - mkdir -p "dist/MuYunFileServer-${VERSION}" release-package
+    - cp -R build/quarkus-app "dist/MuYunFileServer-${VERSION}/quarkus-app"
+    - cp src/main/resources/application.yml "dist/MuYunFileServer-${VERSION}/application.yml"
+    - cp distribution/release/application.local.example.yml "dist/MuYunFileServer-${VERSION}/application.local.example.yml"
+    - cp distribution/release/application.minio.example.yml "dist/MuYunFileServer-${VERSION}/application.minio.example.yml"
+    - cp compose.yaml "dist/MuYunFileServer-${VERSION}/compose.yaml"
+    - cp README.md "dist/MuYunFileServer-${VERSION}/README.md"
+    - cp distribution/release/RUN.md "dist/MuYunFileServer-${VERSION}/RUN.md"
+    - tar -czf "release-package/MuYunFileServer-${VERSION}.tar.gz" -C dist "MuYunFileServer-${VERSION}"
+    - (cd dist && zip -qr "../release-package/MuYunFileServer-${VERSION}.zip" "MuYunFileServer-${VERSION}")
+    - TAR_SHA256="$(sha256sum "release-package/MuYunFileServer-${VERSION}.tar.gz" | awk '{print $1}')"
+    - ZIP_SHA256="$(sha256sum "release-package/MuYunFileServer-${VERSION}.zip" | awk '{print $1}')"
+    - |
+      cat > "release-package/muyunfileserver-manifest-${VERSION}.json" <<EOF
+      {
+        "project": "${CI_PROJECT_PATH}",
+        "version": "${VERSION}",
+        "tag": "${CI_COMMIT_TAG}",
+        "commit": "${CI_COMMIT_SHA}",
+        "pipelineUrl": "${CI_PIPELINE_URL}",
+        "packageName": "${RELEASE_PACKAGE_NAME}",
+        "files": {
+          "tarGz": {
+            "name": "MuYunFileServer-${VERSION}.tar.gz",
+            "sha256": "${TAR_SHA256}"
+          },
+          "zip": {
+            "name": "MuYunFileServer-${VERSION}.zip",
+            "sha256": "${ZIP_SHA256}"
+          }
+        }
+      }
+      EOF
+    - PACKAGE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${RELEASE_PACKAGE_NAME}/${VERSION}"
+    - curl --fail --header "JOB-TOKEN:${CI_JOB_TOKEN}" --upload-file "release-package/MuYunFileServer-${VERSION}.tar.gz" "${PACKAGE_URL}/MuYunFileServer-${VERSION}.tar.gz"
+    - curl --fail --header "JOB-TOKEN:${CI_JOB_TOKEN}" --upload-file "release-package/MuYunFileServer-${VERSION}.zip" "${PACKAGE_URL}/MuYunFileServer-${VERSION}.zip"
+    - curl --fail --header "JOB-TOKEN:${CI_JOB_TOKEN}" --upload-file "release-package/muyunfileserver-manifest-${VERSION}.json" "${PACKAGE_URL}/muyunfileserver-manifest-${VERSION}.json"
+    - echo "Uploaded ${RELEASE_PACKAGE_NAME}/${VERSION} to ${PACKAGE_URL}"
+  artifacts:
+    when: always
+    paths:
+      - release-package/
+    expire_in: 30 days
