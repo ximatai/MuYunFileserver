@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MuYun File Server 部署验收台</title>
+    <link rel="stylesheet" href="/__TEST_CONSOLE_BASE__/test-console-assets/console.css" />
+    <script defer src="/__TEST_CONSOLE_BASE__/test-console-assets/console.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <p class="eyebrow">MuYun File Server</p>
+          <h1>部署验收台</h1>
+          <p class="muted">用于验证健康检查、上传、下载、预览和限时分享链接。文件记录仅保存在当前浏览器会话。</p>
+        </div>
+        <div id="health-status" class="status">正在检查健康状态…</div>
+      </header>
+
+      <section class="card">
+        <h2>可信身份上下文</h2>
+        <div class="grid identity-grid">
+          <label>Tenant ID<input id="tenant-id" autocomplete="off" placeholder="tenant-a" required /></label>
+          <label>User ID<input id="user-id" autocomplete="off" placeholder="u123" required /></label>
+          <label>Request ID（可选）<input id="request-id" autocomplete="off" /></label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>上传文件</h2>
+        <form id="upload-form">
+          <div class="grid upload-grid">
+            <label>文件<input id="files" name="files" type="file" multiple required /></label>
+            <label>备注（可选）<input id="remark" name="remark" maxlength="500" /></label>
+            <label class="checkbox"><input id="temporary" name="temporary" type="checkbox" /> 临时文件</label>
+            <button type="submit">上传</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div><h2>本次会话文件</h2><p class="muted">不查询或管理服务端全量文件。</p></div>
+          <button id="clear-files" class="secondary" type="button">清空本地记录</button>
+        </div>
+        <div id="files-empty" class="empty">尚未上传文件。</div>
+        <div id="file-list" class="file-list" aria-live="polite"></div>
+      </section>
+
+      <section class="card diagnostics">
+        <div class="section-heading"><h2>请求诊断</h2><button id="clear-log" class="secondary" type="button">清空</button></div>
+        <pre id="request-log">等待操作…</pre>
+      </section>
+    </main>
+  </body>
+</html>

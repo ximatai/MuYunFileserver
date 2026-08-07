@@ -129,6 +129,23 @@ curl http://127.0.0.1:8080/api/v1/files/<fileId>/view \
 open http://127.0.0.1:8080/view/files/<fileId>
 ```
 
+### 部署验收台
+
+服务提供一个轻量的部署验收页面，用于手工验证健康检查、上传、下载、预览和限时下载链接。它不提供服务端文件列表或管理能力，浏览器只保留本次会话上传的文件记录。
+
+默认关闭。若在受控环境中需要启用，在 `application.yml` 中设置：
+
+```yaml
+mfs:
+  token:
+    enabled: true
+    secret: a-long-random-secret
+  test-console:
+    enabled: true
+```
+
+然后访问 `http://127.0.0.1:8080/test-console`。页面生成的下载链接有期限（默认 15 分钟、最长 24 小时）；持有链接者可在有效期内直接下载，因此不要在不受控渠道或长期场景中使用它。
+
 ### 5. Docker 镜像
 
 当前 Docker 交付采用单容器模式，镜像内已包含：

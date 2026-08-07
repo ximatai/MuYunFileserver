@@ -201,6 +201,7 @@
 | 展示描述 | `GET /api/v1/files/{fileId}/view` | `GET /api/v1/public/files/{fileId}/view?access_token=...` |
 | viewer 内容 | `GET /api/v1/files/{fileId}/view/content` | `GET /api/v1/public/files/{fileId}/view/content/{accessToken}` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
+| 生成限时下载链接（部署验收台） | `POST /api/v1/files/{fileId}/download-link` | - |
 
 viewer 页面入口：
 
@@ -252,6 +253,8 @@ viewer 页面 URL 参数：
 | `DELETE` | `/api/v1/public/files/{fileId}?access_token=...` | 使用短时删除 token 软删文件 |
 | `GET` | `/view/files/{fileId}` | 内置 viewer 页面 |
 | `GET` | `/view/public/files/{fileId}?access_token=...` | 内置 public viewer 页面 |
+| `POST` | `/api/v1/files/{fileId}/download-link` | 为当前租户的文件签发限时下载链接；仅在部署验收台启用时可用 |
+| `GET` | `/test-console` | 部署验收页；默认关闭 |
 | `GET` | `/q/health/live` | 存活检查 |
 | `GET` | `/q/health/ready` | 就绪检查 |
 

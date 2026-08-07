@@ -26,6 +26,8 @@ public interface FileServiceConfig {
 
     Viewer viewer();
 
+    TestConsole testConsole();
+
     interface Storage {
         @WithDefault("local")
         String type();
@@ -145,6 +147,17 @@ public interface FileServiceConfig {
 
         @io.smallrye.config.WithName("pdf-rendering")
         RenderedPdf pdfRendering();
+    }
+
+    interface TestConsole {
+        @WithDefault("false")
+        boolean enabled();
+
+        @WithDefault("15M")
+        Duration defaultDownloadLinkTtl();
+
+        @WithDefault("24H")
+        Duration maxDownloadLinkTtl();
     }
 
     interface Text {
