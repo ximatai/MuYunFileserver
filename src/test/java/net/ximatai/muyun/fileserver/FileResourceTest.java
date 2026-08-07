@@ -104,6 +104,61 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldCreateLimitedDownloadLinkForCurrentTenant() {
+        String fileId = uploadSingleFile("shared.txt", "share me".getBytes(StandardCharsets.UTF_8), "text/plain");
+
+        String downloadPath = givenAuthenticated()
+                .contentType("application/json")
+                .body("""
+                        { "expiresInSeconds": 120 }
+                        """)
+                .when()
+                .post("/api/v1/files/{fileId}/download-link", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.fileId", equalTo(fileId))
+                .body("data.downloadPath", Matchers.startsWith("/api/v1/public/files/" + fileId + "/download?access_token="))
+                .body("data.expiresAt", notNullValue())
+                .extract()
+                .path("data.downloadPath");
+
+        given()
+                .when()
+                .get(downloadPath)
+                .then()
+                .statusCode(200)
+                .body(equalTo("share me"));
+    }
+
+    @Test
+    void shouldServeEnabledTestConsoleWithoutIdentityHeaders() {
+        given()
+                .when()
+                .get("/test-console")
+                .then()
+                .statusCode(200)
+                .header("Content-Type", Matchers.containsString("text/html"))
+                .body(Matchers.containsString("部署验收台"));
+    }
+
+    @Test
+    void shouldRejectOverlongDownloadLinkTtl() {
+        String fileId = uploadSingleFile("shared-too-long.txt", "share me".getBytes(StandardCharsets.UTF_8), "text/plain");
+
+        givenAuthenticated()
+                .contentType("application/json")
+                .body("""
+                        { "expiresInSeconds": 86401 }
+                        """)
+                .when()
+                .post("/api/v1/files/{fileId}/download-link", fileId)
+                .then()
+                .statusCode(400)
+                .body("success", equalTo(false));
+    }
+
+    @Test
     void shouldRenameFileAndUseRenamedFilenameForDownload() {
         String fileId = uploadSingleFile("contract.txt", "hello rename".getBytes(), "text/plain");
 

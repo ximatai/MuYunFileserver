@@ -54,3 +54,7 @@ mfs:
         profile-root: ${user.dir}/var/tmp/libreoffice-profile
       artifact-cache:
         cleanup-orphan-on-file-delete: true
+  test-console:
+    enabled: false
+    default-download-link-ttl: 15M
+    max-download-link-ttl: 24H

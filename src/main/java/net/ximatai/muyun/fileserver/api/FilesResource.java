@@ -13,6 +13,8 @@ import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import net.ximatai.muyun.fileserver.api.dto.DeleteFileResult;
+import net.ximatai.muyun.fileserver.api.dto.CreateDownloadLinkRequest;
+import net.ximatai.muyun.fileserver.api.dto.DownloadLinkResponse;
 import net.ximatai.muyun.fileserver.api.dto.FileMetadataResponse;
 import net.ximatai.muyun.fileserver.api.dto.FileViewResponse;
 import net.ximatai.muyun.fileserver.api.dto.PromoteFilesRequest;
@@ -22,6 +24,7 @@ import net.ximatai.muyun.fileserver.api.dto.UploadFilesResponse;
 import net.ximatai.muyun.fileserver.application.DownloadFile;
 import net.ximatai.muyun.fileserver.application.FileCommandService;
 import net.ximatai.muyun.fileserver.application.FileQueryService;
+import net.ximatai.muyun.fileserver.application.DownloadLinkService;
 import net.ximatai.muyun.fileserver.application.UploadService;
 import net.ximatai.muyun.fileserver.common.api.ApiResponses;
 import net.ximatai.muyun.fileserver.common.api.DownloadResponses;
@@ -41,6 +44,9 @@ public class FilesResource {
 
     @Inject
     FileCommandService fileCommandService;
+
+    @Inject
+    DownloadLinkService downloadLinkService;
 
     @POST
     @Consumes(MediaType.MULTIPART_FORM_DATA)
@@ -94,6 +100,17 @@ public class FilesResource {
         FileMetadataResponse response = fileCommandService.rename(
                 fileId,
                 request == null ? null : request.originalFilename()
+        );
+        return Response.ok(ApiResponses.ok(response)).build();
+    }
+
+    @POST
+    @Path("/{fileId}/download-link")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response createDownloadLink(@RestPath String fileId, CreateDownloadLinkRequest request) {
+        DownloadLinkResponse response = downloadLinkService.create(
+                fileId,
+                request == null ? null : request.expiresInSeconds()
         );
         return Response.ok(ApiResponses.ok(response)).build();
     }
