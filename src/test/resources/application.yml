@@ -23,7 +23,7 @@ mfs:
       enabled: true
       office-enabled: true
       libreoffice:
-        command: ${user.dir}/src/test/resources/bin/fake-soffice.sh
+        command: ${user.dir}/src/test/resources/fake-soffice
         timeout: 5S
         max-concurrency: 1
         retry-failure-after: 5M

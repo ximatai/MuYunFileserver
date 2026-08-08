@@ -20,6 +20,7 @@ import net.ximatai.muyun.fileserver.api.dto.DeleteFileResult;
 import net.ximatai.muyun.fileserver.api.dto.FileMetadataResponse;
 import net.ximatai.muyun.fileserver.api.dto.FileViewResponse;
 import net.ximatai.muyun.fileserver.api.dto.UploadFilesResponse;
+import net.ximatai.muyun.fileserver.api.dto.PromoteFilesResponse;
 import net.ximatai.muyun.fileserver.common.api.ApiResponses;
 import net.ximatai.muyun.fileserver.common.api.DownloadResponses;
 import org.jboss.resteasy.reactive.RestPath;
@@ -59,6 +60,14 @@ public class PublicFilesResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response getView(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
         FileViewResponse response = tokenFileQueryService.getView(fileId, accessToken);
+        return Response.ok(ApiResponses.ok(response)).build();
+    }
+
+    @POST
+    @Path("/{fileId}/promote")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response promote(@RestPath String fileId, @QueryParam("access_token") String accessToken) {
+        PromoteFilesResponse response = tokenFileCommandService.promote(fileId, accessToken);
         return Response.ok(ApiResponses.ok(response)).build();
     }
 

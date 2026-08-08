@@ -41,7 +41,7 @@ public class TokenFileQueryService {
     TextViewService textViewService;
 
     public FileMetadataResponse getMetadata(String fileId, String accessToken) {
-        FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
+        FileMetadata metadata = requireAccessibleFile(fileId, accessToken, "metadata");
 
         LOG.info(OperationLog.format(
                 "metadata_query_by_token",
@@ -56,7 +56,7 @@ public class TokenFileQueryService {
     }
 
     public DownloadFile openDownload(String fileId, String accessToken) {
-        FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
+        FileMetadata metadata = requireAccessibleFile(fileId, accessToken, "download", DownloadTokenSigner.VIEWER_PURPOSE);
         if (!storageProvider.exists(metadata.storageKey())) {
             throw new NotFoundException("file not found");
         }
@@ -81,7 +81,7 @@ public class TokenFileQueryService {
     }
 
     public RenderedPdfResolution openRenderedPdf(String fileId, String accessToken) {
-        FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
+        FileMetadata metadata = requireAccessibleFile(fileId, accessToken, DownloadTokenSigner.VIEWER_PURPOSE);
 
         RenderedPdfResolution renderedPdf = renderedPdfService.openRenderedPdf(metadata);
 
@@ -98,7 +98,7 @@ public class TokenFileQueryService {
     }
 
     public void ensureRenderedPdfReady(String fileId, String accessToken) {
-        FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
+        FileMetadata metadata = requireAccessibleFile(fileId, accessToken, DownloadTokenSigner.VIEWER_PURPOSE);
         renderedPdfService.ensureRenderedPdfReady(metadata);
 
         LOG.info(OperationLog.format(
@@ -120,8 +120,7 @@ public class TokenFileQueryService {
         }
 
         DownloadTokenClaims claims = downloadTokenVerifier.verify(accessToken);
-        FileMetadata metadata = requireAccessibleFile(fileId, claims);
-        requireViewPurpose(claims);
+        FileMetadata metadata = requireAccessibleFile(fileId, claims, "view");
         FileViewResponse descriptor = viewDescriptorService.describePublic(metadata, claims);
 
         LOG.info(OperationLog.format(
@@ -137,7 +136,7 @@ public class TokenFileQueryService {
     }
 
     public DownloadFile openViewContent(String fileId, String accessToken) {
-        FileMetadata metadata = requireAccessibleFile(fileId, accessToken);
+        FileMetadata metadata = requireAccessibleFile(fileId, accessToken, DownloadTokenSigner.VIEWER_PURPOSE);
         ViewerType viewerType = viewDescriptorService.resolveViewerType(metadata.mimeType());
         if (viewerType == ViewerType.PDF) {
             RenderedPdfResolution renderedPdf = renderedPdfService.openRenderedPdf(metadata);
@@ -196,7 +195,7 @@ public class TokenFileQueryService {
         throw new NotFoundException("view content is not available for current file");
     }
 
-    private FileMetadata requireAccessibleFile(String fileId, String accessToken) {
+    private FileMetadata requireAccessibleFile(String fileId, String accessToken, String... requiredPurposes) {
         if (!downloadTokenVerifier.isEnabled()) {
             throw new NotFoundException("resource not found");
         }
@@ -205,16 +204,17 @@ public class TokenFileQueryService {
         }
 
         DownloadTokenClaims claims = downloadTokenVerifier.verify(accessToken);
-        return requireAccessibleFile(fileId, claims);
+        return requireAccessibleFile(fileId, claims, requiredPurposes);
     }
 
-    private void requireViewPurpose(DownloadTokenClaims claims) {
-        if (DownloadTokenSigner.VIEWER_PURPOSE.equals(claims.purpose())) {
-            throw new ForbiddenException("download token purpose is not valid for view");
+    private FileMetadata requireAccessibleFile(String fileId, DownloadTokenClaims claims, String... requiredPurposes) {
+        // Signed links issued before purpose-scoped read tokens were introduced did not carry
+        // a purpose. Keep those read-only links valid during the protocol migration; every
+        // newly issued platform token is purpose-scoped and an explicit wrong purpose is never
+        // widened into another operation.
+        if (claims.purpose() != null && java.util.Arrays.stream(requiredPurposes).noneMatch(claims.purpose()::equals)) {
+            throw new ForbiddenException("file token purpose is not valid for this operation");
         }
-    }
-
-    private FileMetadata requireAccessibleFile(String fileId, DownloadTokenClaims claims) {
         if (!fileId.equals(claims.fileId())) {
             throw new ForbiddenException("download token does not match requested file");
         }

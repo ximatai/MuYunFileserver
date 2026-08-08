@@ -1086,6 +1086,140 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldRejectExplicitDownloadPurposeForPublicMetadata() throws Exception {
+        String fileId = uploadSingleFile("purpose-metadata.txt", "metadata".getBytes(), "text/plain");
+        String accessToken = signFileToken("download", TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file token purpose is not valid for this operation"));
+    }
+
+    @Test
+    void shouldRejectExplicitMetadataPurposeForPublicDownload() throws Exception {
+        String fileId = uploadSingleFile("purpose-download.txt", "download".getBytes(), "text/plain");
+        String accessToken = signFileToken("metadata", TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file token purpose is not valid for this operation"));
+    }
+
+    @Test
+    void shouldRejectExplicitDownloadPurposeForPublicViewDescriptor() throws Exception {
+        String fileId = uploadSingleFile("purpose-view.txt", "view".getBytes(), "text/plain");
+        String accessToken = signFileToken("download", TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("file token purpose is not valid for this operation"));
+    }
+
+    @Test
+    void shouldAllowPurposeScopedTokensForTheirReadOperations() throws Exception {
+        String fileId = uploadSingleFile("purpose-scoped.txt", "scoped read".getBytes(), "text/plain");
+
+        given()
+                .queryParam("access_token", signFileToken("metadata", TENANT_ID, fileId, Instant.now().plusSeconds(60)))
+                .when()
+                .get("/api/v1/public/files/{fileId}", fileId)
+                .then()
+                .statusCode(200)
+                .body("data.id", equalTo(fileId));
+
+        given()
+                .queryParam("access_token", signFileToken("download", TENANT_ID, fileId, Instant.now().plusSeconds(60)))
+                .when()
+                .get("/api/v1/public/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(200)
+                .body(equalTo("scoped read"));
+
+        given()
+                .queryParam("access_token", signFileToken("view", TENANT_ID, fileId, Instant.now().plusSeconds(60)))
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(200)
+                .body("data.fileId", equalTo(fileId));
+    }
+
+    @Test
+    void shouldLimitViewerTokenToPreviewContentAndDownload() throws Exception {
+        String fileId = uploadSingleFile("viewer-purpose.txt", "viewer content".getBytes(), "text/plain");
+        String viewerToken = signFileToken("viewer", TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", viewerToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/view", fileId)
+                .then()
+                .statusCode(403)
+                .body("message", equalTo("file token purpose is not valid for this operation"));
+
+        given()
+                .when()
+                .get("/api/v1/public/files/{fileId}/view/content/{accessToken}", fileId, viewerToken)
+                .then()
+                .statusCode(200)
+                .body(equalTo("viewer content"));
+
+        given()
+                .queryParam("access_token", viewerToken)
+                .when()
+                .get("/api/v1/public/files/{fileId}/download", fileId)
+                .then()
+                .statusCode(200)
+                .body(equalTo("viewer content"));
+    }
+
+    @Test
+    void shouldPromoteTemporaryFileWithPurposeScopedToken() throws Exception {
+        String fileId = uploadSingleFile("purpose-promote.txt", "promote".getBytes(), "text/plain", true);
+        String accessToken = signFileToken("promote", TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .post("/api/v1/public/files/{fileId}/promote", fileId)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("data.items[0].id", equalTo(fileId))
+                .body("data.items[0].temporary", equalTo(false));
+    }
+
+    @Test
+    void shouldRejectNonPromoteTokenForPublicPromote() throws Exception {
+        String fileId = uploadSingleFile("purpose-promote-reject.txt", "promote".getBytes(), "text/plain", true);
+        String accessToken = signFileToken("download", TENANT_ID, fileId, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .when()
+                .post("/api/v1/public/files/{fileId}/promote", fileId)
+                .then()
+                .statusCode(403)
+                .body("success", equalTo(false))
+                .body("message", equalTo("promote token is not valid for requested file"));
+    }
+
+    @Test
     void shouldEncodeSpecialCharactersInContentDisposition() {
         String fileId = uploadSingleFile("report final(1).txt", "hello".getBytes(), "text/plain");
 
@@ -1573,7 +1707,7 @@ class FileResourceTest {
                 .get("/api/v1/public/files/{fileId}/view", fileId)
                 .then()
                 .statusCode(403)
-                .body("message", equalTo("download token purpose is not valid for view"));
+                .body("message", equalTo("file token purpose is not valid for this operation"));
     }
 
     @Test
@@ -1780,9 +1914,13 @@ class FileResourceTest {
     }
 
     private String signDeleteToken(String tenantId, String fileId, Instant expiresAt) throws Exception {
+        return signFileToken("delete", tenantId, fileId, expiresAt);
+    }
+
+    private String signFileToken(String purpose, String tenantId, String fileId, Instant expiresAt) throws Exception {
         return signToken("""
-                {"iss":"biz-app","sub":"%s","purpose":"delete","tenant_id":"%s","file_id":"%s","exp":%d}
-                """.formatted(USER_ID, tenantId, fileId, expiresAt.getEpochSecond()).trim(), TOKEN_SECRET);
+                {"iss":"biz-app","sub":"%s","purpose":"%s","tenant_id":"%s","file_id":"%s","exp":%d}
+                """.formatted(USER_ID, purpose, tenantId, fileId, expiresAt.getEpochSecond()).trim(), TOKEN_SECRET);
     }
 
     private String signUploadToken(String tenantId, String userId, Instant expiresAt) throws Exception {

@@ -93,6 +93,7 @@ flowchart LR
 - `POST /api/v1/public/files?access_token=...`
 - `GET /api/v1/public/files/{fileId}?access_token=...`
 - `GET /api/v1/public/files/{fileId}/download?access_token=...`
+- `POST /api/v1/public/files/{fileId}/promote?access_token=...`
 - `DELETE /api/v1/public/files/{fileId}?access_token=...`
 
 特点：
@@ -100,7 +101,7 @@ flowchart LR
 - 公开接口不要求身份头
 - 业务后端负责签发短时 token
 - 文件服务只验证 token 与文件操作是否匹配
-- 上传 token、读取 token、删除 token 必须分开签发
+- 上传、查询、下载、查看、转正和删除 token 应按用途分别签发
 
 ---
 
@@ -161,7 +162,7 @@ sequenceDiagram
 - 上传 token 至少包含 `tenant_id`、`sub`、`purpose=upload`、`exp`
 - token 上传支持多文件整单语义和 `remark`
 - token 上传不支持 `file_ids`
-- 若业务把上传结果仅作为草稿或中转文件，可先按临时文件使用，确认保留后再调用批量转正接口
+- 若业务把上传结果仅作为草稿或中转文件，可先按临时文件使用；确认保留后，可由业务后端调用批量转正接口，或向前端签发 `purpose=promote` 的单文件 token 并调用公开转正接口
 
 ### 5.3 短时 token 下载 / 查询
 
@@ -175,7 +176,7 @@ sequenceDiagram
 
     U->>B: request file access
     B->>B: validate business permission
-    B-->>U: read/download access_token
+    B-->>U: operation-scoped access_token
     U->>F: GET public file metadata or download endpoint
     F->>F: verify read token
     F->>D: load metadata
@@ -185,7 +186,9 @@ sequenceDiagram
 
 关键点：
 
-- 读取 token 至少包含 `tenant_id`、`file_id`、`exp`
+- 读取 token 至少包含 `tenant_id`、`file_id`、`exp`。新签发的 token 应按操作使用 `purpose=metadata`、`purpose=download` 或 `purpose=view`
+- 查看描述会派生短时 `purpose=viewer` token，供预览内容与下载 URL 使用
+- 旧的无 `purpose` 读取 token 在迁移期内仍可用于只读操作；新接入方不应继续签发此类 token
 - 下载接口返回文件流，不是 JSON
 - 文件已删除时，查询和下载都返回 `404`
 
@@ -371,7 +374,10 @@ Access-Control-Expose-Headers: Content-Disposition, Content-Length, Content-Type
 1. 在业务后端完成登录态与业务权限校验
 2. 根据操作类型签发对应 token：
    - 上传：`purpose=upload`
-   - 读取：带 `file_id`
+   - 查询：`purpose=metadata`，带 `file_id`
+   - 下载：`purpose=download`，带 `file_id`
+   - 查看：`purpose=view`，带 `file_id`
+   - 转正：`purpose=promote`，带 `file_id`
    - 删除：`purpose=delete`
 3. 将短时 `access_token` 或完整公开 URL 返回给前端
 4. 前端直接调用 `MuYunFileServer` 的公开接口

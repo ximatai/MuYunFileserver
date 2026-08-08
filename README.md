@@ -397,22 +397,25 @@ Readiness 在两种模式下的行为：
 | 能力 | 可信身份头模式 | 短时 token 模式 |
 |---|---|---|
 | 上传 | `POST /api/v1/files` | `POST /api/v1/public/files?access_token=...` |
-| 转正 | `POST /api/v1/files/promote` | 暂不支持 |
+| 转正 | `POST /api/v1/files/promote` | `POST /api/v1/public/files/{fileId}/promote?access_token=...` |
 | 元数据 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
 | 展示描述 | `GET /api/v1/files/{fileId}/view` | `GET /api/v1/public/files/{fileId}/view?access_token=...` |
 | viewer 内容 | `GET /api/v1/files/{fileId}/view/content` | `GET /api/v1/public/files/{fileId}/view/content/{accessToken}` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
 
-短时 token 模式适合业务后端先完成权限校验，再给前端一个临时上传、查看、下载或删除地址。token 模式默认关闭，需要显式开启 `mfs.token.enabled=true`。
+短时 token 模式适合业务后端先完成权限校验，再给前端一个临时上传、查看、下载、转正或删除地址。token 模式默认关闭，需要显式开启 `mfs.token.enabled=true`。
 
 token 约束：
 
 - 当前只支持 `HMAC-SHA256`
 - 上传 token 至少携带 `tenant_id`、`sub`、`purpose=upload`、`exp`
-- 查询 / 下载 / 查看 token 至少携带 `tenant_id`、`file_id`、`exp`
+- 查询 / 下载 / 查看 token 至少携带 `tenant_id`、`file_id`、`exp`；新签发的 token 应分别使用 `purpose=metadata`、`purpose=download`、`purpose=view`
 - 删除 token 必须单独签发，并携带 `purpose=delete`
+- 转正 token 必须单独签发，并携带 `purpose=promote`
 - 公开 token 上传支持多文件和 `remark`，不支持显式 `file_ids`
+
+为平滑迁移，缺少 `purpose` 的既有只读 token 暂时仍可用于查询、下载和查看；显式携带错误 `purpose` 的 token 会返回 `403`。新接入方应始终签发带用途的 token。
 
 ### 常用调用
 
