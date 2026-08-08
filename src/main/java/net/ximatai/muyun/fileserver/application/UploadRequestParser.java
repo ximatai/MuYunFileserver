@@ -26,11 +26,25 @@ class UploadRequestParser {
     }
 
     UploadRequest parse(MultipartFormDataInput input, boolean allowRequestedFileIds) {
+        return parse(input, allowRequestedFileIds, true);
+    }
+
+    /**
+     * Public upload tokens always create staging files.  Do not parse the
+     * browser-controlled temporary field at all: it has no token-mode meaning.
+     */
+    UploadRequest parseTokenUpload(MultipartFormDataInput input) {
+        return parse(input, false, false);
+    }
+
+    private UploadRequest parse(MultipartFormDataInput input,
+                                boolean allowRequestedFileIds,
+                                boolean readTemporary) {
         Map<String, Collection<FormValue>> values = input.getValues();
         List<FormValue> fileValues = formValues(values, "files");
         List<String> requestedFileIds = textValues(values, "file_ids");
         String remark = singleOptionalText(values, "remark");
-        boolean temporary = singleOptionalBoolean(values, "temporary", false);
+        boolean temporary = readTemporary && singleOptionalBoolean(values, "temporary", false);
 
         validateRequest(fileValues, requestedFileIds, allowRequestedFileIds);
         return new UploadRequest(fileValues, requestedFileIds, remark, temporary);

@@ -50,7 +50,7 @@ public class UploadService {
      * make them permanent by supplying a multipart {@code temporary=false}.
      */
     public UploadFilesResponse uploadTemporary(MultipartFormDataInput input, RequestContext requestContext) {
-        UploadRequest request = uploadRequestParser.parse(input, false);
+        UploadRequest request = uploadRequestParser.parseTokenUpload(input);
         return upload(new UploadRequest(request.fileValues(), request.requestedFileIds(), request.remark(), true),
                 requestContext);
     }

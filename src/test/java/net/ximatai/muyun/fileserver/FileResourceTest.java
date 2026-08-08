@@ -877,13 +877,14 @@ class FileResourceTest {
     }
 
     @Test
-    void shouldForceTokenUploadToTemporaryEvenWhenTheBrowserRequestsPermanentStorage() throws Exception {
+    void shouldIgnoreBrowserTemporaryFieldsForTokenUploads() throws Exception {
         String accessToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().plusSeconds(60));
 
         given()
                 .queryParam("access_token", accessToken)
                 .multiPart("files", "public-upload.txt", "token upload".getBytes(), "text/plain")
                 .multiPart("temporary", "false")
+                .multiPart("temporary", "not-a-boolean")
                 .when()
                 .post("/api/v1/public/files")
                 .then()
