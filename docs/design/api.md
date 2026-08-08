@@ -243,6 +243,7 @@ viewer 页面 URL 参数：
 | `POST` | `/api/v1/public/files?access_token=...` | 使用短时上传 token 上传一个或多个文件 |
 | `PUT` | `/api/v1/files/{fileId}/name` | 重命名文件 |
 | `POST` | `/api/v1/files/promote` | 批量转正临时文件 |
+| `POST` | `/api/v1/public/files/{fileId}/promote?access_token=...` | 使用短时转正 token 转正单个临时文件 |
 | `GET` | `/api/v1/files/{fileId}` | 查询单文件元数据 |
 | `GET` | `/api/v1/files/{fileId}/download` | 下载文件 |
 | `GET` | `/api/v1/files/{fileId}/view` | 返回 viewer 展示描述 |
@@ -588,6 +589,42 @@ curl "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF?access
 | `fileId` 非法 | `400` |
 | 无身份上下文 | `401` |
 | 租户不匹配或无权访问 | `403` |
+| 文件不存在或已删除 | `404` |
+| 内部错误 | `500` |
+
+### 8.10.4 短时 token 单文件转正接口
+
+- 方法：`POST`
+- 路径：`/api/v1/public/files/{fileId}/promote`
+- Query 参数：`access_token`
+
+说明：
+
+- 该入口不要求 `X-Tenant-Id`、`X-User-Id`
+- 业务后端完成业务校验后，签发绑定 `tenant_id`、`file_id` 且 `purpose=promote` 的短时 token
+- 文件已是正式文件时按幂等成功处理
+
+成功响应为单元素 `items` 列表，结构与批量转正接口相同：
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "01JABCDEF1234567890ABCDEF",
+        "temporary": false
+      }
+    ]
+  }
+}
+```
+
+| 场景 | 状态码 |
+|---|---|
+| 缺少、非法或过期的 `access_token` | `401` |
+| `fileId` 非法 | `400` |
+| token `purpose` 不为 `promote`，或 token 与目标文件/租户不匹配 | `403` |
 | 文件不存在或已删除 | `404` |
 | 内部错误 | `500` |
 

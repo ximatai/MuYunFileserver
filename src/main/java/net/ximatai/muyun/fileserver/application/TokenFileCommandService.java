@@ -106,6 +106,16 @@ public class TokenFileCommandService {
             metadata = repository.findActiveById(fileId)
                     .orElseThrow(() -> new NotFoundException("file not found"));
         }
+        LOG.info(OperationLog.format(
+                "promote_by_token",
+                "success",
+                "file_id", fileId,
+                "tenant_id", metadata.tenantId(),
+                "request_id", null,
+                "storage_provider", metadata.storageProvider(),
+                "token_issuer", claims.issuer(),
+                "token_subject", claims.subject()
+        ));
         return new PromoteFilesResponse(List.of(FileMetadataMapper.toResponse(metadata)));
     }
 }
