@@ -367,7 +367,6 @@ curl -X POST "http://localhost:8080/api/v1/files" \
 |---|---|---|
 | `files` | 是 | 文件内容，可重复出现，支持多文件 |
 | `remark` | 否 | 统一备注 |
-| `temporary` | 否 | 已忽略；token 上传始终按临时文件写入 |
 
 说明：
 
@@ -378,7 +377,7 @@ curl -X POST "http://localhost:8080/api/v1/files" \
 - 上传 token 必须单独签发，并带 `purpose=upload`
 - token 上传仍经过文件服务，不是对象存储直传
 - token 上传不支持 `file_ids`，文件 ID 统一由服务端生成
-- token 上传始终创建临时资源，客户端不能通过 `temporary=false` 将其写为正式文件
+- token 上传始终创建临时资源；转正只能由业务确认后的转正动作完成
 - 上传成功后的元数据查询、下载、删除语义与普通上传一致
 
 ### 7.7 短时 token 上传请求示例
