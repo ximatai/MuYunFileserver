@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+
+OUTDIR=""
+INPUT=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --outdir)
+      OUTDIR="$2"
+      shift 2
+      ;;
+    --convert-to)
+      shift 2
+      ;;
+    --headless|-env:UserInstallation=*)
+      shift
+      ;;
+    *)
+      INPUT="$1"
+      shift
+      ;;
+  esac
+done
+
+TARGET="$OUTDIR/$(basename "$INPUT" | sed 's/\.[^.]*$//').pdf"
+cat > "$TARGET" <<'EOF'
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 1 /Kids [3 0 R] >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] >>
+endobj
+trailer
+<< /Size 4 /Root 1 0 R >>
+%%EOF
+EOF

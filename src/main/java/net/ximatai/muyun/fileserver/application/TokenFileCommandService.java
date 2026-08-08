@@ -3,6 +3,8 @@ package net.ximatai.muyun.fileserver.application;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.api.dto.DeleteFileResult;
+import net.ximatai.muyun.fileserver.api.dto.FileMetadataResponse;
+import net.ximatai.muyun.fileserver.api.dto.PromoteFilesResponse;
 import net.ximatai.muyun.fileserver.common.exception.ForbiddenException;
 import net.ximatai.muyun.fileserver.common.exception.NotFoundException;
 import net.ximatai.muyun.fileserver.common.exception.ValidationException;
@@ -15,6 +17,7 @@ import net.ximatai.muyun.fileserver.infrastructure.ulid.UlidGenerator;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
+import java.util.List;
 
 @ApplicationScoped
 public class TokenFileCommandService {
@@ -78,5 +81,31 @@ public class TokenFileCommandService {
         ));
 
         return new DeleteFileResult(fileId, FileStatus.DELETED.name(), deletedAt);
+    }
+
+    /** Promote one temporary file after its owning business service has verified it. */
+    public PromoteFilesResponse promote(String fileId, String accessToken) {
+        if (!config.token().enabled()) {
+            throw new NotFoundException("resource not found");
+        }
+        if (!ulidGenerator.isValid(fileId)) {
+            throw new ValidationException("invalid fileId");
+        }
+
+        DownloadTokenClaims claims = downloadTokenVerifier.verify(accessToken);
+        if (!"promote".equals(claims.purpose()) || !fileId.equals(claims.fileId())) {
+            throw new ForbiddenException("promote token is not valid for requested file");
+        }
+        FileMetadata metadata = repository.findActiveById(fileId)
+                .orElseThrow(() -> new NotFoundException("file not found"));
+        if (!metadata.tenantId().equals(claims.tenantId())) {
+            throw new ForbiddenException("promote token is not valid for current tenant");
+        }
+        if (metadata.temporary()) {
+            repository.promote(fileId, metadata.tenantId());
+            metadata = repository.findActiveById(fileId)
+                    .orElseThrow(() -> new NotFoundException("file not found"));
+        }
+        return new PromoteFilesResponse(List.of(FileMetadataMapper.toResponse(metadata)));
     }
 }

@@ -195,7 +195,7 @@
 |---|---|---|
 | 上传 | `POST /api/v1/files` | `POST /api/v1/public/files?access_token=...` |
 | 重命名 | `PUT /api/v1/files/{fileId}/name` | - |
-| 临时文件批量转正 | `POST /api/v1/files/promote` | - |
+| 临时文件转正 | `POST /api/v1/files/promote` | `POST /api/v1/public/files/{fileId}/promote?access_token=...` |
 | 单文件元数据查询 | `GET /api/v1/files/{fileId}` | `GET /api/v1/public/files/{fileId}?access_token=...` |
 | 下载 | `GET /api/v1/files/{fileId}/download` | `GET /api/v1/public/files/{fileId}/download?access_token=...` |
 | 展示描述 | `GET /api/v1/files/{fileId}/view` | `GET /api/v1/public/files/{fileId}/view?access_token=...` |
@@ -227,7 +227,7 @@ viewer 页面 URL 参数：
 说明：
 
 - 可信身份头模式依赖统一网关或受控上游注入身份上下文
-- 短时 token 模式当前覆盖上传、查询、统一查看、下载、删除
+- 短时 token 模式当前覆盖上传、查询、统一查看、下载、单文件转正、删除
 - 当前内置 viewer 已正式支持 `PDF`、`Office -> PDF`、主流图片、纯文本、原始音频和原始视频在线展示
 - 纯文本 viewer 首版覆盖 `text/plain`、`text/markdown`、`text/csv`、`text/xml`、`application/json`、`application/xml`
 - 纯文本 viewer 首版对超大文本返回明确错误并引导下载，不做分页和流式 tail
@@ -500,6 +500,8 @@ curl "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABCDEF?access
 - 当前最小实现默认关闭，需通过配置显式开启
 - 第一版仅支持 `HMAC-SHA256`
 - token 至少应包含 `tenant_id`、`file_id`、`exp`
+- 新签发的读取 token 应带操作用途：查询为 `metadata`，下载为 `download`，查看描述为 `view`；由查看描述派生的 `viewer` token 可读取预览内容和下载
+- 为平滑迁移，不带 `purpose` 的既有读取 token 暂时仍可用于上述只读接口；显式携带错误用途的 token 返回 `403`
 - 第一版不实现严格一次性消费
 
 ---
@@ -831,11 +833,12 @@ curl -X DELETE "http://localhost:8080/api/v1/public/files/01JABCDEF1234567890ABC
 ## 12. 关键接口规则汇总
 
 - 可信身份头模式下，业务请求必须带可信的 `X-Tenant-Id` 和 `X-User-Id`
-- 短时 token 模式下，公开上传、查询、统一查看、下载、删除接口通过 `access_token` 完成授权，不要求身份头
+- 短时 token 模式下，公开上传、查询、统一查看、下载、单文件转正、删除接口通过 `access_token` 完成授权，不要求身份头
 - 一期只支持单文件查询，不支持列表和搜索
 - 一期支持多文件上传，但单次请求最多 10 个文件
 - 一期支持临时文件上传，默认上传为正式文件
 - 一期支持批量转正临时文件
+- 短时 token 模式支持使用 `purpose=promote` 的 token 转正单个临时文件
 - 一期允许请求端可选指定 `ULID` 格式的 `file_id`
 - 短时 token 上传接口不支持请求端显式指定 `file_id`
 - 已存在的 `file_id` 返回 `409 Conflict`
