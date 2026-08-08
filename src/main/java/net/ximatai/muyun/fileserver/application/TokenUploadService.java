@@ -30,6 +30,6 @@ public class TokenUploadService {
         }
 
         RequestContext requestContext = new RequestContext(claims.tenantId(), claims.subject(), null, null);
-        return uploadService.upload(input, requestContext, false);
+        return uploadService.uploadTemporary(input, requestContext);
     }
 }
