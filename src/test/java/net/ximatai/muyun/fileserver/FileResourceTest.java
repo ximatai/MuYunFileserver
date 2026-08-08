@@ -861,6 +861,7 @@ class FileResourceTest {
                 .body("success", equalTo(true))
                 .body("data.items.size()", equalTo(1))
                 .body("data.items[0].id", notNullValue())
+                .body("data.items[0].temporary", equalTo(true))
                 .extract()
                 .path("data.items[0].id");
 
@@ -871,7 +872,23 @@ class FileResourceTest {
                 .statusCode(200)
                 .body("data.id", equalTo(fileId))
                 .body("data.remark", equalTo("public upload"))
+                .body("data.temporary", equalTo(true))
                 .body("data.uploadedBy", equalTo(USER_ID));
+    }
+
+    @Test
+    void shouldForceTokenUploadToTemporaryEvenWhenTheBrowserRequestsPermanentStorage() throws Exception {
+        String accessToken = signUploadToken(TENANT_ID, USER_ID, Instant.now().plusSeconds(60));
+
+        given()
+                .queryParam("access_token", accessToken)
+                .multiPart("files", "public-upload.txt", "token upload".getBytes(), "text/plain")
+                .multiPart("temporary", "false")
+                .when()
+                .post("/api/v1/public/files")
+                .then()
+                .statusCode(200)
+                .body("data.items[0].temporary", equalTo(true));
     }
 
     @Test

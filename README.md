@@ -404,6 +404,8 @@ Readiness 在两种模式下的行为：
 | viewer 内容 | `GET /api/v1/files/{fileId}/view/content` | `GET /api/v1/public/files/{fileId}/view/content/{accessToken}` |
 | 删除 | `DELETE /api/v1/files/{fileId}` | `DELETE /api/v1/public/files/{fileId}?access_token=...` |
 
+公共上传 token 仅用于浏览器暂存：`POST /api/v1/public/files` 写入的文件始终是临时文件，multipart 的 `temporary` 字段会被忽略。业务服务完成校验并确认保存后，再通过转正接口使其成为正式文件。
+
 短时 token 模式适合业务后端先完成权限校验，再给前端一个临时上传、查看、下载、转正或删除地址。token 模式默认关闭，需要显式开启 `mfs.token.enabled=true`。
 
 token 约束：

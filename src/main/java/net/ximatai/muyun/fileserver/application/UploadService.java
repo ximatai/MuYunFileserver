@@ -42,7 +42,20 @@ public class UploadService {
     }
 
     public UploadFilesResponse upload(MultipartFormDataInput input, RequestContext requestContext, boolean allowRequestedFileIds) {
-        UploadRequest uploadRequest = uploadRequestParser.parse(input, allowRequestedFileIds);
+        return upload(uploadRequestParser.parse(input, allowRequestedFileIds), requestContext);
+    }
+
+    /**
+     * Token-authorised browser uploads are staging objects.  The caller cannot
+     * make them permanent by supplying a multipart {@code temporary=false}.
+     */
+    public UploadFilesResponse uploadTemporary(MultipartFormDataInput input, RequestContext requestContext) {
+        UploadRequest request = uploadRequestParser.parse(input, false);
+        return upload(new UploadRequest(request.fileValues(), request.requestedFileIds(), request.remark(), true),
+                requestContext);
+    }
+
+    private UploadFilesResponse upload(UploadRequest uploadRequest, RequestContext requestContext) {
 
         List<PreparedUpload> preparedUploads = new ArrayList<>();
         List<FileMetadata> insertedMetadata = new ArrayList<>();
