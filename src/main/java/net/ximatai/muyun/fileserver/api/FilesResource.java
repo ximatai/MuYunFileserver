@@ -28,12 +28,14 @@ import net.ximatai.muyun.fileserver.application.DownloadLinkService;
 import net.ximatai.muyun.fileserver.application.UploadService;
 import net.ximatai.muyun.fileserver.common.api.ApiResponses;
 import net.ximatai.muyun.fileserver.common.api.DownloadResponses;
+import net.ximatai.muyun.fileserver.common.security.RequireIdentity;
 import org.jboss.resteasy.reactive.RestPath;
 import org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput;
 
 @Path("/api/v1/files")
 @Produces(MediaType.APPLICATION_JSON)
 @Blocking
+@RequireIdentity
 public class FilesResource {
 
     @Inject

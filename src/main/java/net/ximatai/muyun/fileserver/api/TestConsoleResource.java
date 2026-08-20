@@ -10,6 +10,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import net.ximatai.muyun.fileserver.common.exception.NotFoundException;
+import net.ximatai.muyun.fileserver.common.security.PublicEndpoint;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 
 import java.io.IOException;
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 
 @Path("/test-console")
 @Blocking
+@PublicEndpoint
 public class TestConsoleResource {
 
     private static final String INDEX_PATH = "META-INF/test-console/index.html";

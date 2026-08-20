@@ -9,6 +9,7 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
+import net.ximatai.muyun.fileserver.common.security.PublicEndpoint;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -16,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 
 @Path("/view")
 @Blocking
+@PublicEndpoint
 public class ViewerPageResource {
 
     private static final String INDEX_PATH = "META-INF/resources/viewer/index.html";

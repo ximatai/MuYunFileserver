@@ -12,7 +12,9 @@ public class SupportedFileTypes {
     private static final Map<String, String> MIME_ALIASES = Map.ofEntries(
             Map.entry("audio/vnd.wave", "audio/wav"),
             Map.entry("audio/wave", "audio/wav"),
-            Map.entry("audio/x-wav", "audio/wav")
+            Map.entry("audio/x-wav", "audio/wav"),
+            Map.entry("text/x-web-markdown", "text/markdown"),
+            Map.entry("text/x-markdown", "text/markdown")
     );
 
     private static final Set<String> TEXT_MIME_TYPES = Set.of(
@@ -169,6 +171,11 @@ public class SupportedFileTypes {
     }
 
     private String normalize(String mimeType) {
-        return mimeType == null ? "" : mimeType.trim().toLowerCase(Locale.ROOT);
+        if (mimeType == null) {
+            return "";
+        }
+        String normalized = mimeType.trim().toLowerCase(Locale.ROOT);
+        int parameterIndex = normalized.indexOf(';');
+        return parameterIndex < 0 ? normalized : normalized.substring(0, parameterIndex).trim();
     }
 }

@@ -1,6 +1,6 @@
 package net.ximatai.muyun.fileserver.common.exception;
 
-public class AppException extends RuntimeException {
+public abstract class AppException extends RuntimeException {
 
     private final int status;
 

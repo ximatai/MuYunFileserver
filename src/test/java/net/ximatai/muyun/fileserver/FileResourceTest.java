@@ -4,6 +4,7 @@ import de.huxhorn.sulky.ulid.ULID;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.job.FileCleanupJob;
+import net.ximatai.muyun.fileserver.common.exception.mapper.UnhandledExceptionMapper;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +22,17 @@ import java.util.Base64;
 import java.io.ByteArrayOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -45,6 +57,97 @@ class FileResourceTest {
 
     @Inject
     FileCleanupJob fileCleanupJob;
+
+    @Test
+    void shouldKeepUnknownPathsAs404WithoutUnhandledErrorLogs() {
+        Logger unhandledLogger = Logger.getLogger(UnhandledExceptionMapper.class.getName());
+        Logger blockedThreadLogger = Logger.getLogger("io.vertx.core.impl.BlockedThreadChecker");
+        CapturingLogHandler logHandler = new CapturingLogHandler();
+        unhandledLogger.addHandler(logHandler);
+        blockedThreadLogger.addHandler(logHandler);
+        try {
+            for (String path : List.of("/does-not-exist", "//wp-includes/blocks.php", "/xmlrpc.php")) {
+                given()
+                        .header("X-Request-Id", "scan-test")
+                        .when()
+                        .get(path)
+                        .then()
+                        .statusCode(404)
+                        .header("X-Request-Id", equalTo("scan-test"));
+            }
+
+            given()
+                    .when()
+                    .get("/generated-request-id")
+                    .then()
+                    .statusCode(404)
+                    .header("X-Request-Id", notNullValue());
+
+            for (int index = 0; index < 100; index++) {
+                given().when().get("/wp-probe-" + index).then().statusCode(404);
+            }
+
+            org.junit.jupiter.api.Assertions.assertTrue(logHandler.errorRecords().isEmpty(),
+                    "expected 404 responses must not be logged by the unhandled-exception mapper");
+            org.junit.jupiter.api.Assertions.assertTrue(logHandler.warningRecords().isEmpty(),
+                    "404 burst must not trigger Vert.x blocked-thread warnings");
+        } finally {
+            unhandledLogger.removeHandler(logHandler);
+            blockedThreadLogger.removeHandler(logHandler);
+        }
+    }
+
+    @Test
+    void shouldKeepConcurrentUnknownPathsAs404WithoutBlockedThreadWarnings() throws Exception {
+        Logger blockedThreadLogger = Logger.getLogger("io.vertx.core.impl.BlockedThreadChecker");
+        CapturingLogHandler logHandler = new CapturingLogHandler();
+        blockedThreadLogger.addHandler(logHandler);
+        try (ExecutorService executor = Executors.newFixedThreadPool(8)) {
+            List<Callable<Integer>> requests = new ArrayList<>();
+            for (int index = 0; index < 80; index++) {
+                int requestIndex = index;
+                requests.add(() -> given()
+                        .when()
+                        .get("/concurrent-wp-probe-" + requestIndex)
+                        .then()
+                        .extract()
+                        .statusCode());
+            }
+
+            for (Future<Integer> response : executor.invokeAll(requests)) {
+                org.junit.jupiter.api.Assertions.assertEquals(404, response.get());
+            }
+            org.junit.jupiter.api.Assertions.assertTrue(logHandler.warningRecords().isEmpty(),
+                    "concurrent 404 requests must not trigger Vert.x blocked-thread warnings");
+        } finally {
+            blockedThreadLogger.removeHandler(logHandler);
+        }
+    }
+
+    private static final class CapturingLogHandler extends Handler {
+        private final List<LogRecord> records = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void publish(LogRecord record) {
+            records.add(record);
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() {
+        }
+
+        List<LogRecord> errorRecords() {
+            return records.stream().filter(record -> record.getLevel().intValue() >= Level.SEVERE.intValue()).toList();
+        }
+
+        List<LogRecord> warningRecords() {
+            return records.stream().filter(record -> record.getLevel().intValue() >= Level.WARNING.intValue()).toList();
+        }
+    }
 
     @Test
     void shouldUploadQueryDownloadAndDeleteFile() {
@@ -139,7 +242,19 @@ class FileResourceTest {
                 .then()
                 .statusCode(200)
                 .header("Content-Type", Matchers.containsString("text/html"))
+                .header("X-Request-Id", notNullValue())
                 .body(Matchers.containsString("部署验收台"));
+    }
+
+    @Test
+    void shouldRejectProtectedApiWithoutIdentityHeadersAndReturnRequestId() {
+        given()
+                .when()
+                .get("/api/v1/files/not-a-file")
+                .then()
+                .statusCode(401)
+                .header("X-Request-Id", notNullValue())
+                .body("success", equalTo(false));
     }
 
     @Test

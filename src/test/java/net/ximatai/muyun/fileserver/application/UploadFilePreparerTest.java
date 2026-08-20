@@ -158,6 +158,16 @@ class UploadFilePreparerTest {
         assertEquals("audio/wav", preparedUploads.getFirst().mimeType());
     }
 
+    @Test
+    void shouldAcceptMarkdownMimeAliasesAndParameters() {
+        SupportedFileTypes fileTypes = new SupportedFileTypes();
+
+        assertTrue(fileTypes.isAllowedUploadMimeType("text/markdown;charset=utf-8"));
+        assertTrue(fileTypes.isAllowedUploadMimeType("text/x-web-markdown"));
+        assertTrue(fileTypes.isAllowedUploadMimeType("text/x-markdown"));
+        assertEquals("text/markdown", fileTypes.canonicalize(" text/x-web-markdown ; charset=UTF-8 "));
+    }
+
     private static final class InMemoryRepository implements FileMetadataRepository {
         private final Set<String> existingIds;
 
