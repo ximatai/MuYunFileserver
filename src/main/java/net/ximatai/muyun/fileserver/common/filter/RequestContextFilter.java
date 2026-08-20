@@ -5,10 +5,14 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.container.ResourceInfo;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.ext.Provider;
 import net.ximatai.muyun.fileserver.common.context.RequestContext;
 import net.ximatai.muyun.fileserver.common.context.RequestContextHolder;
+import net.ximatai.muyun.fileserver.common.context.RequestMetadataHolder;
 import net.ximatai.muyun.fileserver.common.exception.UnauthorizedException;
+import net.ximatai.muyun.fileserver.common.security.PublicEndpoint;
 
 @Provider
 @Priority(Priorities.AUTHENTICATION)
@@ -22,34 +26,42 @@ public class RequestContextFilter implements ContainerRequestFilter {
     @Inject
     RequestContextHolder requestContextHolder;
 
+    @Inject
+    RequestMetadataHolder requestMetadataHolder;
+
+    @Context
+    ResourceInfo resourceInfo;
+
     @Override
     public void filter(ContainerRequestContext requestContext) {
         String path = requestContext.getUriInfo().getPath();
-        if (path.startsWith("q/")
-                || path.startsWith("/q/")
-                || path.startsWith("viewer/")
-                || path.startsWith("/viewer/")
-                || path.equals("test-console")
-                || path.equals("/test-console")
-                || path.startsWith("test-console/")
-                || path.startsWith("/test-console/")
-                || path.startsWith("test-console-assets/")
-                || path.startsWith("/test-console-assets/")
-                || path.startsWith("view/")
-                || path.startsWith("/view/")
-                || path.equals("api/v1/public/files")
-                || path.equals("/api/v1/public/files")
-                || path.startsWith("api/v1/public/files/")
-                || path.startsWith("/api/v1/public/files/")) {
+        if (isInfrastructureEndpoint(path) || isPublicEndpoint()) {
             return;
         }
 
         String tenantId = header(requestContext, TENANT_ID_HEADER);
         String userId = header(requestContext, USER_ID_HEADER);
-        String requestId = blankToNull(requestContext.getHeaderString(REQUEST_ID_HEADER));
+        String requestId = requestMetadataHolder.get().traceId();
         String clientId = blankToNull(requestContext.getHeaderString(CLIENT_ID_HEADER));
 
         requestContextHolder.set(new RequestContext(tenantId, userId, requestId, clientId));
+    }
+
+    private boolean isInfrastructureEndpoint(String path) {
+        return path.startsWith("q/")
+                || path.startsWith("/q/")
+                || path.startsWith("viewer/")
+                || path.startsWith("/viewer/")
+                || path.startsWith("test-console-assets/")
+                || path.startsWith("/test-console-assets/");
+    }
+
+    private boolean isPublicEndpoint() {
+        return resourceInfo != null
+                && ((resourceInfo.getResourceMethod() != null
+                && resourceInfo.getResourceMethod().isAnnotationPresent(PublicEndpoint.class))
+                || (resourceInfo.getResourceClass() != null
+                && resourceInfo.getResourceClass().isAnnotationPresent(PublicEndpoint.class)));
     }
 
     private String header(ContainerRequestContext requestContext, String headerName) {

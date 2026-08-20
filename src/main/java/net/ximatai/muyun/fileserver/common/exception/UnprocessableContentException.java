@@ -1,6 +1,6 @@
 package net.ximatai.muyun.fileserver.common.exception;
 
-public class UnprocessableContentException extends AppException {
+public class UnprocessableContentException extends ClientException {
 
     public UnprocessableContentException(String message) {
         super(422, message);

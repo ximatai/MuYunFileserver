@@ -2,7 +2,7 @@ package net.ximatai.muyun.fileserver.common.exception;
 
 import jakarta.ws.rs.core.Response;
 
-public class StorageException extends AppException {
+public class StorageException extends ServerException {
 
     public StorageException(String message) {
         super(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), message);

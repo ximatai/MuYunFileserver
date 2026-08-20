@@ -23,11 +23,13 @@ import net.ximatai.muyun.fileserver.api.dto.UploadFilesResponse;
 import net.ximatai.muyun.fileserver.api.dto.PromoteFilesResponse;
 import net.ximatai.muyun.fileserver.common.api.ApiResponses;
 import net.ximatai.muyun.fileserver.common.api.DownloadResponses;
+import net.ximatai.muyun.fileserver.common.security.PublicEndpoint;
 import org.jboss.resteasy.reactive.RestPath;
 import org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput;
 
 @Path("/api/v1/public/files")
 @Blocking
+@PublicEndpoint
 public class PublicFilesResource {
 
     @Inject
