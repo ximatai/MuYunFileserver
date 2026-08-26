@@ -21,8 +21,8 @@
       <section class="card">
         <h2>可信身份上下文</h2>
         <div class="grid identity-grid">
-          <label>Tenant ID<input id="tenant-id" autocomplete="off" placeholder="tenant-a" required /></label>
-          <label>User ID<input id="user-id" autocomplete="off" placeholder="u123" required /></label>
+          <label>Tenant ID<input id="tenant-id" autocomplete="off" value="demo" required /></label>
+          <label>User ID<input id="user-id" autocomplete="off" value="demo" required /></label>
           <label>Request ID（可选）<input id="request-id" autocomplete="off" /></label>
         </div>
       </section>
@@ -33,7 +33,7 @@
           <div class="grid upload-grid">
             <label>文件<input id="files" name="files" type="file" multiple required /></label>
             <label>备注（可选）<input id="remark" name="remark" maxlength="500" /></label>
-            <label class="checkbox"><input id="temporary" name="temporary" type="checkbox" /> 临时文件</label>
+            <label class="checkbox"><input id="temporary" name="temporary" type="checkbox" checked /> 临时文件</label>
             <button type="submit">上传</button>
           </div>
         </form>
