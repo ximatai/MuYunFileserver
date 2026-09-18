@@ -2,6 +2,7 @@ package net.ximatai.muyun.fileserver;
 
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import org.testcontainers.containers.MinIOContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,7 +28,8 @@ public class MinioFileResourceTestResource implements QuarkusTestResourceLifecyc
             throw new IllegalStateException("failed to prepare minio test resource paths", exception);
         }
 
-        minio = new MinIOContainer("minio/minio:latest")
+        minio = new MinIOContainer(DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z")
+                .asCompatibleSubstituteFor("minio/minio"))
                 .withUserName("minioadmin")
                 .withPassword("minioadmin");
         minio.start();
