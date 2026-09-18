@@ -27,7 +27,7 @@ public class MinioFileResourceTestResource implements QuarkusTestResourceLifecyc
             throw new IllegalStateException("failed to prepare minio test resource paths", exception);
         }
 
-        minio = new MinIOContainer("minio/minio:RELEASE.2025-10-15T17-29-55Z")
+        minio = new MinIOContainer("minio/minio:latest")
                 .withUserName("minioadmin")
                 .withPassword("minioadmin");
         minio.start();

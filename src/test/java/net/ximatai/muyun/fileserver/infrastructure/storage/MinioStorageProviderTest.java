@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MinioStorageProviderTest {
 
     private static final String BUCKET = "muyun-files";
-    private static final MinIOContainer MINIO = new MinIOContainer("minio/minio:RELEASE.2025-10-15T17-29-55Z")
+    private static final MinIOContainer MINIO = new MinIOContainer("minio/minio:latest")
             .withUserName("minioadmin")
             .withPassword("minioadmin");
 
