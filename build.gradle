@@ -100,3 +100,9 @@ tasks.named('processResources') {
 tasks.named('clean') {
     delete viewerGeneratedResourcesDir
 }
+
+tasks.withType(Test).configureEach {
+    if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+        environment 'MFS_VIEWER_PDF_RENDERING_LIBREOFFICE_COMMAND', file('src/test/resources/fake-soffice.cmd').absolutePath
+    }
+}

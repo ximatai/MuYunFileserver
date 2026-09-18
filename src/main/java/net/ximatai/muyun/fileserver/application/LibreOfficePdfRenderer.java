@@ -149,8 +149,18 @@ public class LibreOfficePdfRenderer implements OfficePdfRenderer {
             if (Files.isExecutable(candidate)) {
                 return candidate;
             }
+            if (isWindows()) {
+                Path executableCandidate = Path.of(directory, configuredCommand + ".exe");
+                if (Files.isExecutable(executableCandidate)) {
+                    return executableCandidate;
+                }
+            }
         }
         throw new ServiceUnavailableException("pdf renderer is not available");
+    }
+
+    private boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 
     private void ensureDirectory(Path path) {

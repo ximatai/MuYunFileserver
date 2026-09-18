@@ -16,7 +16,56 @@ class LibreOfficePdfRendererTest {
 
     @Test
     void shouldConvertWithExecutableCommand() throws Exception {
-        Path script = createScript("""
+        Path script = createSuccessfulScript();
+        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
+        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
+
+        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
+        Files.writeString(source, "fake");
+
+        RenderedPdfConversionResult result = converter.convert(source, "contract.docx");
+
+        assertTrue(Files.exists(result.outputFile()));
+        assertEquals("application/pdf", new org.apache.tika.Tika().detect(result.outputFile()));
+    }
+
+    @Test
+    void shouldThrowServiceUnavailableWhenCommandIsMissing() throws Exception {
+        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
+        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand("missing-soffice-command");
+
+        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
+        Files.writeString(source, "fake");
+
+        assertThrows(ServiceUnavailableException.class, () -> converter.convert(source, "contract.docx"));
+    }
+
+    @Test
+    void shouldThrowTimeoutWhenCommandHangs() throws Exception {
+        Path script = createSleepingScript();
+        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
+        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
+
+        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
+        Files.writeString(source, "fake");
+
+        assertThrows(GatewayTimeoutException.class, () -> converter.convert(source, "contract.docx"));
+    }
+
+    @Test
+    void shouldThrowUnprocessableWhenOutputIsMissing() throws Exception {
+        Path script = createNoOutputScript();
+        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
+        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
+
+        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
+        Files.writeString(source, "fake");
+
+        assertThrows(UnprocessableEntityException.class, () -> converter.convert(source, "contract.docx"));
+    }
+
+    private Path createSuccessfulScript() throws Exception {
+        return createScript("""
                 #!/bin/sh
                 set -eu
                 OUTDIR=""
@@ -65,64 +114,68 @@ class LibreOfficePdfRendererTest {
                 398
                 %%EOF
                 EOF
+                """, """
+                @echo off
+                setlocal EnableExtensions
+                set "OUTDIR="
+                set "INPUT="
+                :parse
+                if "%~1"=="" goto writePdf
+                if /I "%~1"=="--outdir" (set "OUTDIR=%~2" & shift & shift & goto parse)
+                if /I "%~1"=="--convert-to" (shift & shift & goto parse)
+                if /I "%~1"=="--headless" (shift & goto parse)
+                set "ARG=%~1"
+                if /I "%ARG:~0,22%"=="-env:UserInstallation=" (shift & goto parse)
+                set "INPUT=%~1"
+                shift
+                goto parse
+                :writePdf
+                for %%I in ("%INPUT%") do set "TARGET=%OUTDIR%\\%%~nI.pdf"
+                > "%TARGET%" (
+                  echo %%PDF-1.4
+                  echo 1 0 obj
+                  echo ^<^< /Type /Catalog /Pages 2 0 R ^>^>
+                  echo endobj
+                  echo 2 0 obj
+                  echo ^<^< /Type /Pages /Count 1 /Kids [3 0 R] ^>^>
+                  echo endobj
+                  echo 3 0 obj
+                  echo ^<^< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] ^>^>
+                  echo endobj
+                  echo trailer
+                  echo ^<^< /Size 4 /Root 1 0 R ^>^>
+                )
                 """);
-        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
-        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
-
-        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
-        Files.writeString(source, "fake");
-
-        RenderedPdfConversionResult result = converter.convert(source, "contract.docx");
-
-        assertTrue(Files.exists(result.outputFile()));
-        assertEquals("application/pdf", new org.apache.tika.Tika().detect(result.outputFile()));
     }
 
-    @Test
-    void shouldThrowServiceUnavailableWhenCommandIsMissing() throws Exception {
-        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
-        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand("missing-soffice-command");
-
-        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
-        Files.writeString(source, "fake");
-
-        assertThrows(ServiceUnavailableException.class, () -> converter.convert(source, "contract.docx"));
-    }
-
-    @Test
-    void shouldThrowTimeoutWhenCommandHangs() throws Exception {
-        Path script = createScript("""
+    private Path createSleepingScript() throws Exception {
+        return createScript("""
                 #!/bin/sh
                 sleep 10
+                """, """
+                @echo off
+                ping.exe -n 11 127.0.0.1 > NUL
                 """);
-        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
-        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
-
-        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
-        Files.writeString(source, "fake");
-
-        assertThrows(GatewayTimeoutException.class, () -> converter.convert(source, "contract.docx"));
     }
 
-    @Test
-    void shouldThrowUnprocessableWhenOutputIsMissing() throws Exception {
-        Path script = createScript("""
+    private Path createNoOutputScript() throws Exception {
+        return createScript("""
                 #!/bin/sh
                 exit 0
+                """, """
+                @echo off
+                exit /b 0
                 """);
-        LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
-        converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
-
-        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
-        Files.writeString(source, "fake");
-
-        assertThrows(UnprocessableEntityException.class, () -> converter.convert(source, "contract.docx"));
     }
 
-    private Path createScript(String content) throws Exception {
-        Path script = Files.createTempFile("fake-soffice-unit", ".sh");
-        Files.writeString(script, content);
+    private Path createScript(String unixContent, String windowsContent) throws Exception {
+        Path script = Files.createTempFile("fake-soffice-unit", isWindows() ? ".cmd" : ".sh");
+        Files.writeString(script, isWindows() ? windowsContent : unixContent);
         script.toFile().setExecutable(true);
         return script;
+    }
+
+    private boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 }
