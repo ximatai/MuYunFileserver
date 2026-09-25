@@ -115,7 +115,12 @@ public class FileCommandService {
         if (!deleted) {
             throw new NotFoundException("file not found");
         }
-        renderedPdfService.deleteRenderedPdfIfExists(metadata);
+        try {
+            renderedPdfService.deleteRenderedPdfIfExists(metadata);
+        } catch (RuntimeException cleanupFailure) {
+            LOG.error(OperationLog.format("preview_cleanup", "failure", "file_id", fileId,
+                    "tenant_id", metadata.tenantId(), "reason", cleanupFailure.getMessage()), cleanupFailure);
+        }
 
         LOG.info(OperationLog.format(
                 "delete",

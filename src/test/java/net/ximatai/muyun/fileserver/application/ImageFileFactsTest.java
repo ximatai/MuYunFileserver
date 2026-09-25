@@ -31,6 +31,24 @@ class ImageFileFactsTest {
     }
 
     @Test
+    void truncatedJpegAndPngAreInputErrorsRatherThanStorageFailures() throws Exception {
+        for (var sample : Map.of("sample.jpg", "image/jpeg", "sample.png", "image/png").entrySet()) {
+            byte[] content = Files.readAllBytes(Path.of(getClass().getResource("/image-dimensions/" + sample.getKey()).toURI()));
+            for (int length : new int[]{8, 12, 20}) {
+                Path path = temporary.resolve(sample.getKey());
+                Files.write(path, java.util.Arrays.copyOf(content, length));
+                assertThrows(ValidationException.class, () -> ImageFileFacts.read(path, sample.getValue()));
+            }
+        }
+    }
+
+    @Test
+    void unavailableFileRemainsAStorageFailure() {
+        assertThrows(net.ximatai.muyun.fileserver.common.exception.StorageException.class,
+                () -> ImageFileFacts.read(temporary.resolve("missing.png"), "image/png"));
+    }
+
+    @Test
     void nonRasterFormatsDoNotAcquireInventedDimensions() {
         assertNull(ImageFileFacts.read(temporary.resolve("document.pdf"), "application/pdf"));
         assertNull(ImageFileFacts.read(temporary.resolve("vector.svg"), "image/svg+xml"));

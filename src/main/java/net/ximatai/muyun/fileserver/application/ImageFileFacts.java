@@ -12,6 +12,7 @@ import net.ximatai.muyun.fileserver.common.exception.ValidationException;
 import net.ximatai.muyun.fileserver.common.exception.StorageException;
 
 import java.io.IOException;
+import java.io.EOFException;
 import java.nio.file.Path;
 import java.util.Set;
 
@@ -25,6 +26,8 @@ record ImageFileFacts(String mimeType, int width, int height) {
             ImageFileFacts facts = from(ImageMetadataReader.readMetadata(path.toFile()));
             if (!mimeType.equals(facts.mimeType())) throw new ValidationException("image metadata does not match media type");
             return facts;
+        } catch (EOFException exception) {
+            throw new ValidationException("image dimensions are unavailable");
         } catch (IOException exception) {
             throw new StorageException("failed to read image metadata", exception);
         } catch (ImageProcessingException | IllegalArgumentException exception) {
