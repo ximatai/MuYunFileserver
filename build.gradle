@@ -23,6 +23,7 @@ dependencies {
     implementation 'io.quarkus:quarkus-hibernate-validator'
     implementation 'io.quarkiverse.jdbc:quarkus-jdbc-sqlite:3.0.11'
     implementation 'org.apache.tika:tika-core:3.2.3'
+    implementation 'com.drewnoakes:metadata-extractor:2.21.0'
     implementation 'de.huxhorn.sulky:de.huxhorn.sulky.ulid:8.3.0'
     implementation 'io.minio:minio:8.6.0'
     testImplementation 'io.quarkus:quarkus-junit5'

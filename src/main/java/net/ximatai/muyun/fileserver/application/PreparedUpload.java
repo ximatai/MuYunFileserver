@@ -18,7 +18,9 @@ record PreparedUpload(
         String storageKey,
         Instant uploadedAt,
         boolean temporary,
-        Path tempFile
+        Path tempFile,
+        Integer imageWidth,
+        Integer imageHeight
 ) {
     FileMetadata toMetadata(String remark, String uploadedBy, String storageProvider) {
         return new FileMetadata(
@@ -38,7 +40,9 @@ record PreparedUpload(
                 uploadedAt,
                 null,
                 null,
-                remark
+                remark,
+                imageWidth,
+                imageHeight
         );
     }
 }

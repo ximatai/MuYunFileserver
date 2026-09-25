@@ -15,6 +15,8 @@ public record FileMetadataResponse(
         String remark,
         String uploadedBy,
         Instant uploadedAt,
-        Instant deletedAt
+        Instant deletedAt,
+        Integer imageWidth,
+        Integer imageHeight
 ) {
 }

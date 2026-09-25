@@ -67,6 +67,28 @@ class UploadFilePreparerTest {
     }
 
     @Test
+    void shouldDiscardAllPreparedFilesWhenImageMetadataValidationFails() throws Exception {
+        Path temporary = Files.createTempDirectory("image-metadata-rollback");
+        UploadFilePreparer preparer = new UploadFilePreparer();
+        preparer.config = TestConfigs.fileServiceConfig();
+        preparer.repository = new InMemoryRepository(Set.of());
+        preparer.storageProvider = new TestStorageProvider(temporary);
+        preparer.storageKeyFactory = new StorageKeyFactory();
+        preparer.ulidGenerator = new FixedUlidGenerator("01ARZ3NDEKTSV4RRFFQ69G5FAV", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
+        preparer.supportedFileTypes = new SupportedFileTypes();
+        byte[] broken = new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a};
+        UploadRequest request = new UploadRequest(List.of(
+                TestFormValue.file("first.txt", "first".getBytes(), "text/plain"),
+                TestFormValue.file("broken.png", broken, "image/png")), List.of(), null, true);
+        assertThrows(ValidationException.class,
+                () -> preparer.prepare(request, new RequestContext("tenant-a", "user-1", "req-1", "client-1")));
+        try (var files = Files.list(temporary)) {
+            assertEquals(0, files.count());
+        }
+        Files.delete(temporary);
+    }
+
+    @Test
     void shouldRejectConflictingExplicitFileId() throws Exception {
         UploadFilePreparer preparer = new UploadFilePreparer();
         preparer.config = TestConfigs.fileServiceConfig();
@@ -301,6 +323,11 @@ class UploadFilePreparerTest {
 
         @Override
         public void deleteTempFile(Path tempFile) {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (IOException exception) {
+                throw new java.io.UncheckedIOException(exception);
+            }
         }
 
         @Override

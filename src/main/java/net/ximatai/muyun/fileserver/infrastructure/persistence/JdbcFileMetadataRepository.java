@@ -39,8 +39,8 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
                 insert into file_metadata (
                     id, tenant_id, original_filename, extension, mime_type, size_bytes, sha256,
                     storage_provider, storage_bucket, storage_key, status, temporary, uploaded_by, uploaded_at,
-                    deleted_at, delete_marked_by, remark
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    deleted_at, delete_marked_by, remark, image_width, image_height
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (var connection = dataSource.getConnection();
              var statement = connection.prepareStatement(sql)) {
@@ -61,6 +61,8 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
             statement.setString(15, metadata.deletedAt() == null ? null : metadata.deletedAt().toString());
             statement.setString(16, metadata.deleteMarkedBy());
             statement.setString(17, metadata.remark());
+            statement.setObject(18, metadata.imageWidth(), java.sql.Types.INTEGER);
+            statement.setObject(19, metadata.imageHeight(), java.sql.Types.INTEGER);
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to insert file metadata", exception);
@@ -259,8 +261,15 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
                 Instant.parse(resultSet.getString("uploaded_at")),
                 parseInstant(resultSet.getString("deleted_at")),
                 resultSet.getString("delete_marked_by"),
-                resultSet.getString("remark")
+                resultSet.getString("remark"),
+                nullableInt(resultSet, "image_width"),
+                nullableInt(resultSet, "image_height")
         );
+    }
+
+    private Integer nullableInt(ResultSet resultSet, String column) throws SQLException {
+        int value = resultSet.getInt(column);
+        return resultSet.wasNull() ? null : value;
     }
 
     private Instant parseInstant(String value) {

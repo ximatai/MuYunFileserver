@@ -7,7 +7,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MinIOContainer;
-import org.testcontainers.utility.DockerImageName;
+import net.ximatai.muyun.fileserver.MinioTestImage;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -21,8 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MinioStorageProviderTest {
 
     private static final String BUCKET = "muyun-files";
-    private static final MinIOContainer MINIO = new MinIOContainer(DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z")
-            .asCompatibleSubstituteFor("minio/minio"))
+    private static final MinIOContainer MINIO = new MinIOContainer(MinioTestImage.name())
             .withUserName("minioadmin")
             .withPassword("minioadmin");
 

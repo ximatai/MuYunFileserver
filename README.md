@@ -271,11 +271,14 @@ http://127.0.0.1:5173/view/public/files/{fileId}?access_token=...
 
 其他常用命令：
 
-运行测试：
+运行测试（需要 Docker）：
 
 ```sh
 ./gradlew test
 ```
+
+MinIO 测试默认从固定的官方 `RELEASE.2025-09-07T16-13-09Z` 源码构建真实测试容器，源码提交与构建环境见 `src/test/resources/minio/Dockerfile`。首次运行需要下载构建镜像和 Go 依赖，后续复用 Docker 构建缓存；不依赖 MinIO 预构建镜像仓库。可通过 `MFS_TEST_MINIO_IMAGE` 指定已准备的兼容镜像或验证其他版本。这只影响测试，不改变生产存储配置。
+
 
 构建：
 
