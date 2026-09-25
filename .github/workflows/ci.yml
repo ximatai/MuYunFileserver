@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      MFS_TEST_MINIO_IMAGE: muyun-test-minio:ci
 
     steps:
       - name: Checkout
@@ -29,6 +31,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Build MinIO test server from pinned source
+        run: docker build --tag "$MFS_TEST_MINIO_IMAGE" src/test/resources/minio
 
       - name: Run tests
         run: ./gradlew test --no-daemon
