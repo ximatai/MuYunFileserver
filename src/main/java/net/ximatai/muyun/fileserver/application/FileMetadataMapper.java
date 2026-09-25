@@ -22,7 +22,9 @@ final class FileMetadataMapper {
                 metadata.remark(),
                 metadata.uploadedBy(),
                 metadata.uploadedAt(),
-                metadata.deletedAt()
+                metadata.deletedAt(),
+                metadata.imageWidth(),
+                metadata.imageHeight()
         );
     }
 }

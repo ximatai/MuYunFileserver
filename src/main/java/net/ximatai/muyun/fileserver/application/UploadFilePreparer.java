@@ -56,14 +56,17 @@ class UploadFilePreparer {
     SupportedFileTypes supportedFileTypes;
 
     List<PreparedUpload> prepare(UploadRequest uploadRequest, RequestContext requestContext) {
-        return java.util.stream.IntStream.range(0, uploadRequest.fileValues().size())
-                .mapToObj(index -> prepareSingle(
-                        extractUploadFile(uploadRequest.fileValues().get(index)),
-                        requestedIdAt(uploadRequest.requestedFileIds(), index),
-                        uploadRequest.temporary(),
-                        requestContext
-                ))
-                .toList();
+        List<PreparedUpload> prepared = new java.util.ArrayList<>();
+        try {
+            for (int index = 0; index < uploadRequest.fileValues().size(); index++) {
+                prepared.add(prepareSingle(extractUploadFile(uploadRequest.fileValues().get(index)),
+                        requestedIdAt(uploadRequest.requestedFileIds(), index), uploadRequest.temporary(), requestContext));
+            }
+            return List.copyOf(prepared);
+        } catch (RuntimeException failure) {
+            prepared.forEach(upload -> discardTemp(upload.tempFile(), failure));
+            throw failure;
+        }
     }
 
     private PreparedUpload prepareSingle(
@@ -76,27 +79,43 @@ class UploadFilePreparer {
 
         String fileId = resolveFileId(requestedFileId);
         Path tempFile = storageProvider.createTempFile();
-        FileDigest fileDigest = streamToTemp(uploadFile.fileItem(), tempFile);
-        validateStreamedSize(fileDigest.sizeBytes());
+        try {
+            FileDigest fileDigest = streamToTemp(uploadFile.fileItem(), tempFile);
+            validateStreamedSize(fileDigest.sizeBytes());
 
-        String originalFilename = Objects.requireNonNullElse(uploadFile.originalFilename(), fileId);
-        String mimeType = supportedFileTypes.canonicalize(detectMimeType(tempFile, originalFilename, uploadFile.formValue()));
-        validateMimeType(mimeType);
+            String originalFilename = Objects.requireNonNullElse(uploadFile.originalFilename(), fileId);
+            String mimeType = supportedFileTypes.canonicalize(detectMimeType(tempFile, originalFilename, uploadFile.formValue()));
+            validateMimeType(mimeType);
+            ImageFileFacts image = ImageFileFacts.read(tempFile, mimeType);
 
-        return new PreparedUpload(
-                fileId,
-                requestContext.tenantId(),
-                originalFilename,
-                extensionOf(originalFilename),
-                mimeType,
-                fileDigest.sizeBytes(),
-                fileDigest.sha256(),
-                storageProvider.storageBucket(),
-                storageKeyFactory.build(requestContext.tenantId(), fileId),
-                Instant.now(),
-                temporary,
-                tempFile
-        );
+            return new PreparedUpload(
+                    fileId,
+                    requestContext.tenantId(),
+                    originalFilename,
+                    extensionOf(originalFilename),
+                    mimeType,
+                    fileDigest.sizeBytes(),
+                    fileDigest.sha256(),
+                    storageProvider.storageBucket(),
+                    storageKeyFactory.build(requestContext.tenantId(), fileId),
+                    Instant.now(),
+                    temporary,
+                    tempFile,
+                    image == null ? null : image.width(),
+                    image == null ? null : image.height()
+            );
+        } catch (RuntimeException failure) {
+            discardTemp(tempFile, failure);
+            throw failure;
+        }
+    }
+
+    private void discardTemp(Path path, RuntimeException failure) {
+        try {
+            storageProvider.deleteTempFile(path);
+        } catch (RuntimeException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
+        }
     }
 
     private UploadFile extractUploadFile(FormValue formValue) {

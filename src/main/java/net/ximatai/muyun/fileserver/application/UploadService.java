@@ -83,7 +83,7 @@ public class UploadService {
             ));
             return new UploadFilesResponse(List.copyOf(responseItems));
         } catch (RuntimeException exception) {
-            rollback(insertedMetadata, movedStorageKeys, preparedUploads);
+            rollback(insertedMetadata, movedStorageKeys);
             LOG.warn(OperationLog.format(
                     "upload",
                     "failure",
@@ -95,7 +95,7 @@ public class UploadService {
             ));
             throw exception;
         } finally {
-            preparedUploads.forEach(item -> storageProvider.deleteTempFile(item.tempFile()));
+            cleanupTemporaryFiles(preparedUploads);
         }
     }
 
@@ -127,7 +127,7 @@ public class UploadService {
         return responseItems;
     }
 
-    private void rollback(List<FileMetadata> insertedMetadata, List<String> movedStorageKeys, List<PreparedUpload> preparedUploads) {
+    private void rollback(List<FileMetadata> insertedMetadata, List<String> movedStorageKeys) {
         for (int index = insertedMetadata.size() - 1; index >= 0; index--) {
             try {
                 repository.deleteById(insertedMetadata.get(index).id());
@@ -154,7 +154,9 @@ public class UploadService {
                 ), exception);
             }
         }
+    }
 
+    private void cleanupTemporaryFiles(List<PreparedUpload> preparedUploads) {
         for (PreparedUpload preparedUpload : preparedUploads) {
             try {
                 storageProvider.deleteTempFile(preparedUpload.tempFile());

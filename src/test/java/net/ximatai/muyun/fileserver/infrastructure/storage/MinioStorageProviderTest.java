@@ -21,7 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MinioStorageProviderTest {
 
     private static final String BUCKET = "muyun-files";
-    private static final MinIOContainer MINIO = new MinIOContainer(DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z")
+    private static final MinIOContainer MINIO = new MinIOContainer(DockerImageName.parse(System.getenv().getOrDefault("MFS_TEST_MINIO_IMAGE",
+                "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"))
             .asCompatibleSubstituteFor("minio/minio"))
             .withUserName("minioadmin")
             .withPassword("minioadmin");

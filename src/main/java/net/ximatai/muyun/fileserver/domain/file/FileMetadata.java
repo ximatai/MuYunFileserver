@@ -19,6 +19,8 @@ public record FileMetadata(
         Instant uploadedAt,
         Instant deletedAt,
         String deleteMarkedBy,
-        String remark
+        String remark,
+        Integer imageWidth,
+        Integer imageHeight
 ) {
 }

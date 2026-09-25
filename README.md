@@ -271,11 +271,14 @@ http://127.0.0.1:5173/view/public/files/{fileId}?access_token=...
 
 其他常用命令：
 
-运行测试：
+运行测试（需要 Docker）：
 
 ```sh
 ./gradlew test
 ```
+
+MinIO 测试默认使用仓库固定的镜像。镜像仓库受限时，可通过 `MFS_TEST_MINIO_IMAGE` 显式指定可访问的兼容镜像；这只影响测试容器，不改变生产存储配置。
+
 
 构建：
 

@@ -40,8 +40,11 @@ public class FileCommandService {
     RenderedPdfService renderedPdfService;
 
     public PromoteFilesResponse promote(List<String> fileIds) {
+        return promote(fileIds, requestContextHolder.getRequired());
+    }
+
+    PromoteFilesResponse promote(List<String> fileIds, RequestContext requestContext) {
         List<String> normalizedFileIds = normalizeFileIds(fileIds);
-        RequestContext requestContext = requestContextHolder.getRequired();
         List<FileMetadataResponse> items = new ArrayList<>();
 
         for (String fileId : normalizedFileIds) {
@@ -51,7 +54,7 @@ public class FileCommandService {
 
             if (metadata.temporary()) {
                 repository.promote(fileId, requestContext.tenantId());
-                metadata = repository.findById(fileId)
+                metadata = repository.findActiveById(fileId)
                         .orElseThrow(() -> new NotFoundException("file not found"));
             }
             items.add(FileMetadataMapper.toResponse(metadata));
@@ -97,8 +100,11 @@ public class FileCommandService {
     }
 
     public DeleteFileResult delete(String fileId) {
+        return delete(fileId, requestContextHolder.getRequired());
+    }
+
+    DeleteFileResult delete(String fileId, RequestContext requestContext) {
         validateFileId(fileId);
-        RequestContext requestContext = requestContextHolder.getRequired();
         FileMetadata metadata = repository.findById(fileId)
                 .orElseThrow(() -> new NotFoundException("file not found"));
 

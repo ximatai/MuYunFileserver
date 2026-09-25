@@ -738,6 +738,31 @@ class FileResourceTest {
     }
 
     @Test
+    void shouldPersistImageDimensionsAndReturnThemThroughMetadataAndPromotion() throws Exception {
+        byte[] content;
+        try (var stream = getClass().getResourceAsStream("/image-dimensions/sample.png")) {
+            content = stream.readAllBytes();
+        }
+        String fileId = uploadSingleFile("dimensions.png", content, "image/png", true);
+        givenAuthenticated().when().get("/api/v1/files/{fileId}", fileId).then().statusCode(200)
+                .body("data.imageWidth", equalTo(16)).body("data.imageHeight", equalTo(8));
+        String token = signFileToken("promote", TENANT_ID, fileId, Instant.now().plusSeconds(60));
+        given().queryParam("access_token", token).when()
+                .post("/api/v1/public/files/{fileId}/promote", fileId).then().statusCode(200)
+                .body("data.items[0].imageWidth", equalTo(16)).body("data.items[0].imageHeight", equalTo(8))
+                .body("data.items[0].temporary", equalTo(false));
+        try (var connection = dataSource.getConnection();
+             var statement = connection.prepareStatement("select image_width, image_height from file_metadata where id = ?")) {
+            statement.setString(1, fileId);
+            try (var result = statement.executeQuery()) {
+                org.junit.jupiter.api.Assertions.assertTrue(result.next());
+                org.junit.jupiter.api.Assertions.assertEquals(16, result.getInt("image_width"));
+                org.junit.jupiter.api.Assertions.assertEquals(8, result.getInt("image_height"));
+            }
+        }
+    }
+
+    @Test
     void shouldReturnImageViewDescriptorForSupportedImageType() {
         String fileId = uploadSingleFile("photo.png", minimalPngBytes(), "image/png");
 
@@ -1525,7 +1550,7 @@ class FileResourceTest {
                 .then()
                 .statusCode(403)
                 .body("success", equalTo(false))
-                .body("message", equalTo("download token is not valid for current tenant"));
+                .body("message", equalTo("file is not accessible for current tenant"));
     }
 
     @Test
@@ -1587,7 +1612,7 @@ class FileResourceTest {
                 .then()
                 .statusCode(403)
                 .body("success", equalTo(false))
-                .body("message", equalTo("download token purpose is not valid for delete"));
+                .body("message", equalTo("delete token is not valid for requested file"));
     }
 
     @Test
@@ -1962,6 +1987,33 @@ class FileResourceTest {
         givenAuthenticated()
                 .when()
                 .delete("/api/v1/files/{fileId}", fileId)
+                .then()
+                .statusCode(200);
+
+        org.junit.jupiter.api.Assertions.assertFalse(Files.exists(previewPath));
+    }
+
+    @Test
+    void shouldDeleteGeneratedRenderedPdfThroughTokenCommand() throws Exception {
+        String fileId = uploadSingleFile(
+                "delete-rendered.docx",
+                minimalDocxBytes(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        );
+
+        givenAuthenticated()
+                .when()
+                .get("/api/v1/files/{fileId}/view/content", fileId)
+                .then()
+                .statusCode(200);
+
+        Path previewPath = previewStoragePath(fileId);
+        org.junit.jupiter.api.Assertions.assertTrue(Files.exists(previewPath));
+
+        given()
+                .queryParam("access_token", signDeleteToken(TENANT_ID, fileId, Instant.now().plusSeconds(60)))
+                .when()
+                .delete("/api/v1/public/files/{fileId}", fileId)
                 .then()
                 .statusCode(200);
 
