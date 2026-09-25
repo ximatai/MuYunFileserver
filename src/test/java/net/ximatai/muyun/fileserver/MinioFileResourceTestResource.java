@@ -29,7 +29,7 @@ public class MinioFileResourceTestResource implements QuarkusTestResourceLifecyc
         }
 
         minio = new MinIOContainer(DockerImageName.parse(System.getenv().getOrDefault("MFS_TEST_MINIO_IMAGE",
-                "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"))
+                "minio/minio:RELEASE.2023-09-04T19-57-37Z"))
                 .asCompatibleSubstituteFor("minio/minio"))
                 .withUserName("minioadmin")
                 .withPassword("minioadmin");

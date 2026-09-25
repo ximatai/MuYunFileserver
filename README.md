@@ -277,7 +277,7 @@ http://127.0.0.1:5173/view/public/files/{fileId}?access_token=...
 ./gradlew test
 ```
 
-MinIO 测试默认使用仓库固定的镜像。镜像仓库受限时，可通过 `MFS_TEST_MINIO_IMAGE` 显式指定可访问的兼容镜像；这只影响测试容器，不改变生产存储配置。
+MinIO 测试默认使用 `minio/minio:RELEASE.2023-09-04T19-57-37Z` 作为 S3 操作契约基线，不代表生产部署版本建议。需要验证其他版本或镜像仓库受限时，可通过 `MFS_TEST_MINIO_IMAGE` 显式指定可访问的兼容镜像；这只影响测试容器，不改变生产存储配置。
 
 
 构建：
