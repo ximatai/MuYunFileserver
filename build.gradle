@@ -103,6 +103,7 @@ tasks.named('clean') {
 }
 
 tasks.withType(Test).configureEach {
+    inputs.files(fileTree("workers/media-worker") { include "*.py" })
     if (Os.isFamily(Os.FAMILY_WINDOWS)) {
         environment 'MFS_VIEWER_PDF_RENDERING_LIBREOFFICE_COMMAND', file('src/test/resources/fake-soffice.cmd').absolutePath
     }

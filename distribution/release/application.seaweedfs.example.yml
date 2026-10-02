@@ -1,0 +1,19 @@
+# Uses the existing S3-compatible client. The legacy "minio" configuration
+# namespace identifies the client adapter, not the deployed server product.
+mfs:
+  reception:
+    enabled: ${MFS_RECEPTION_ENABLED:false}
+    bucket: ${MFS_RECEPTION_BUCKET:muyun-recording}
+    service-token: ${MFS_RECEPTION_TOKEN:}
+    allowed-tenants: ${MFS_RECEPTION_TENANTS:}
+  storage:
+    type: minio
+    temp-dir: ${user.dir}/var/tmp
+    minio:
+      endpoint: ${MFS_S3_ENDPOINT:http://127.0.0.1:8333}
+      access-key: ${MFS_S3_ACCESS_KEY}
+      secret-key: ${MFS_S3_SECRET_KEY}
+      bucket: ${MFS_S3_BUCKET:muyun-files}
+      auto-create-bucket: false
+  database:
+    path: ${user.dir}/var/data/muyun-fileserver.db

@@ -211,3 +211,11 @@ docker run -d \
 ```sh
 docker compose -f distribution/release/compose.yaml up -d
 ```
+## SeaweedFS 存储
+
+可用 `compose.seaweedfs.yaml` 启动自有 S3 存储，配置参考
+`application.seaweedfs.example.yml`，详细步骤和生产边界见
+`docs/design/seaweed-storage.md`。需要自行生成环境凭证；示例入口仅绑定回环地址。
+FileServer 使用既有 `minio` 客户端适配，不自动迁移历史文件。
+若 FileServer 与存储均在容器中运行，须加入同一内部网络并使用服务地址，
+不能使用 `127.0.0.1` 互访。

@@ -22,6 +22,10 @@
 - `liveness / readiness` 健康检查
 - `local` 和 `minio` 两种存储模式
 
+自部署 SeaweedFS 的 S3 兼容基线、组件边界及后续受控接收规划见
+[自有音视频存储设计](docs/design/seaweed-storage.md)。目前沿用既有 `minio`
+客户端配置，不代表必须部署 MinIO；直接对象接收登记仍是下一阶段能力。
+
 当前明确不包含：
 
 - 分片上传

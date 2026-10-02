@@ -35,6 +35,15 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
 
     @Override
     public void insert(FileMetadata metadata) {
+        try (var connection = dataSource.getConnection()) {
+            insert(connection, metadata);
+        } catch (SQLException exception) {
+            throw new IllegalStateException("failed to insert file metadata", exception);
+        }
+    }
+
+    /** Allows reception publication and metadata to commit in the same transaction. */
+    public void insert(java.sql.Connection connection, FileMetadata metadata) throws SQLException {
         String sql = """
                 insert into file_metadata (
                     id, tenant_id, original_filename, extension, mime_type, size_bytes, sha256,
@@ -42,8 +51,7 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
                     deleted_at, delete_marked_by, remark, image_width, image_height
                 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
-        try (var connection = dataSource.getConnection();
-             var statement = connection.prepareStatement(sql)) {
+        try (var statement = connection.prepareStatement(sql)) {
             statement.setString(1, metadata.id());
             statement.setString(2, metadata.tenantId());
             statement.setString(3, metadata.originalFilename());
@@ -64,8 +72,6 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
             statement.setObject(18, metadata.imageWidth(), java.sql.Types.INTEGER);
             statement.setObject(19, metadata.imageHeight(), java.sql.Types.INTEGER);
             statement.executeUpdate();
-        } catch (SQLException exception) {
-            throw new IllegalStateException("failed to insert file metadata", exception);
         }
     }
 

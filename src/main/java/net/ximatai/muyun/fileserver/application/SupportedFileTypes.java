@@ -11,6 +11,8 @@ public class SupportedFileTypes {
 
     private static final Map<String, String> MIME_ALIASES = Map.ofEntries(
             Map.entry("audio/vnd.wave", "audio/wav"),
+            // Tika core identifies Ogg audio (including Opus) as audio/vorbis.
+            Map.entry("audio/vorbis", "audio/ogg"),
             Map.entry("audio/wave", "audio/wav"),
             Map.entry("audio/x-wav", "audio/wav"),
             Map.entry("text/x-web-markdown", "text/markdown"),

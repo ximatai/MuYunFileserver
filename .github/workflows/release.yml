@@ -36,6 +36,12 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Install media verification tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Verify media worker failure recovery
+        run: python3 -m unittest discover -s workers/media-worker -p test_worker.py -v
+
       - name: Build application
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
@@ -53,7 +59,15 @@ jobs:
           cp src/main/resources/application.yml "${RELEASE_DIR}/application.yml"
           cp distribution/release/application.local.example.yml "${RELEASE_DIR}/application.local.example.yml"
           cp distribution/release/application.minio.example.yml "${RELEASE_DIR}/application.minio.example.yml"
+          cp distribution/release/application.seaweedfs.example.yml "${RELEASE_DIR}/application.seaweedfs.example.yml"
           cp compose.yaml "${RELEASE_DIR}/compose.yaml"
+          cp compose.seaweedfs.yaml "${RELEASE_DIR}/compose.seaweedfs.yaml"
+          mkdir -p "${RELEASE_DIR}/docs/design"
+          cp docs/design/seaweed-storage.md "${RELEASE_DIR}/docs/design/seaweed-storage.md"
+          mkdir -p "${RELEASE_DIR}/workers" "${RELEASE_DIR}/scripts"
+          mkdir -p "${RELEASE_DIR}/workers/media-worker"
+          cp workers/media-worker/worker.py workers/media-worker/README.md "${RELEASE_DIR}/workers/media-worker/"
+          cp scripts/render-seaweed-identities.py "${RELEASE_DIR}/scripts/render-seaweed-identities.py"
           cp README.md "${RELEASE_DIR}/README.md"
           cp distribution/release/RUN.md "${RELEASE_DIR}/RUN.md"
           (
