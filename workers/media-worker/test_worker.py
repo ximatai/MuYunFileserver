@@ -165,10 +165,26 @@ class WorkerFaultTest(unittest.TestCase):
                             "-hls_time", "10", str(source / "index.m3u8")], check=True)
             segment = next(source.glob("*.ts"))
             data = bytearray(segment.read_bytes())
-            # Corrupt AAC packet payload while leaving the TS container and index present.
-            for packet in range(10, 30):
-                offset = packet * 188
-                data[offset + 12:offset + 188] = b"\xff" * 176
+            # Target the actual audio PID, not packet numbers that vary by FFmpeg build.
+            stream = json.loads(subprocess.check_output(["ffprobe", "-v", "error", "-select_streams", "a:0",
+                "-show_entries", "stream=id", "-of", "json", str(segment)]))["streams"][0]
+            audio_pid = int(stream["id"], 16)
+            corrupted = 0
+            for offset in range(0, len(data) - 187, 188):
+                if ((data[offset + 1] & 31) << 8 | data[offset + 2]) != audio_pid:
+                    continue
+                control = (data[offset + 3] >> 4) & 3
+                if not control & 1:
+                    continue
+                payload = offset + 4
+                if control & 2:
+                    payload += 1 + data[payload]
+                if payload + 9 < offset + 188 and data[payload:payload + 3] == b"\x00\x00\x01":
+                    payload += 9 + data[payload + 8]  # Preserve PES headers and timestamps.
+                if payload < offset + 188:
+                    data[payload:offset + 188] = b"\xff" * (offset + 188 - payload)
+                    corrupted += 1
+            self.assertGreater(corrupted, 0)
             segment.write_bytes(data)
             class SourceFiles:
                 def call(self, *args, **kwargs):
