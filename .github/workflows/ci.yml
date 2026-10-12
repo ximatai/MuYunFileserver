@@ -36,7 +36,14 @@ jobs:
         run: docker build --tag "$MFS_TEST_MINIO_IMAGE" src/test/resources/minio
 
       - name: Run tests
-        run: ./gradlew test --no-daemon
+        # The integration test invokes the same native decoder as the media Worker.
+        # Install it explicitly instead of relying on the hosted runner image.
+        # Python media regressions must run as part of the PR gate as well.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python3 -m unittest discover -s workers/media-worker -p test_worker.py -v
+          ./gradlew test --no-daemon
 
       - name: Build application
         run: ./gradlew build --no-daemon
