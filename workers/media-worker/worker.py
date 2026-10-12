@@ -71,7 +71,7 @@ def validate_hls(path, members):
     raw = path.read_text(encoding="utf-8")
     if len(raw) > 1024 * 1024 or not raw.startswith("#EXTM3U") or "#EXT-X-ENDLIST" not in raw:
         raise ValueError("recording index is incomplete")
-    if "#EXT-X-KEY" in raw or "#EXT-X-MAP" in raw or "#EXT-X-STREAM-INF" in raw:
+    if any(tag in raw for tag in ("#EXT-X-KEY", "#EXT-X-MAP", "#EXT-X-STREAM-INF", "#EXT-X-BYTERANGE")):
         raise ValueError("unsupported recording index; preserve raw assets for later processing")
     segments = [line.strip() for line in raw.splitlines() if line.strip() and not line.startswith("#")]
     if not segments:
@@ -82,6 +82,7 @@ def validate_hls(path, members):
         relative = (path.parent / segment).resolve()
         if relative not in members:
             raise ValueError("recording fragment is missing from confirmed assets")
+    return [(path.parent / segment).resolve() for segment in segments]
 
 
 class ReceptionBusy(Exception):
@@ -158,14 +159,21 @@ class Worker:
             indexes = sorted(path for path in members if path.suffix == ".m3u8")
             if len(indexes) != 1:
                 raise ValueError("expected one mixed recording index; keep all raw indexes")
-            validate_hls(indexes[0], members)
+            segments = validate_hls(indexes[0], members)
+            # Each TS fragment has its own transport continuity counters. Opening them
+            # separately avoids treating a reset at a file boundary as packet damage.
+            # Keep playlist order, strict decoder errors and final full-file validation.
+            concat = directory / "source.ffconcat"
+            concat.write_text("ffconcat version 1.0\n" + "".join(
+                "file '" + path.relative_to(directory.resolve()).as_posix() + "'\n" for path in segments), encoding="utf-8")
+            input_args = ["-protocol_whitelist", "file", "-f", "concat", "-safe", "1", "-i", str(concat)]
             audio = directory / "audio.ogg"
-            self.run([self.ffmpeg,"-nostdin","-y","-v","error","-xerror","-protocol_whitelist","file,crypto", "-i",str(indexes[0]),
+            self.run([self.ffmpeg,"-nostdin","-y","-v","error","-xerror", *input_args,
                       "-map","0:a:0","-vn","-af","asetpts=N/SR/TB","-ac","1","-c:a","libopus","-b:a","32k",str(audio)])
             paths = [audio]
             if video:
                 movie = directory / "video.mp4"
-                self.run([self.ffmpeg,"-nostdin","-y","-v","error","-xerror","-protocol_whitelist","file,crypto","-i",str(indexes[0]),
+                self.run([self.ffmpeg,"-nostdin","-y","-v","error","-xerror", *input_args,
                           "-map","0:v:0","-map","0:a:0?","-c","copy","-movflags","+faststart",str(movie)])
                 paths.append(movie)
                 self.run([self.ffmpeg,"-nostdin","-v","error","-xerror","-i",str(movie),"-f","null","-"])

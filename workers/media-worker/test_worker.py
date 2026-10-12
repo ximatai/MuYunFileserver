@@ -30,6 +30,52 @@ class BusyFiles:
 
 
 class WorkerFaultTest(unittest.TestCase):
+    def test_video_fragments_with_reset_transport_counters_preserve_audio_and_video(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            for number in range(2):
+                subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+                    "testsrc2=size=160x90:rate=10", "-f", "lavfi", "-i",
+                    f"sine=frequency={600 + number * 200}:sample_rate=48000", "-t", "2",
+                    "-c:v", "libx264", "-g", "20", "-c:a", "aac", "-f", "mpegts",
+                    str(source / f"segment{number}.ts")], check=True, timeout=20)
+            (source / "index.m3u8").write_text("#EXTM3U\n#EXT-X-TARGETDURATION:2\n"
+                "#EXTINF:2,\nsegment0.ts\n#EXTINF:2,\nsegment1.ts\n#EXT-X-ENDLIST\n")
+            outputs = {}
+            class SourceFiles:
+                def call(self, method, path, body=None, binary=False):
+                    if method == "PUT":
+                        outputs[path.rsplit("/", 1)[1]] = body.read()
+                        return {}
+                    if path.endswith("/confirm"):
+                        return {"state": "READY", "assets": {name: name for name in outputs}}
+                    if path.endswith(RAW):
+                        return {"state": "READY", "assets": {p.name: p.name for p in source.iterdir()}}
+                    return {"id": DERIVED, "state": "OPEN"}
+                def download(self, asset, destination, remaining):
+                    payload = (source / asset).read_bytes()
+                    destination.write_bytes(payload)
+                    return len(payload)
+            worker = Worker(root / "worker", SourceFiles())
+            worker.submit(RAW, True)
+            worker.process_next()
+            result = worker.get(RAW)
+            self.assertEqual("READY", result["state"], result)
+            self.assertEqual({"audio.ogg", "video.mp4"}, set(outputs))
+            self.assertGreater(result["durationMillis"], 3800)
+            self.assertLess(result["durationMillis"], 4500)
+            movie = root / "replay.mp4"
+            movie.write_bytes(outputs["video.mp4"])
+            subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-xerror", "-i", str(movie),
+                "-f", "null", "-"], check=True, timeout=20)
+            facts = json.loads(subprocess.check_output(["ffprobe", "-v", "error", "-count_frames",
+                "-show_entries", "stream=codec_name,nb_read_frames", "-of", "json", str(movie)]))
+            video = next(s for s in facts["streams"] if s["codec_name"] == "h264")
+            self.assertEqual(40, int(video["nb_read_frames"]))
+            self.assertTrue(any(s["codec_name"] == "aac" for s in facts["streams"]))
+
     def test_confirmation_timeout_and_restart_eventually_reuse_same_assets(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

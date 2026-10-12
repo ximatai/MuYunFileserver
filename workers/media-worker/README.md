@@ -48,3 +48,9 @@ FileServer URL 固定，禁重定向；HTTP 只允许回环地址。
 - 派生任务 OPEN 才上传；CONFIRMING 使用冻结清单重新确认。租约忙返回延迟重试，不记永久 FAILED；READY 仍核对同一清单，返回原资产 ID。
 - 转码及整文件解码开启 FFmpeg `-xerror`，损坏输入失败并保留原始资产。音频以样本数重建连续输出时间戳，避免正常 HLS 分段时间戳重复导致封装错误；不忽略解码错误。
 - 无设备故障回归：`python3 -m unittest discover -s workers/media-worker -p test_worker.py -v`，覆盖确认忙/重启、PUT 与确认竞争、损坏 TS。真实音视频及 SeaweedFS 闭环由 FileReceptionResourceTest 执行。
+
+### TS 分片边界兼容（2026-10-12）
+
+真实声网音视频素材中，各 TS 分片单独严格解码均成功，但 HLS 连续 demux 将跨分片的 transport continuity counter 重置标为 corrupt input packet。处理器现按已确认索引中的顺序生成本地 ffconcat，逐文件打开分片后合并时间轴；保留 `-xerror` 和最终整文件解码，不使用 discardcorrupt 或忽略错误参数。只允许 file 协议，拒绝加密、主索引、EXT-X-MAP、字节范围与远端／越界引用。合成计数器重置场景验证两段全部 40 帧和 AAC 音轨均保留，原有真实载荷损坏回归仍为 FAILED。
+
+本次真实失败任务由运营者在停止 Worker 后，留存原 FAILED 快照，重新执行同一接收任务的处理和确认，实际资产生成成功后恢复同一队列记录。未重新请求供应商录制。该受控操作不是自动重试 API；失败任务的通用受控恢复入口仍需后续工程化。
