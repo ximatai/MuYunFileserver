@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from urllib import error
-from worker import Worker
+from worker import Worker, validate_hls
 
 RAW = "11111111-1111-4111-8111-111111111111"
 DERIVED = "22222222-2222-4222-8222-222222222222"
@@ -31,18 +31,31 @@ class BusyFiles:
 
 class WorkerFaultTest(unittest.TestCase):
     def test_video_fragments_with_reset_transport_counters_preserve_audio_and_video(self):
+        self.check_video_fragments(False)
+
+    def test_continuous_hls_preserves_audio_video_timeline(self):
+        self.check_video_fragments(True)
+
+    def check_video_fragments(self, continuous):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "source"
             source.mkdir()
-            for number in range(2):
+            if continuous:
+                subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+                    "testsrc2=size=160x90:rate=15", "-f", "lavfi", "-i",
+                    "sine=frequency=800:sample_rate=48000", "-t", "30", "-c:v", "libx264",
+                    "-g", "30", "-c:a", "aac", "-f", "hls", "-hls_time", "2",
+                    "-hls_list_size", "0", str(source / "index.m3u8")], check=True, timeout=30)
+            for number in range(0 if continuous else 2):
                 subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i",
                     "testsrc2=size=160x90:rate=10", "-f", "lavfi", "-i",
                     f"sine=frequency={600 + number * 200}:sample_rate=48000", "-t", "2",
                     "-c:v", "libx264", "-g", "20", "-c:a", "aac", "-f", "mpegts",
                     str(source / f"segment{number}.ts")], check=True, timeout=20)
-            (source / "index.m3u8").write_text("#EXTM3U\n#EXT-X-TARGETDURATION:2\n"
-                "#EXTINF:2,\nsegment0.ts\n#EXTINF:2,\nsegment1.ts\n#EXT-X-ENDLIST\n")
+            if not continuous:
+                (source / "index.m3u8").write_text("#EXTM3U\n#EXT-X-TARGETDURATION:2\n"
+                    "#EXTINF:2,\nsegment0.ts\n#EXTINF:2,\nsegment1.ts\n#EXT-X-ENDLIST\n")
             outputs = {}
             class SourceFiles:
                 def call(self, method, path, body=None, binary=False):
@@ -64,8 +77,8 @@ class WorkerFaultTest(unittest.TestCase):
             result = worker.get(RAW)
             self.assertEqual("READY", result["state"], result)
             self.assertEqual({"audio.ogg", "video.mp4"}, set(outputs))
-            self.assertGreater(result["durationMillis"], 3800)
-            self.assertLess(result["durationMillis"], 4500)
+            expected = 30 if continuous else 4
+            self.assertLess(abs(result["durationMillis"] / 1000 - expected), 0.15)
             movie = root / "replay.mp4"
             movie.write_bytes(outputs["video.mp4"])
             subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-xerror", "-i", str(movie),
@@ -73,8 +86,25 @@ class WorkerFaultTest(unittest.TestCase):
             facts = json.loads(subprocess.check_output(["ffprobe", "-v", "error", "-count_frames",
                 "-show_entries", "stream=codec_name,nb_read_frames", "-of", "json", str(movie)]))
             video = next(s for s in facts["streams"] if s["codec_name"] == "h264")
-            self.assertEqual(40, int(video["nb_read_frames"]))
+            self.assertEqual(450 if continuous else 40, int(video["nb_read_frames"]))
             self.assertTrue(any(s["codec_name"] == "aac" for s in facts["streams"]))
+            duration = float(json.loads(subprocess.check_output(["ffprobe", "-v", "error",
+                "-show_entries", "format=duration", "-of", "json", str(movie)]))["format"]["duration"])
+            self.assertLess(abs(duration - result["durationMillis"] / 1000), 0.15)
+            if continuous:
+                frames = json.loads(subprocess.check_output(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                    "-show_entries", "frame=best_effort_timestamp_time", "-of", "json", str(movie)]))["frames"]
+                times = [float(frame["best_effort_timestamp_time"]) for frame in frames]
+                self.assertLess(max(b - a for a, b in zip(times, times[1:])), 0.08)
+
+    def test_invalid_hls_durations_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            index = Path(temporary) / "index.m3u8"
+            segment = Path(temporary) / "segment.ts"
+            for duration in ("", "#EXTINF:0,\n", "#EXTINF:NaN,\n", "#EXTINF:2,\n#EXTINF:2,\n"):
+                index.write_text("#EXTM3U\n" + duration + "segment.ts\n#EXT-X-ENDLIST\n")
+                with self.assertRaises(ValueError):
+                    validate_hls(index, {segment.resolve()})
 
     def test_confirmation_timeout_and_restart_eventually_reuse_same_assets(self):
         with tempfile.TemporaryDirectory() as temporary:

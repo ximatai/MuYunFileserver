@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import hmac
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -73,16 +74,31 @@ def validate_hls(path, members):
         raise ValueError("recording index is incomplete")
     if any(tag in raw for tag in ("#EXT-X-KEY", "#EXT-X-MAP", "#EXT-X-STREAM-INF", "#EXT-X-BYTERANGE")):
         raise ValueError("unsupported recording index; preserve raw assets for later processing")
-    segments = [line.strip() for line in raw.splitlines() if line.strip() and not line.startswith("#")]
+    segments = []
+    duration = None
+    for line in raw.splitlines():
+        line = line.strip()
+        if line.startswith("#EXTINF:"):
+            value = line[8:].split(",", 1)[0]
+            if duration is not None or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", value) or not math.isfinite(float(value)) or float(value) <= 0:
+                raise ValueError("invalid HLS fragment duration")
+            duration = value
+        elif line and not line.startswith("#"):
+            if duration is None:
+                raise ValueError("HLS fragment has no duration")
+            segments.append((line, duration))
+            duration = None
+    if duration is not None:
+        raise ValueError("HLS duration has no fragment")
     if not segments:
         raise ValueError("recording index contains no fragments")
-    for segment in segments:
+    for segment, duration in segments:
         if not re.fullmatch(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*", segment) or any(p in (".", "..") for p in segment.split("/")):
             raise ValueError("unsafe HLS reference")
         relative = (path.parent / segment).resolve()
         if relative not in members:
             raise ValueError("recording fragment is missing from confirmed assets")
-    return [(path.parent / segment).resolve() for segment in segments]
+    return [((path.parent / segment).resolve(), duration) for segment, duration in segments]
 
 
 class ReceptionBusy(Exception):
@@ -162,10 +178,11 @@ class Worker:
             segments = validate_hls(indexes[0], members)
             # Each TS fragment has its own transport continuity counters. Opening them
             # separately avoids treating a reset at a file boundary as packet damage.
-            # Keep playlist order, strict decoder errors and final full-file validation.
+            # EXTINF, rather than the TS audio/video envelope, defines the next boundary.
             concat = directory / "source.ffconcat"
             concat.write_text("ffconcat version 1.0\n" + "".join(
-                "file '" + path.relative_to(directory.resolve()).as_posix() + "'\n" for path in segments), encoding="utf-8")
+                "file '" + path.relative_to(directory.resolve()).as_posix() + "'\nduration " + duration + "\n"
+                for path, duration in segments), encoding="utf-8")
             input_args = ["-protocol_whitelist", "file", "-f", "concat", "-safe", "1", "-i", str(concat)]
             audio = directory / "audio.ogg"
             self.run([self.ffmpeg,"-nostdin","-y","-v","error","-xerror", *input_args,
@@ -173,11 +190,22 @@ class Worker:
             paths = [audio]
             if video:
                 movie = directory / "video.mp4"
+                rate = self.video_rate(segments[0][0])
                 self.run([self.ffmpeg,"-nostdin","-y","-v","error","-xerror", *input_args,
-                          "-map","0:v:0","-map","0:a:0?","-c","copy","-movflags","+faststart",str(movie)])
+                          "-map","0:v:0","-map","0:a:0?","-vf","setpts=N/(" + rate + "*TB)",
+                          "-fps_mode","passthrough","-c:v","libx264","-preset","veryfast","-crf","18","-c:a","aac",
+                          "-af","asetpts=N/SR/TB","-movflags","+faststart",str(movie)])
                 paths.append(movie)
                 self.run([self.ffmpeg,"-nostdin","-v","error","-xerror","-i",str(movie),"-f","null","-"])
             facts = self.probe(audio)
+            if video:
+                output = subprocess.check_output([self.ffprobe, "-v", "error", "-show_entries",
+                    "format=duration", "-of", "json", str(movie)], timeout=30)
+                video_duration = float(json.loads(output)["format"]["duration"])
+                expected_duration = sum(float(duration) for _, duration in segments)
+                if not math.isfinite(video_duration) or max(abs(video_duration - facts["durationMillis"] / 1000),
+                        abs(video_duration - expected_duration)) > 0.25:
+                    raise ValueError("recording audio/video timeline mismatch")
             manifest = {"objects": [self.entry(path) for path in paths], "facts": facts}
             staging = directory / "manifest.part"
             staging.write_text(json.dumps(manifest), encoding="utf-8")
@@ -224,6 +252,14 @@ class Worker:
     def run(self, args):
         with (self.root / "process.log").open("wb") as log:
             subprocess.run(args, stdin=subprocess.DEVNULL, stdout=log, stderr=log, check=True, timeout=600)
+
+    def video_rate(self, path):
+        output = subprocess.check_output([self.ffprobe, "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=avg_frame_rate", "-of", "json", str(path)], timeout=30)
+        rate = json.loads(output)["streams"][0]["avg_frame_rate"]
+        if not re.fullmatch(r"[1-9][0-9]*/[1-9][0-9]*", rate):
+            raise ValueError("invalid recording video rate")
+        return rate
 
     def probe(self, path):
         # Decode the entire output, then inspect codec and duration. Metadata alone is insufficient.
