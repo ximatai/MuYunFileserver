@@ -40,7 +40,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Verify media worker failure recovery
-        run: python3 -m unittest discover -s workers/media-worker -p test_worker.py -v
+        run: python3 -m unittest discover -s workers/media-worker -p 'test*.py' -v
 
       - name: Build application
         env:

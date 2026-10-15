@@ -17,6 +17,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import request, error, parse
 
 
+JOB_ID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
+
 class Files:
     def __init__(self, base, tenant, token):
         endpoint = parse.urlsplit(base)
@@ -24,8 +27,13 @@ class Files:
             raise ValueError("invalid fixed FileServer endpoint")
         if endpoint.scheme == "http" and endpoint.hostname not in ("localhost", "127.0.0.1"):
             raise ValueError("FileServer HTTP is permitted only on loopback")
+        if not isinstance(tenant, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", tenant):
+            raise ValueError("invalid FileServer tenant")
         self.base, self.tenant, self.token = base.rstrip("/"), tenant, token
         self.opener = request.build_opener(NoRedirect())
+
+    def for_tenant(self, tenant):
+        return Files(self.base, tenant, self.token)
 
     def call(self, method, path, body=None, binary=False):
         headers = {"X-Tenant-Id": self.tenant, "X-User-Id": "media-worker", "Authorization": "Bearer " + self.token}
@@ -106,44 +114,94 @@ class ReceptionBusy(Exception):
 
 
 class Worker:
-    def __init__(self, root, files, ffmpeg="ffmpeg", ffprobe="ffprobe", max_bytes=16 * 1024 ** 3):
+    def __init__(self, root, files, ffmpeg="ffmpeg", ffprobe="ffprobe", max_bytes=16 * 1024 ** 3,
+                 allowed_tenants=None):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.files, self.ffmpeg, self.ffprobe, self.max_bytes = files, ffmpeg, ffprobe, max_bytes
+        self.default_tenant = getattr(files, "tenant", "default")
+        self.allowed_tenants = frozenset(allowed_tenants if allowed_tenants is not None else [self.default_tenant])
+        if (not self.allowed_tenants or len(self.allowed_tenants) > 64 or self.default_tenant not in self.allowed_tenants
+                or any(not isinstance(t, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", t)
+                       for t in self.allowed_tenants)):
+            raise ValueError("invalid explicit worker tenant scopes")
         self.lock = threading.Lock()
         with self.db() as db:
-            db.execute("create table if not exists jobs(id text primary key,video integer,state text,result text,error text,updated real)")
+            db.execute("begin immediate")
+            db.execute("create table if not exists worker_metadata(key text primary key,value text not null)")
+            db.execute("insert or ignore into worker_metadata values('legacy_tenant',?)", (self.default_tenant,))
+            legacy_tenant = db.execute("select value from worker_metadata where key='legacy_tenant'").fetchone()[0]
+            db.execute("create table if not exists jobs(id text primary key,video integer,state text,result text,error text,updated real,tenant text not null)")
+            if "tenant" not in {row[1] for row in db.execute("pragma table_info(jobs)")}:
+                db.execute("alter table jobs add column tenant text")
+            # Freeze the original single-tenant scope once, not the new HTTP caller or a changed default.
+            db.execute("update jobs set tenant=? where tenant is null", (legacy_tenant,))
             # This executable runs one worker thread and holds an exclusive process lock (see main).
             db.execute("update jobs set state='QUEUED' where state='PROCESSING'")
 
     def db(self):
         return sqlite3.connect(self.root / "jobs.db", timeout=30)
 
-    def submit(self, reception, video):
-        if not re.fullmatch(r"[0-9a-f-]{36}", reception) or not isinstance(video, bool):
+    def tenant(self, value=None):
+        if value is None:
+            if len(self.allowed_tenants) != 1:
+                raise ValueError("an explicit tenant is required")
+            return self.default_tenant
+        if value not in self.allowed_tenants:
+            raise PermissionError("tenant is not configured")
+        return value
+
+    def submit(self, reception, video, tenant=None):
+        tenant = self.tenant(tenant)
+        if not isinstance(reception, str) or not re.fullmatch(JOB_ID, reception) or not isinstance(video, bool):
             raise ValueError("invalid recording job")
         with self.db() as db:
-            db.execute("insert or ignore into jobs values(?,?,'QUEUED',null,null,?)", (reception, int(video), time.time()))
-            if db.execute("select video from jobs where id=?", (reception,)).fetchone()[0] != int(video):
+            existing = db.execute("select video,tenant from jobs where id=?", (reception,)).fetchone()
+        if existing is not None:
+            if existing[1] != tenant:
+                raise KeyError(reception)
+            if existing[0] != int(video):
                 raise ValueError("job id reused with different profile")
-        return self.get(reception)
-
-    def get(self, reception):
+            return self.get(reception, tenant)
+        # A tenant header selects a permitted scope, not ownership of arbitrary receipt IDs.
+        # Verify the source before claiming its globally unique ID in the durable queue.
+        task = self.files_for(tenant).call("GET", "/api/v1/internal/receptions/" + reception)
+        if task["state"] != "READY" or not task["assets"]:
+            raise ValueError("raw recording reception is not confirmed")
         with self.db() as db:
-            row = db.execute("select state,result,error from jobs where id=?", (reception,)).fetchone()
+            db.execute("insert or ignore into jobs(id,video,state,result,error,updated,tenant) values(?,?,'QUEUED',null,null,?,?)",
+                       (reception, int(video), time.time(), tenant))
+            row = db.execute("select video,tenant from jobs where id=?", (reception,)).fetchone()
+            if row[1] != tenant:
+                raise KeyError(reception)
+            if row[0] != int(video):
+                raise ValueError("job id reused with different profile")
+        return self.get(reception, tenant)
+
+    def files_for(self, tenant):
+        tenant = self.tenant(tenant)
+        return self.files if tenant == self.default_tenant else self.files.for_tenant(tenant)
+
+    def get(self, reception, tenant=None):
+        tenant = self.tenant(tenant)
+        with self.db() as db:
+            row = db.execute("select state,result,error from jobs where id=? and tenant=?", (reception, tenant)).fetchone()
         if row is None:
             raise KeyError(reception)
-        return {"id": reception, "state": row[0], **(json.loads(row[1]) if row[1] else {}), **({"error": row[2]} if row[2] else {})}
+        return {**(json.loads(row[1]) if row[1] else {}), "id": reception, "tenantId": tenant, "state": row[0],
+                **({"error": row[2]} if row[2] else {})}
 
     def process_next(self):
         with self.lock:
             with self.db() as db:
-                row = db.execute("select id,video from jobs where state='QUEUED' and updated<=? order by updated limit 1", (time.time(),)).fetchone()
+                scopes = sorted(self.allowed_tenants)
+                row = db.execute("select id,video,tenant from jobs where state='QUEUED' and updated<=? and tenant in ("
+                                 + ",".join("?" for _ in scopes) + ") order by updated limit 1", (time.time(), *scopes)).fetchone()
                 if row is None:
                     return False
                 db.execute("update jobs set state='PROCESSING',updated=? where id=?", (time.time(), row[0]))
             try:
-                result = self.process(row[0], bool(row[1]))
+                result = self.process(row[0], bool(row[1]), row[2])
                 with self.db() as db:
                     db.execute("update jobs set state='READY',result=?,error=null,updated=? where id=?", (json.dumps(result), time.time(), row[0]))
                 shutil.rmtree(self.root / row[0], ignore_errors=True)
@@ -155,8 +213,10 @@ class Worker:
                                ("QUEUED" if transient else "FAILED", type(exc).__name__, time.time() + (30 if transient else 0), row[0]))
             return True
 
-    def process(self, reception, video):
-        task = self.files.call("GET", "/api/v1/internal/receptions/" + reception)
+    def process(self, reception, video, tenant=None):
+        tenant = self.tenant(tenant)
+        files = self.files_for(tenant)
+        task = files.call("GET", "/api/v1/internal/receptions/" + reception)
         if task["state"] != "READY" or not task["assets"]:
             raise ValueError("raw recording reception is not confirmed")
         directory = self.root / reception
@@ -170,7 +230,7 @@ class Worker:
                     raise ValueError("unsafe recording asset key")
                 path = directory / "raw" / key
                 path.parent.mkdir(parents=True, exist_ok=True)
-                remaining -= self.files.download(asset, path, remaining)
+                remaining -= files.download(asset, path, remaining)
                 members.add(path.resolve())
             indexes = sorted(path for path in members if path.suffix == ".m3u8")
             if len(indexes) != 1:
@@ -211,7 +271,7 @@ class Worker:
             staging.write_text(json.dumps(manifest), encoding="utf-8")
             os.replace(staging, manifest_file)
         manifest = json.loads(manifest_file.read_text())
-        derived = self.files.call("POST", "/api/v1/internal/receptions", {
+        derived = files.call("POST", "/api/v1/internal/receptions", {
             "idempotencyKey": "derived_" + reception, "maxObjects": 2, "maxBytes": self.max_bytes, "expiresInSeconds": 604800})
         if derived["state"] == "OPEN":
             for item in manifest["objects"]:
@@ -219,12 +279,12 @@ class Worker:
                 # urllib streams a file object in bounded chunks; do not load recordings into RAM.
                 try:
                     with path.open("rb") as source:
-                        self.files.call("PUT", "/api/v1/internal/receptions/" + derived["id"] + "/objects/" + item["key"], source, binary=True)
+                        files.call("PUT", "/api/v1/internal/receptions/" + derived["id"] + "/objects/" + item["key"], source, binary=True)
                 except error.HTTPError as exc:
                     if exc.code != 409:
                         raise
                     exc.close()
-                    current = self.files.call("GET", "/api/v1/internal/receptions/" + derived["id"])
+                    current = files.call("GET", "/api/v1/internal/receptions/" + derived["id"])
                     if current["state"] == "CONFIRMING":
                         raise ReceptionBusy() from exc
                     if current["state"] == "READY":
@@ -233,14 +293,14 @@ class Worker:
         if derived["state"] not in ("OPEN", "CONFIRMING", "READY"):
             raise ValueError("derived reception is no longer usable")
         try:
-            confirmed = self.files.call("POST", "/api/v1/internal/receptions/" + derived["id"] + "/confirm", {"objects": manifest["objects"]})
+            confirmed = files.call("POST", "/api/v1/internal/receptions/" + derived["id"] + "/confirm", {"objects": manifest["objects"]})
         except error.HTTPError as exc:
             if exc.code == 409:
                 exc.close()
-                current = self.files.call("GET", "/api/v1/internal/receptions/" + derived["id"])
+                current = files.call("GET", "/api/v1/internal/receptions/" + derived["id"])
                 if current["state"] == "READY":
                     # Confirm again to check the frozen manifest, rather than accepting unknown assets.
-                    confirmed = self.files.call("POST", "/api/v1/internal/receptions/" + derived["id"] + "/confirm", {"objects": manifest["objects"]})
+                    confirmed = files.call("POST", "/api/v1/internal/receptions/" + derived["id"] + "/confirm", {"objects": manifest["objects"]})
                 elif current["state"] == "CONFIRMING":
                     raise ReceptionBusy() from exc
                 else:
@@ -281,6 +341,72 @@ class Worker:
         return {"key": path.name, "filename": path.name, "sizeBytes": path.stat().st_size, "sha256": digest.hexdigest()}
 
 
+def handler_for(worker, token):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def respond(self, status, value):
+            raw = json.dumps(value).encode(); self.send_response(status)
+            self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(raw)))
+            self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(raw)
+
+        def authenticated(self):
+            values = self.headers.get_all("Authorization", [])
+            return len(values) == 1 and hmac.compare_digest(values[0].encode("utf-8"), ("Bearer " + token).encode("utf-8"))
+
+        def tenant(self):
+            values = self.headers.get_all("X-Tenant-Id", [])
+            if len(values) > 1:
+                raise ValueError("ambiguous tenant")
+            return worker.tenant(values[0] if values else None)
+
+        def do_GET(self):
+            if not self.authenticated():
+                return self.respond(401, {})
+            match = re.fullmatch(r"/jobs/(" + JOB_ID + ")", self.path)
+            try:
+                tenant = self.tenant()
+                if self.path == "/capabilities":
+                    return self.respond(200, {"schemaVersion": 1, "tenantScoped": True, "tenantId": tenant})
+                if not match:
+                    return self.respond(404, {})
+                self.respond(200, worker.get(match[1], tenant))
+            except KeyError:
+                self.respond(404, {})
+            except PermissionError:
+                self.respond(403, {})
+            except ValueError:
+                self.respond(400, {})
+
+        def do_POST(self):
+            if not self.authenticated():
+                return self.respond(401, {})
+            try:
+                tenant = self.tenant()
+                size = int(self.headers.get("Content-Length", "0"))
+                if self.path != "/jobs" or not 0 < size <= 2048:
+                    return self.respond(400, {})
+                body = json.loads(self.rfile.read(size))
+                if not isinstance(body, dict) or set(body) != {"receptionId", "video"}:
+                    raise ValueError("invalid job fields")
+                self.respond(200, worker.submit(body["receptionId"], body["video"], tenant))
+            except PermissionError:
+                self.respond(403, {})
+            except KeyError:
+                self.respond(404, {})
+            except error.HTTPError as exc:
+                status = 404 if exc.code in (403, 404) else 503
+                exc.close()
+                self.respond(status, {})
+            except (error.URLError, TimeoutError):
+                self.respond(503, {})
+            except (ValueError, TypeError):
+                self.respond(400, {})
+
+    return Handler
+
+
 def main():
     import fcntl
     parser = argparse.ArgumentParser()
@@ -293,49 +419,16 @@ def main():
     root = Path(args.root).resolve(); root.mkdir(parents=True, exist_ok=True)
     lock = (root / "worker.lock").open("w")
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    worker = Worker(root, Files(os.environ["FILESERVER_URL"], os.environ["FILESERVER_TENANT"], os.environ["FILESERVER_RECEPTION_TOKEN"]))
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *args):
-            pass
-
-        def respond(self, status, value):
-            raw = json.dumps(value).encode(); self.send_response(status)
-            self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(raw)))
-            self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(raw)
-
-        def authenticated(self):
-            return hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + token)
-
-        def do_GET(self):
-            if not self.authenticated():
-                return self.respond(401, {})
-            match = re.fullmatch(r"/jobs/([0-9a-f-]{36})", self.path)
-            try:
-                if not match:
-                    return self.respond(404, {})
-                self.respond(200, worker.get(match[1]))
-            except KeyError:
-                self.respond(404, {})
-
-        def do_POST(self):
-            if not self.authenticated():
-                return self.respond(401, {})
-            try:
-                size = int(self.headers.get("Content-Length", "0"))
-                if self.path != "/jobs" or not 0 < size <= 2048:
-                    return self.respond(400, {})
-                body = json.loads(self.rfile.read(size))
-                self.respond(200, worker.submit(body["receptionId"], body["video"]))
-            except (ValueError, KeyError, TypeError):
-                self.respond(400, {})
+    scopes = os.environ.get("FILESERVER_ALLOWED_TENANTS")
+    worker = Worker(root, Files(os.environ["FILESERVER_URL"], os.environ["FILESERVER_TENANT"], os.environ["FILESERVER_RECEPTION_TOKEN"]),
+                    allowed_tenants=None if scopes is None else [scope.strip() for scope in scopes.split(",")])
 
     def consume():
         while True:
             if not worker.process_next():
                 time.sleep(1)
     threading.Thread(target=consume, daemon=True).start()
-    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(worker, token)).serve_forever()
 
 
 if __name__ == "__main__":

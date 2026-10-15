@@ -64,7 +64,22 @@ MP4 重新编码增加 CPU 开销，不再声明视频原码流复制；长会�
 
 ## 链路治理状态（2026-10-15）
 
-当前已提交运行实现仍为“一实例一租户”；共享多租户队列、有界重试和资源治理尚未交付。
+当前同时支持单租户与显式配置范围内的共享 Worker；有界重试和资源治理尚未交付。
 后续目标、可信网络前提、接口状态和验收门槛以
 [FileServer / Worker 链路契约](../../docs/design/seaweed-storage.md#fileserver--worker-链路治理契约2026-10-15)
 及[阶段执行记录](../../docs/project/development-plan.md#7-fileserver--worker-链路治理2026-10-15)为准。
+
+### 租户上下文与兼容
+
+默认仍使用 `FILESERVER_TENANT`，单租户请求可省略 `X-Tenant-Id`。
+共享实例设置 `FILESERVER_ALLOWED_TENANTS=tenant-a,tenant-b`（最多 64 个，须包含默认租户），
+请求必须提供 `X-Tenant-Id`；格式与 FileServer 接收服务一致，服务端允许列表也须覆盖对应租户。
+Bearer 只供可信服务使用；拥有该凭证的服务可访问配置列表内全部租户，不提供用户级授权。
+`GET /capabilities` 同样需要认证与租户，返回 `schemaVersion=1`、`tenantScoped=true`、`tenantId`。
+任务响应附带冻结的 `tenantId`；入队前检查源接收归属及 READY，跨租户提交/查询返回 404。
+HTTP 200 的任务仍须按 state 判断结果；非法正文 400，范围外租户 403，上游暂不可达 503。
+
+旧 jobs.db 首次升级时以 **原 FILESERVER_TENANT** 回填租户，并在 worker_metadata 固定迁移来源。
+升级前停止 Worker，备份 jobs.db 与完整工作目录；不能先改默认租户再升级。
+后续更改默认租户不会改写已有任务；移除允许列表中的租户后，该租户旧队列不会被消费或转给其他租户。
+同一 root 仍只允许运行一个进程；不要将旧程序直接指向升级后的队列。
