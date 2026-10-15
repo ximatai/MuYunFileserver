@@ -42,7 +42,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          python3 -m unittest discover -s workers/media-worker -p test_worker.py -v
+          python3 -m unittest discover -s workers/media-worker -p 'test*.py' -v
           ./gradlew test --no-daemon
 
       - name: Build application

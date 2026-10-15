@@ -203,3 +203,98 @@
 - 优先推进视频封面图、时长元数据与大文件媒体体验边界
 - 持续收口 Docker 文档与交付模板表达
 - 暂不进入视频转码，除非业务需求明确要求
+
+
+## 7. FileServer / Worker 链路治理（2026-10-15）
+
+优先级高于本文旧版 Optimization Backlog；本轮先暂缓 MR 产品化、完成公共链路，再回归 MR 接入。
+工作分支 `codex/mr-tenant-worker`，独立工作空间，不修改原 main 目录或运行服务。
+由主代理亲自实现，每阶段自查、提交、邀请 subagent 只读 review，修正 findings 后进入下一阶段。
+依据：[链路契约](../design/seaweed-storage.md#fileserver--worker-链路治理契约2026-10-15)。
+
+| 阶段 | 范围 | 状态 |
+| --- | --- | --- |
+| 1 | 现状核对、职责/接口/授权/格式/容量契约、差距和验收清单 | `73bfbb2` 已自查并由 subagent review，无 actionable findings |
+| 2 | 任务、源文件与衍生文件可信归属；单租户兼容、共享实例与恢复隔离 | `2093da8` 与 `89ec66e` 自查及 subagent review 通过，无 actionable findings |
+| 3 | 幂等、有限重试、故障恢复、队列及磁盘资源上限 | `ef23bd5` review 发现 1 项，`7140e7b` 修复并复核通过 |
+| 4 | 独立真实链路验收、健康/日志/指标、升级和备份恢复说明 | `9e2bc42` 已自查并由 subagent review 通过，无 actionable findings |
+| 5 | MR 按稳定契约接入、归档与播放验证，之后续原业务计划 | MR `2f260a2a` 已自查并由 subagent review 通过，无 actionable findings |
+
+阶段 1 自查：对照 FileReceptionsResource、FileReceptionService、RequestContextFilter、
+FileServiceConfig 与原版 Worker/acceptance 测试核对；明确当前能力与目标，
+未把可信头当作凭证、未声称已有每调用方租户授权，未将 16 GiB 上限当容量验收结论。
+本阶段仅文档，无运行逻辑修改，执行 diff/链接检查；不以重跑媒体测试替代契约审查。
+
+
+阶段 2 自查：统一租户格式与 FileServer 一致；检查字段类型、重复身份头与来源归属；
+任务幂等复用不依赖已过期源接收；迁移保存原租户，默认租户变化不改写归属，
+消费者只读取当前允许范围。CI/release 均运行全部 test*.py，避免新隔离回归被漏掉。
+验证：Worker 原有 6 项真实 FFmpeg 故障回归加租户/HTTP/迁移测试全部通过；
+跨服务真实存储闭环安排在阶段 4，不以当前 fake 证明 FileServer 端到端隔离。
+
+
+阶段 2 补充真实回归：FileReceptionResourceTest 共 10 项全部通过（含独立 Worker 音频/视频闭环）。
+首次固定 localhost:8081 命中既有本机服务而返回 404；测试资源改为随机 HTTP 端口后通过，
+未停止或修改既有服务。acceptance 输出测试目标地址用于定位此类误连，不包含凭证。
+`2093da8` subagent review 无 actionable findings，独立复跑 10 项隔离回归通过。
+
+
+阶段 3 自查：执行次数与任务同库持久化，崩溃恢复不绕过预算；入队容量在立即事务内检查，
+重复请求不重复计数；显式恢复仅 FAILED，保留原租户与清单。转码在超时/空间不足时杀进程组并回收，
+下载/上游调用延续磁盘及总时限检查；普通 GET 不因空间阈值失去可观察性。
+资源阈值是应用层保护而非 OS 硬配额，失败现场不自动丢弃；README 明确实际保障范围。
+
+阶段 3 验证：25 项 Python 回归全部通过，含真实 FFmpeg 媒体完整性、并发入队上限、
+持久重试耗尽、显式恢复权限、崩溃预算、磁盘保护、命令超时与 READY 残留恢复。
+
+
+阶段 3 review 发现并修复：最后一次确认跨过总时限仍可能发布 READY。
+HTTP 成功返回和本地 READY 发布前新增检查；真实本地 HTTP 延迟确认回归验证失败保留清单，
+显式恢复复用同一远端已确认资产。README 收窄网络保证：socket timeout 不是 HTTP 总时长硬截止，
+持续慢响应在控制返回后才检查总时限，不承诺 60 秒内必然返回。
+
+
+阶段 4 自查：健康区分 HTTP 存活与本地 ready，不以线程存活冒充上游可用；指标按租户返回状态，
+服务容量统计含全部待办；日志不含原始异常和身份凭证。停止信号保留原队列与冻结清单，
+编码子进程可中断，正常停止不扣执行预算；慢 HTTP 的停止边界如实记录。
+延迟确认 HTTP fixture 补齐 chunked 请求体读取，避免提前响应造成偶发 BrokenPipe，未放松生产校验。
+初步验证：28 Python tests 与 10 项 FileReceptionResourceTest 通过；真实双租户四条音视频链路、
+改变默认租户后的 Worker 重启结果和 fileId 一致。完整灾备、长会和并发容量不在本次短样本证据内。
+
+
+阶段 4 最终验证：FileServer 全量 162 tests，0 failures/errors/skips。
+最后自查增加日志输出失败不得改变任务结果的保护后，29 项 Python tests 及真实接收 10 tests 复跑通过。
+真实链路四项（双租户 × 音频/音视频）及重启均通过；未部署、未推送、未改既有服务。
+
+
+### 本轮完成记录
+
+阶段 1–5 均由主代理亲自实现、自查、提交，再由只读 subagent review 后推进；
+阶段 3 唯一 finding 已在 `7140e7b` 修复并复核，其他阶段无 actionable findings。
+阶段 4 后续 Quarkus 构建通过；未部署、未推送、未合并主分支，两个原工作目录保持原分支。
+
+MR 接入提交 `2f260a2a80a8a8756cdbd21418afce912490b428`（MR 独立分支 `codex/productization-phases`）：
+Worker 请求携带业务租户；共享配置入队前检查 scoped capabilities，结果的 tenantId/receptionId
+在文件请求前核验；保留单租户旧 Worker 兼容，Bridge 技术协议不变。
+MR 全量 793 tests、0 failure/error、5 既有 opt-in/环境跳过，bootJar 通过；review 独立复跑网关测试通过。
+MR 使用 HTTP 协议 fixture，通用文件链路使用隔离真实服务，两类证据不混同为设备录制验收。
+
+本轮产物是已提交、可审查的开发测试实现。生产部署、长会/并发容量、上游慢响应强制截止、
+完整存储备份恢复演练均未宣称完成；当前失败现场需运维受控处理，CPU/内存硬配额由部署层提供。
+后续 MR 业务产品化回到原阶段计划，设备领用/服务上下文及坐席等不属于本轮 FileServer 改造。
+
+
+### PR 多维独立 review 补充
+
+用户要求在 PR #6 / MR #26 创建后召唤多个 subagent，分别检查数据隔离、可靠性、业务集成，
+主代理检查 CI/交付边界。可靠性 review 发现：终态写库与异常补偿写库均失败时，消费者会在
+下一轮清除错误，遗留 PROCESSING 却不恢复。主代理修复为每轮认领前在独占消费锁内恢复遗留认领，
+保留归属、清单与预算；补偿只修改 PROCESSING，不覆盖已提交 READY。
+新增真实消费者线程故障注入回归验证两次写库失败后，恢复中保持 DOWN，恢复原任务/资产后才 UP。
+
+
+测试/发行维度另发现 P3：release 包只含存储设计，缺少新文档链接的执行记录。
+修复为打包完整 docs，连同执行记录引用的 Overview/API 一起提供，避免只补一个文件仍留下依赖缺口。
+主代理自查与验证：Python 31 tests、真实接收 FileReceptionResourceTest 10 tests 通过；
+补充模拟“不确定提交实际已成功”的回归，确认异常补偿不把已发布 READY 降级。
+发行 docs/Worker README 装配后本地引用文件检查通过。MR 业务/协议兼容维度未发现新增 actionable finding。
