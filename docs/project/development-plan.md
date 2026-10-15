@@ -203,3 +203,24 @@
 - 优先推进视频封面图、时长元数据与大文件媒体体验边界
 - 持续收口 Docker 文档与交付模板表达
 - 暂不进入视频转码，除非业务需求明确要求
+
+
+## 7. FileServer / Worker 链路治理（2026-10-15）
+
+优先级高于本文旧版 Optimization Backlog；MR 产品化暂缓，先完成公共链路。
+工作分支 `codex/mr-tenant-worker`，独立工作空间，不修改原 main 目录或运行服务。
+由主代理亲自实现，每阶段自查、提交、邀请 subagent 只读 review，修正 findings 后进入下一阶段。
+依据：[链路契约](../design/seaweed-storage.md#fileserver--worker-链路治理契约2026-10-15)。
+
+| 阶段 | 范围 | 状态 |
+| --- | --- | --- |
+| 1 | 现状核对、职责/接口/授权/格式/容量契约、差距和验收清单 | 契约完成，待提交 review |
+| 2 | 任务、源文件与衍生文件可信归属；单租户兼容、共享实例与恢复隔离 | 待阶段 1 review；先前 worker.py 草稿已单独 stash 保留，不包含在契约提交中 |
+| 3 | 幂等、有限重试、故障恢复、队列及磁盘资源上限 | 未开始 |
+| 4 | 独立真实链路验收、健康/日志/指标、升级和备份恢复说明 | 未开始 |
+| 5 | MR 按稳定契约接入、归档与播放验证，之后续原业务计划 | 未开始 |
+
+阶段 1 自查：对照 FileReceptionsResource、FileReceptionService、RequestContextFilter、
+FileServiceConfig 与原版 Worker/acceptance 测试核对；明确当前能力与目标，
+未把可信头当作凭证、未声称已有每调用方租户授权，未将 16 GiB 上限当容量验收结论。
+本阶段仅文档，无运行逻辑修改，执行 diff/链接检查；不以重跑媒体测试替代契约审查。
