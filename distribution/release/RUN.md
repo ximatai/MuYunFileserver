@@ -219,3 +219,50 @@ docker compose -f distribution/release/compose.yaml up -d
 FileServer 使用既有 `minio` 客户端适配，不自动迁移历史文件。
 若 FileServer 与存储均在容器中运行，须加入同一内部网络并使用服务地址，
 不能使用 `127.0.0.1` 互访。
+
+
+## FileServer / Worker 链路运维
+
+Worker 是独立 Python 进程，需另装 Python 3.10+ 与支持 libopus/H.264/AAC 的 ffmpeg/ffprobe；
+运行与全部环境变量见 `workers/media-worker/README.md`。文件服务普通身份头入口仅供可信后端，
+接收 API 另配 Bearer 与租户允许列表；Worker Bearer 和接收 Bearer 分别管理，不给普通客户端。
+服务经内网或受控 HTTPS 网关连接，网关约束调用方租户及总请求时长，不将身份头当作用户认证。
+
+### 启动与验收
+
+1. 准备独立接收桶和正式资产桶、FileServer SQLite/临时目录、Worker 持久 root；配置受限身份。
+2. 启动存储、FileServer，确认 `/q/health/ready`；接收 API 默认关闭，需显式启用且桶不同。
+3. 配置 Worker 固定 FileServer 地址、原默认租户、两份独立服务凭证；共享实例另配租户允许列表。
+   由进程管理器保存环境，配置 CPU/内存限制、工作卷配额与 stdout 轮转，勿把密钥写进命令行或提交配置。
+4. 启动 `python3 workers/media-worker/worker.py --root var/media-worker --port 8096`，使用受信任身份
+   请求 `/capabilities`、`/health/ready`；共享实例必须传 `X-Tenant-Id`，健康只代表 Worker 本地状态。
+5. 经业务后端创建并确认一份合成媒体接收任务，提交 `/jobs`，轮询到 READY，检查结果归属并下载解码。
+   浏览器只使用业务后端授权后的短时播放凭证；不要为了验收打开公网可信身份头接口。
+
+### 故障处理
+
+- 401/403：核对调用身份、租户允许范围和可信网关；不能通过改任务租户或扩大公网权限绕过。
+- 503：分别检查 FileServer/存储、Worker readiness、待办数量、磁盘与最近 consumer_error。
+- FAILED：按 jobId/tenantId 查 JSON 日志与任务目录 process.log，排除损坏格式、磁盘或上游问题。
+  修复后由可信操作方向 `POST /jobs/{id}/retry` 提交 `{}`，保持原租户；不要直接改数据库状态。
+- CONFIRMING/超时：保留冻结清单并查询同一任务；恢复会核对原派生任务，不另起 UUID 掩盖不确定结果。
+- 队列中的移除租户仍占容量：先排空或恢复原范围处理，不得用另一个默认租户接管。
+
+### 备份、升级与回退
+
+1. 阻止业务创建新接收/处理任务及录制身份继续写接收区，等待在途请求结束；停止 Worker（SIGTERM），
+   确认退出，再停止 FileServer 和其他写入方。不能只停 Worker 后复制正在写的 FileServer 数据库。
+2. 在同一停写窗口备份 FileServer 数据库及关联本地资产/预览目录，或接收桶和正式桶的一致对象快照；
+   备份 Worker **完整 root**（jobs.db、可能存在的 journal/WAL、素材、冻结清单），另保存版本和配置。
+   密钥单独加密保管；用备份副本验证 SQLite integrity_check，不在运行中的原库做手工修复。
+3. 第一次升级旧 Worker 队列时，必须保留旧 FILESERVER_TENANT，升级会固定旧任务归属。
+   先启动新 FileServer，再启动新 Worker，核验 capabilities、健康、旧任务归属/资产 ID；
+   完整链路健康确认后再恢复业务及录制写入。
+4. 回退前再次停写并备份当前状态。旧 Worker 不得直接读取新 schema；恢复升级前的程序、配置和
+   **同一批次**数据库/工作目录/存储快照。恢复前必须盘点升级后新文件和对外已返回的 fileId，
+   禁止直接回滚快照丢弃已经使用的资产；存在新增数据时优先向前修复或制定单独的数据迁移。
+5. 恢复演练使用隔离端口与副本存储，验证源文件、衍生文件哈希和同一任务恢复后 fileId 一致，
+   再确定恢复点和实际恢复时间。当前自动验收验证 Worker 队列重启，不等同于全栈灾备演练。
+
+自动清理只涵盖 READY 本地残留与既有 FileServer 生命周期；失败现场和数据库历史不自动删除。
+需要清理失败素材时先停止 Worker、备份并确认不再恢复该任务；不可删除排队/处理中的素材或冻结清单。

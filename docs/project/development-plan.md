@@ -216,8 +216,8 @@
 | --- | --- | --- |
 | 1 | 现状核对、职责/接口/授权/格式/容量契约、差距和验收清单 | `73bfbb2` 已自查并由 subagent review，无 actionable findings |
 | 2 | 任务、源文件与衍生文件可信归属；单租户兼容、共享实例与恢复隔离 | `2093da8` 与 `89ec66e` 自查及 subagent review 通过，无 actionable findings |
-| 3 | 幂等、有限重试、故障恢复、队列及磁盘资源上限 | 已实现，待提交 review |
-| 4 | 独立真实链路验收、健康/日志/指标、升级和备份恢复说明 | 未开始 |
+| 3 | 幂等、有限重试、故障恢复、队列及磁盘资源上限 | `ef23bd5` review 发现 1 项，`7140e7b` 修复并复核通过 |
+| 4 | 独立真实链路验收、健康/日志/指标、升级和备份恢复说明 | 已实现，待全量回归及提交 review |
 | 5 | MR 按稳定契约接入、归档与播放验证，之后续原业务计划 | 未开始 |
 
 阶段 1 自查：对照 FileReceptionsResource、FileReceptionService、RequestContextFilter、
@@ -252,3 +252,16 @@ FileServiceConfig 与原版 Worker/acceptance 测试核对；明确当前能力�
 HTTP 成功返回和本地 READY 发布前新增检查；真实本地 HTTP 延迟确认回归验证失败保留清单，
 显式恢复复用同一远端已确认资产。README 收窄网络保证：socket timeout 不是 HTTP 总时长硬截止，
 持续慢响应在控制返回后才检查总时限，不承诺 60 秒内必然返回。
+
+
+阶段 4 自查：健康区分 HTTP 存活与本地 ready，不以线程存活冒充上游可用；指标按租户返回状态，
+服务容量统计含全部待办；日志不含原始异常和身份凭证。停止信号保留原队列与冻结清单，
+编码子进程可中断，正常停止不扣执行预算；慢 HTTP 的停止边界如实记录。
+延迟确认 HTTP fixture 补齐 chunked 请求体读取，避免提前响应造成偶发 BrokenPipe，未放松生产校验。
+初步验证：28 Python tests 与 10 项 FileReceptionResourceTest 通过；真实双租户四条音视频链路、
+改变默认租户后的 Worker 重启结果和 fileId 一致。完整灾备、长会和并发容量不在本次短样本证据内。
+
+
+阶段 4 最终验证：FileServer 全量 162 tests，0 failures/errors/skips。
+最后自查增加日志输出失败不得改变任务结果的保护后，29 项 Python tests 及真实接收 10 tests 复跑通过。
+真实链路四项（双租户 × 音频/音视频）及重启均通过；未部署、未推送、未改既有服务。

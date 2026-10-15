@@ -47,7 +47,7 @@ FileServer URL 固定，禁重定向；HTTP 只允许回环地址。
 
 - 派生任务 OPEN 才上传；CONFIRMING 使用冻结清单重新确认。租约忙返回延迟重试，不记永久 FAILED；READY 仍核对同一清单，返回原资产 ID。
 - 转码及整文件解码开启 FFmpeg `-xerror`，损坏输入失败并保留原始资产。音频以样本数重建连续输出时间戳，避免正常 HLS 分段时间戳重复导致封装错误；不忽略解码错误。
-- 无设备故障回归：`python3 -m unittest discover -s workers/media-worker -p test_worker.py -v`，覆盖确认忙/重启、PUT 与确认竞争、损坏 TS。真实音视频及 SeaweedFS 闭环由 FileReceptionResourceTest 执行。
+- 无设备故障回归：`python3 -m unittest discover -s workers/media-worker -p 'test*.py' -v`，覆盖确认忙/重启、PUT 与确认竞争、损坏 TS。真实音视频及 SeaweedFS 闭环由 FileReceptionResourceTest 执行。
 
 ### TS 分片边界兼容（2026-10-12）
 
@@ -64,7 +64,7 @@ MP4 重新编码增加 CPU 开销，不再声明视频原码流复制；长会�
 
 ## 链路治理状态（2026-10-15）
 
-当前同时支持单租户与显式配置范围内的共享 Worker；现已增加有界重试及资源阈值；独立双租户验收和运维交付仍待完成。
+当前同时支持单租户与显式配置范围内的共享 Worker；现已增加有界重试及资源阈值；已完成独立双租户样本与重启验收，具体证据见阶段执行记录。
 后续目标、可信网络前提、接口状态和验收门槛以
 [FileServer / Worker 链路契约](../../docs/design/seaweed-storage.md#fileserver--worker-链路治理契约2026-10-15)
 及[阶段执行记录](../../docs/project/development-plan.md#7-fileserver--worker-链路治理2026-10-15)为准。
@@ -110,3 +110,35 @@ HTTP socket 超时 60 秒，持续缓慢响应可能更久；总时限会在控�
 达到上限的暂时故障记 `RetryExhausted`；格式/解码/时限/磁盘失败需排障后显式恢复。
 失败目录不自动删除；READY 清理失败的残留在重启时再清理。达到空间阈值时先扩容或
 停止服务、备份后处理明确不再恢复的失败现场，不要删除仍在恢复中的冻结清单。
+
+### 健康、日志和停止
+
+所有 Worker HTTP 入口均保留 Bearer 与租户检查，包括健康和指标，不返回凭证、原始异常或文件内容。
+`GET /health/live` 仅证明 HTTP 进程存活；`GET /health/ready` 检查消费者存活、最近循环无错误、
+SQLite、工作盘阈值及队列容量，UP=200、DOWN=503。它不探测 FileServer/S3 或承诺任务无积压；
+分别监控 FileServer `/q/health/ready` 与存储，持续慢响应需网关总时长限制及队列年龄告警。
+`GET /metrics` 是 JSON 运维快照，不是 Prometheus 文本：当前租户各状态数量、全实例 pendingTotal/maxPending、
+按下次可执行时间计算的 oldestQueuedAgeSeconds。后者不是任务从创建起累计等待时长。
+默认告警建议：消费者/数据库 DOWN 立即告警；空间接近阈值、队列占用超过 80%、可执行队列年龄持续增长时排查。
+
+stdout 使用 JSON 行，jobId + tenantId 关联 submitted/started/deferred/failed/ready/retry_requested；
+仅记录异常类型，不记录 Bearer、请求正文或上游 URL。进程管理器负责 stdout 轮转与留存。
+FFmpeg 排障日志在任务目录 `process.log`，后续命令会覆盖该文件；失败现场保留，READY 清理。
+SIGTERM/SIGINT 停止接收并通知消费者；编码轮询会杀掉子进程组，正常停止不消耗一次执行预算，
+任务重新 QUEUED，仍使用原素材和冻结清单。退出最多等待消费者 65 秒，日志 consumerStopped=false
+表示未完成协作停止，重启会恢复 PROCESSING；不能据此宣称在途 HTTP 已被强制取消。
+
+### 独立验收命令
+
+在源码根目录、Java 21 / Python 3.10+ / FFmpeg / Docker 可用的环境串行执行：
+
+```sh
+python3 -m unittest discover -s workers/media-worker -p 'test*.py' -v
+./gradlew test --tests '*FileReceptionResourceTest' --max-workers=1
+```
+
+验收使用随机端口、临时数据库和 SeaweedFS 容器，不连接 MR、设备或媒体厂商。
+两个租户分别执行音频、音视频，共四条真实链路；入队前跨租户拒绝、派生资产归属、
+下载哈希、全文件解码、播放 Range 和无效播放凭证均断言；随后重启 Worker 并改变默认租户，
+验证四项结果与资产 ID 不变。该短样本不代表长会吞吐、生产容量或多节点高可用。
+备份、升级和恢复步骤见 release 包 `RUN.md` 的 FileServer / Worker 章节。

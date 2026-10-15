@@ -132,6 +132,16 @@ class ReliabilityTest(unittest.TestCase):
             def do_GET(self):
                 self.respond({'state': 'READY', 'assets': {'index.m3u8': 'raw'}})
             def do_PUT(self):
+                if self.headers.get('Transfer-Encoding') == 'chunked':
+                    while True:
+                        size = int(self.rfile.readline().strip(), 16)
+                        if not size:
+                            self.rfile.readline()
+                            break
+                        self.rfile.read(size)
+                        self.rfile.read(2)
+                else:
+                    self.rfile.read(int(self.headers.get('Content-Length', '0')))
                 self.respond({})
             def do_POST(self):
                 if self.path.endswith('/confirm'):
@@ -161,6 +171,47 @@ class ReliabilityTest(unittest.TestCase):
         worker.process_next()
         self.assertEqual('READY', worker.get(RAW)['state'])
         self.assertEqual({'audio.ogg': 'stable-asset'}, worker.get(RAW)['assets'])
+
+    def test_graceful_stop_interrupts_encoder_and_preserves_retry_budget(self):
+        started = threading.Event()
+        class Stoppable(Worker):
+            def process(self, *args):
+                started.set()
+                self.run([sys.executable, '-c', 'import time; time.sleep(10)'])
+        worker = Stoppable(self.root, ScopedFiles())
+        worker.submit(RAW, False)
+        worker.consumer_thread = threading.Thread(target=worker.consume)
+        worker.consumer_thread.start()
+        self.assertTrue(started.wait(timeout=3))
+        worker.stop_event.set()
+        worker.consumer_thread.join(timeout=3)
+        self.assertFalse(worker.consumer_thread.is_alive())
+        self.assertEqual(('QUEUED', 0), (worker.get(RAW)['state'], worker.get(RAW)['attempts']))
+        self.assertEqual('DOWN', worker.readiness(A)['status'])
+
+    def test_closed_stdout_does_not_turn_successful_work_into_failure(self):
+        class Successful(Worker):
+            def process(self, *args):
+                return {'assets': {'audio.ogg': 'stable'}}
+        worker = Successful(self.root, ScopedFiles())
+        with patch('builtins.print', side_effect=BrokenPipeError):
+            worker.submit(RAW, False)
+            worker.process_next()
+        self.assertEqual('READY', worker.get(RAW)['state'])
+
+    def test_readiness_reports_dead_consumer_and_metrics_are_scoped(self):
+        worker = Worker(self.root, ScopedFiles(), allowed_tenants=[A, B])
+        worker.submit(RAW, False, A)
+        worker.submit(OTHER, False, B)
+        self.assertEqual('DOWN', worker.readiness(A)['status'])
+        worker.consumer_thread = threading.current_thread()
+        self.assertEqual('UP', worker.readiness(A)['status'])
+        self.assertEqual({'QUEUED': 1}, worker.metrics(A)['states'])
+        worker.consumer_error = 'OperationalError'
+        self.assertEqual('DOWN', worker.readiness(A)['status'])
+        worker.consumer_error = None
+        worker.max_pending = 2
+        self.assertEqual('DOWN', worker.readiness(A)['status'])
 
     def test_restart_reclaims_ready_residue_but_preserves_failed_evidence(self):
         worker = Worker(self.root, ScopedFiles(), allowed_tenants=[A, B])

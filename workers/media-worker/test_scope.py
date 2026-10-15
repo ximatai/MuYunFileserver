@@ -164,6 +164,10 @@ class ScopeTest(unittest.TestCase):
             client.close()
             return result
         self.assertEqual(401, call('GET', '/capabilities', authorization=None)[0])
+        self.assertEqual(401, call('GET', '/health/live', authorization=None)[0])
+        self.assertEqual(200, call('GET', '/health/live')[0])
+        self.assertEqual(503, call('GET', '/health/ready')[0])
+        self.assertEqual({}, call('GET', '/metrics')[1]['states'])
         self.assertEqual(401, call('GET', '/capabilities', authorization='wrong')[0])
         self.assertEqual(401, call('GET', '/capabilities', duplicate=('Authorization', 'Bearer ' + TOKEN))[0])
         self.assertEqual(400, call('GET', '/capabilities', tenant=None)[0])

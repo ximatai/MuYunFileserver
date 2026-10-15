@@ -119,6 +119,10 @@ class ReceptionBusy(Exception):
     """Another request still owns confirmation; keep the frozen manifest and retry."""
 
 
+class WorkerStopping(ReceptionBusy):
+    """A graceful shutdown preserves the task for the next process."""
+
+
 class JobTimeout(Exception):
     """The total processing deadline has expired."""
 
@@ -138,6 +142,9 @@ class Worker:
         self.max_work_bytes, self.min_free_bytes, self.command_timeout = max_work_bytes, min_free_bytes, command_timeout
         self.job_timeout = job_timeout
         self.execution = threading.local()
+        self.stop_event = threading.Event()
+        self.consumer_thread = None
+        self.consumer_error = None
         if any(not isinstance(v, int) or isinstance(v, bool) or v < 1 for v in
                (max_bytes, max_pending, max_attempts, retry_seconds, max_work_bytes, command_timeout, job_timeout)) or min_free_bytes < 0:
             raise ValueError("invalid worker capacity or retry limits")
@@ -173,6 +180,8 @@ class Worker:
         return sqlite3.connect(self.root / "jobs.db", timeout=30)
 
     def check_space(self):
+        if self.stop_event.is_set():
+            raise WorkerStopping()
         if time.monotonic() > getattr(self.execution, 'deadline', float('inf')):
             raise JobTimeout("worker processing deadline exceeded")
         if shutil.disk_usage(self.root).free < self.min_free_bytes:
@@ -195,6 +204,49 @@ class Worker:
         count = db.execute("select count(*) from jobs where state in ('QUEUED','PROCESSING')").fetchone()[0]
         if count >= self.max_pending:
             raise CapacityExceeded("worker queue is full")
+
+    def emit(self, event, **fields):
+        try:
+            print(json.dumps({"event": event, **fields}, separators=(',', ':')), flush=True)
+        except (OSError, ValueError):
+            pass  # Logging failure must not change durable task state.
+
+    def metrics(self, tenant):
+        tenant = self.tenant(tenant)
+        with self.db() as db:
+            states = dict(db.execute("select state,count(*) from jobs where tenant=? group by state", (tenant,)))
+            oldest = db.execute("select min(updated) from jobs where tenant=? and state='QUEUED'", (tenant,)).fetchone()[0]
+            pending = db.execute("select count(*) from jobs where state in ('QUEUED','PROCESSING')").fetchone()[0]
+        return {"tenantId": tenant, "states": states, "pendingTotal": pending, "maxPending": self.max_pending,
+                "oldestQueuedAgeSeconds": max(0, int(time.time() - oldest)) if oldest is not None else 0}
+
+    def readiness(self, tenant):
+        consumer = self.consumer_thread is not None and self.consumer_thread.is_alive() and self.consumer_error is None
+        try:
+            metrics = self.metrics(tenant)
+            database = True
+        except sqlite3.Error:
+            metrics, database = {}, False
+        try:
+            self.check_space()
+            storage = True
+        except (CapacityExceeded, WorkerStopping, OSError):
+            storage = False
+        ready = consumer and database and storage and metrics.get('pendingTotal', self.max_pending) < self.max_pending
+        return {"status": "UP" if ready else "DOWN", "consumerAlive": consumer,
+                "database": database, "storage": storage, **metrics}
+
+    def consume(self):
+        while not self.stop_event.is_set():
+            try:
+                worked = self.process_next()
+                self.consumer_error = None
+                if not worked:
+                    self.stop_event.wait(0.5)
+            except Exception as exc:
+                self.consumer_error = type(exc).__name__
+                self.emit('consumer_error', error=self.consumer_error)
+                self.stop_event.wait(1)
 
     def tenant(self, value=None):
         if value is None:
@@ -234,6 +286,7 @@ class Worker:
                 raise KeyError(reception)
             if row[0] != int(video):
                 raise ValueError("job id reused with different profile")
+        self.emit("job_submitted", jobId=reception, tenantId=tenant)
         return self.get(reception, tenant)
 
     def files_for(self, tenant):
@@ -262,6 +315,7 @@ class Worker:
                 db.execute("update jobs set state='QUEUED',attempts=0,error=null,updated=? where id=? and tenant=?",
                            (time.time(), reception, tenant))
             # Retrying an already queued/running/ready task is idempotent, never resets its budget.
+        self.emit("job_retry_requested", jobId=reception, tenantId=tenant)
         return self.get(reception, tenant)
 
     def process_next(self):
@@ -277,21 +331,26 @@ class Worker:
                     return True
                 db.execute("update jobs set state='PROCESSING',attempts=attempts+1,updated=? where id=?", (time.time(), row[0]))
             try:
+                self.execution.log_path = self.root / row[0] / "process.log"
+                self.emit("job_started", jobId=row[0], tenantId=row[2], attempt=row[3] + 1)
                 self.execution.deadline = time.monotonic() + self.job_timeout
                 self.check_space()
                 result = self.process(row[0], bool(row[1]), row[2])
                 self.check_space()
                 with self.db() as db:
                     db.execute("update jobs set state='READY',result=?,error=null,updated=? where id=?", (json.dumps(result), time.time(), row[0]))
+                self.emit("job_ready", jobId=row[0], tenantId=row[2], attempt=row[3] + 1)
                 shutil.rmtree(self.root / row[0], ignore_errors=True)
             except Exception as exc:
                 # Never log provider responses, URLs or credentials. Explicit retry uses the same durable files/manifest.
                 with self.db() as db:
                     transient = isinstance(exc, ReceptionBusy) or isinstance(exc, (error.URLError, TimeoutError)) and (not isinstance(exc, error.HTTPError) or exc.code >= 500)
-                    retry = transient and row[3] + 1 < self.max_attempts
+                    stopping = isinstance(exc, WorkerStopping)
+                    retry = stopping or transient and row[3] + 1 < self.max_attempts
                     reason = "RetryExhausted" if transient and not retry else type(exc).__name__
-                    db.execute("update jobs set state=?,error=?,updated=? where id=?",
-                               ("QUEUED" if retry else "FAILED", reason, time.time() + (self.retry_seconds if retry else 0), row[0]))
+                    db.execute("update jobs set state=?,error=?,updated=?,attempts=attempts-? where id=?",
+                               ("QUEUED" if retry else "FAILED", reason, time.time() + (self.retry_seconds if retry else 0), int(stopping), row[0]))
+                self.emit("job_deferred" if retry else "job_failed", jobId=row[0], tenantId=row[2], error=reason)
             finally:
                 self.execution.deadline = float("inf")
             return True
@@ -395,7 +454,9 @@ class Worker:
     def run(self, args):
         self.check_space()
         started = time.monotonic()
-        with (self.root / "process.log").open("wb") as log:
+        log_path = getattr(self.execution, "log_path", self.root / "process.log")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("wb") as log:
             process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
             try:
                 while process.poll() is None:
@@ -411,7 +472,10 @@ class Worker:
                 self.check_space()
             finally:
                 if process.poll() is None:
-                    os.killpg(process.pid, signal.SIGKILL)
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
                 process.wait()
 
     def video_rate(self, path):
@@ -501,6 +565,13 @@ def handler_for(worker, token):
             match = re.fullmatch(r"/jobs/(" + JOB_ID + ")", self.path)
             try:
                 tenant = self.tenant()
+                if self.path == "/health/live":
+                    return self.respond(200, {"status": "UP"})
+                if self.path == "/health/ready":
+                    result = worker.readiness(tenant)
+                    return self.respond(200 if result['status'] == 'UP' else 503, result)
+                if self.path == "/metrics":
+                    return self.respond(200, worker.metrics(tenant))
                 if self.path == "/capabilities":
                     return self.respond(200, {"schemaVersion": 1, "tenantScoped": True, "tenantId": tenant})
                 if not match:
@@ -512,6 +583,8 @@ def handler_for(worker, token):
                 self.respond(403, {})
             except ValueError:
                 self.respond(400, {})
+            except sqlite3.Error:
+                self.respond(503, {"error": "DatabaseUnavailable"})
 
         def do_POST(self):
             if not self.authenticated():
@@ -533,7 +606,7 @@ def handler_for(worker, token):
                 if not isinstance(body, dict) or set(body) != {"receptionId", "video"}:
                     raise ValueError("invalid job fields")
                 self.respond(200, worker.submit(body["receptionId"], body["video"], tenant))
-            except CapacityExceeded:
+            except (CapacityExceeded, WorkerStopping):
                 self.respond(503, {"error": "CapacityExceeded"})
             except PermissionError:
                 self.respond(403, {})
@@ -547,6 +620,8 @@ def handler_for(worker, token):
                 self.respond(503, {})
             except (ValueError, TypeError):
                 self.respond(400, {})
+            except sqlite3.Error:
+                self.respond(503, {"error": "DatabaseUnavailable"})
 
     return Handler
 
@@ -575,12 +650,24 @@ def main():
                     command_timeout=int(os.environ.get("MEDIA_WORKER_COMMAND_TIMEOUT", "600")),
                     job_timeout=int(os.environ.get("MEDIA_WORKER_JOB_TIMEOUT", "3600")))
 
-    def consume():
-        while True:
-            if not worker.process_next():
-                time.sleep(1)
-    threading.Thread(target=consume, daemon=True).start()
-    BoundedHTTPServer(("127.0.0.1", args.port), handler_for(worker, token)).serve_forever()
+    server = BoundedHTTPServer(("127.0.0.1", args.port), handler_for(worker, token))
+    server.timeout = 0.5
+    def stop(signum, frame):
+        worker.stop_event.set()
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    worker.consumer_thread = threading.Thread(target=worker.consume, daemon=True)
+    worker.consumer_thread.start()
+    worker.emit('worker_started', schemaVersion=1)
+    try:
+        while not worker.stop_event.is_set():
+            server.handle_request()
+    finally:
+        worker.stop_event.set()
+        server.server_close()
+        worker.consumer_thread.join(timeout=65)
+        worker.emit('worker_stopped', consumerStopped=not worker.consumer_thread.is_alive())
+
 
 
 if __name__ == "__main__":
