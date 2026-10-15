@@ -207,7 +207,7 @@
 
 ## 7. FileServer / Worker 链路治理（2026-10-15）
 
-优先级高于本文旧版 Optimization Backlog；MR 产品化暂缓，先完成公共链路。
+优先级高于本文旧版 Optimization Backlog；本轮先暂缓 MR 产品化、完成公共链路，再回归 MR 接入。
 工作分支 `codex/mr-tenant-worker`，独立工作空间，不修改原 main 目录或运行服务。
 由主代理亲自实现，每阶段自查、提交、邀请 subagent 只读 review，修正 findings 后进入下一阶段。
 依据：[链路契约](../design/seaweed-storage.md#fileserver--worker-链路治理契约2026-10-15)。
@@ -217,8 +217,8 @@
 | 1 | 现状核对、职责/接口/授权/格式/容量契约、差距和验收清单 | `73bfbb2` 已自查并由 subagent review，无 actionable findings |
 | 2 | 任务、源文件与衍生文件可信归属；单租户兼容、共享实例与恢复隔离 | `2093da8` 与 `89ec66e` 自查及 subagent review 通过，无 actionable findings |
 | 3 | 幂等、有限重试、故障恢复、队列及磁盘资源上限 | `ef23bd5` review 发现 1 项，`7140e7b` 修复并复核通过 |
-| 4 | 独立真实链路验收、健康/日志/指标、升级和备份恢复说明 | 已实现，待全量回归及提交 review |
-| 5 | MR 按稳定契约接入、归档与播放验证，之后续原业务计划 | 未开始 |
+| 4 | 独立真实链路验收、健康/日志/指标、升级和备份恢复说明 | `9e2bc42` 已自查并由 subagent review 通过，无 actionable findings |
+| 5 | MR 按稳定契约接入、归档与播放验证，之后续原业务计划 | MR `2f260a2a` 已自查并由 subagent review 通过，无 actionable findings |
 
 阶段 1 自查：对照 FileReceptionsResource、FileReceptionService、RequestContextFilter、
 FileServiceConfig 与原版 Worker/acceptance 测试核对；明确当前能力与目标，
@@ -265,3 +265,20 @@ HTTP 成功返回和本地 READY 发布前新增检查；真实本地 HTTP 延�
 阶段 4 最终验证：FileServer 全量 162 tests，0 failures/errors/skips。
 最后自查增加日志输出失败不得改变任务结果的保护后，29 项 Python tests 及真实接收 10 tests 复跑通过。
 真实链路四项（双租户 × 音频/音视频）及重启均通过；未部署、未推送、未改既有服务。
+
+
+### 本轮完成记录
+
+阶段 1–5 均由主代理亲自实现、自查、提交，再由只读 subagent review 后推进；
+阶段 3 唯一 finding 已在 `7140e7b` 修复并复核，其他阶段无 actionable findings。
+阶段 4 后续 Quarkus 构建通过；未部署、未推送、未合并主分支，两个原工作目录保持原分支。
+
+MR 接入提交 `2f260a2a80a8a8756cdbd21418afce912490b428`（MR 独立分支 `codex/productization-phases`）：
+Worker 请求携带业务租户；共享配置入队前检查 scoped capabilities，结果的 tenantId/receptionId
+在文件请求前核验；保留单租户旧 Worker 兼容，Bridge 技术协议不变。
+MR 全量 793 tests、0 failure/error、5 既有 opt-in/环境跳过，bootJar 通过；review 独立复跑网关测试通过。
+MR 使用 HTTP 协议 fixture，通用文件链路使用隔离真实服务，两类证据不混同为设备录制验收。
+
+本轮产物是已提交、可审查的开发测试实现。生产部署、长会/并发容量、上游慢响应强制截止、
+完整存储备份恢复演练均未宣称完成；当前失败现场需运维受控处理，CPU/内存硬配额由部署层提供。
+后续 MR 业务产品化回到原阶段计划，设备领用/服务上下文及坐席等不属于本轮 FileServer 改造。
