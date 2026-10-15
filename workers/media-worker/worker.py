@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import sqlite3
 import subprocess
 import threading
@@ -21,7 +22,7 @@ JOB_ID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 
 class Files:
-    def __init__(self, base, tenant, token):
+    def __init__(self, base, tenant, token, space_check=None):
         endpoint = parse.urlsplit(base)
         if endpoint.scheme not in ("http", "https") or endpoint.username or endpoint.query or endpoint.fragment:
             raise ValueError("invalid fixed FileServer endpoint")
@@ -30,12 +31,14 @@ class Files:
         if not isinstance(tenant, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", tenant):
             raise ValueError("invalid FileServer tenant")
         self.base, self.tenant, self.token = base.rstrip("/"), tenant, token
-        self.opener = request.build_opener(NoRedirect())
+        self.space_check = space_check or (lambda: None)
+        self.opener = request.build_opener(request.ProxyHandler({}), NoRedirect())
 
     def for_tenant(self, tenant):
-        return Files(self.base, tenant, self.token)
+        return Files(self.base, tenant, self.token, self.space_check)
 
     def call(self, method, path, body=None, binary=False):
+        self.space_check()
         headers = {"X-Tenant-Id": self.tenant, "X-User-Id": "media-worker", "Authorization": "Bearer " + self.token}
         if body is not None:
             headers["Content-Type"] = "application/octet-stream" if binary else "application/json"
@@ -60,6 +63,7 @@ class Files:
         with self.opener.open(req, timeout=60) as response, destination.open("wb") as output:
             size = 0
             while chunk := response.read(65536):
+                self.space_check()
                 size += len(chunk)
                 if size > max_bytes:
                     raise ValueError("recording exceeds worker capacity")
@@ -113,12 +117,30 @@ class ReceptionBusy(Exception):
     """Another request still owns confirmation; keep the frozen manifest and retry."""
 
 
+class JobTimeout(Exception):
+    """The total processing deadline has expired."""
+
+
+class CapacityExceeded(Exception):
+    """Configured queue or local storage capacity has been reached."""
+
+
 class Worker:
     def __init__(self, root, files, ffmpeg="ffmpeg", ffprobe="ffprobe", max_bytes=16 * 1024 ** 3,
-                 allowed_tenants=None):
+                 allowed_tenants=None, max_pending=128, max_attempts=5, retry_seconds=30,
+                 max_work_bytes=32 * 1024 ** 3, min_free_bytes=256 * 1024 ** 2, command_timeout=600, job_timeout=3600):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.files, self.ffmpeg, self.ffprobe, self.max_bytes = files, ffmpeg, ffprobe, max_bytes
+        self.max_pending, self.max_attempts, self.retry_seconds = max_pending, max_attempts, retry_seconds
+        self.max_work_bytes, self.min_free_bytes, self.command_timeout = max_work_bytes, min_free_bytes, command_timeout
+        self.job_timeout = job_timeout
+        self.execution = threading.local()
+        if any(not isinstance(v, int) or isinstance(v, bool) or v < 1 for v in
+               (max_bytes, max_pending, max_attempts, retry_seconds, max_work_bytes, command_timeout, job_timeout)) or min_free_bytes < 0:
+            raise ValueError("invalid worker capacity or retry limits")
+        if isinstance(files, Files):
+            self.files = Files(files.base, files.tenant, files.token, self.check_space)
         self.default_tenant = getattr(files, "tenant", "default")
         self.allowed_tenants = frozenset(allowed_tenants if allowed_tenants is not None else [self.default_tenant])
         if (not self.allowed_tenants or len(self.allowed_tenants) > 64 or self.default_tenant not in self.allowed_tenants
@@ -134,13 +156,43 @@ class Worker:
             db.execute("create table if not exists jobs(id text primary key,video integer,state text,result text,error text,updated real,tenant text not null)")
             if "tenant" not in {row[1] for row in db.execute("pragma table_info(jobs)")}:
                 db.execute("alter table jobs add column tenant text")
+            if "attempts" not in {row[1] for row in db.execute("pragma table_info(jobs)")}:
+                db.execute("alter table jobs add column attempts integer not null default 0")
             # Freeze the original single-tenant scope once, not the new HTTP caller or a changed default.
             db.execute("update jobs set tenant=? where tenant is null", (legacy_tenant,))
             # This executable runs one worker thread and holds an exclusive process lock (see main).
             db.execute("update jobs set state='QUEUED' where state='PROCESSING'")
+            ready = [row[0] for row in db.execute("select id from jobs where state='READY'")]
+        for reception in ready:
+            if re.fullmatch(JOB_ID, reception):
+                shutil.rmtree(self.root / reception, ignore_errors=True)
 
     def db(self):
         return sqlite3.connect(self.root / "jobs.db", timeout=30)
+
+    def check_space(self):
+        if time.monotonic() > getattr(self.execution, 'deadline', float('inf')):
+            raise JobTimeout("worker processing deadline exceeded")
+        if shutil.disk_usage(self.root).free < self.min_free_bytes:
+            raise CapacityExceeded("worker free space threshold reached")
+        now = time.monotonic()
+        if now - getattr(self.execution, 'last_space_scan', -float('inf')) < 0.2:
+            return
+        used = 0
+        for path in self.root.rglob('*'):
+            try:
+                if path.is_file():
+                    used += path.stat().st_size
+            except FileNotFoundError:
+                pass  # Concurrent cleanup of a completed job is harmless.
+        if used >= self.max_work_bytes:
+            raise CapacityExceeded("worker storage threshold reached")
+        self.execution.last_space_scan = now
+
+    def require_queue_capacity(self, db):
+        count = db.execute("select count(*) from jobs where state in ('QUEUED','PROCESSING')").fetchone()[0]
+        if count >= self.max_pending:
+            raise CapacityExceeded("worker queue is full")
 
     def tenant(self, value=None):
         if value is None:
@@ -165,10 +217,14 @@ class Worker:
             return self.get(reception, tenant)
         # A tenant header selects a permitted scope, not ownership of arbitrary receipt IDs.
         # Verify the source before claiming its globally unique ID in the durable queue.
+        self.check_space()
         task = self.files_for(tenant).call("GET", "/api/v1/internal/receptions/" + reception)
         if task["state"] != "READY" or not task["assets"]:
             raise ValueError("raw recording reception is not confirmed")
         with self.db() as db:
+            db.execute("begin immediate")
+            if db.execute("select 1 from jobs where id=?", (reception,)).fetchone() is None:
+                self.require_queue_capacity(db)
             db.execute("insert or ignore into jobs(id,video,state,result,error,updated,tenant) values(?,?,'QUEUED',null,null,?,?)",
                        (reception, int(video), time.time(), tenant))
             row = db.execute("select video,tenant from jobs where id=?", (reception,)).fetchone()
@@ -185,22 +241,42 @@ class Worker:
     def get(self, reception, tenant=None):
         tenant = self.tenant(tenant)
         with self.db() as db:
-            row = db.execute("select state,result,error from jobs where id=? and tenant=?", (reception, tenant)).fetchone()
+            row = db.execute("select state,result,error,attempts from jobs where id=? and tenant=?", (reception, tenant)).fetchone()
         if row is None:
             raise KeyError(reception)
-        return {**(json.loads(row[1]) if row[1] else {}), "id": reception, "tenantId": tenant, "state": row[0],
+        return {**(json.loads(row[1]) if row[1] else {}), "id": reception, "tenantId": tenant, "state": row[0], "attempts": row[3],
                 **({"error": row[2]} if row[2] else {})}
+
+    def retry(self, reception, tenant=None):
+        tenant = self.tenant(tenant)
+        with self.db() as db:
+            db.execute("begin immediate")
+            row = db.execute("select state from jobs where id=? and tenant=?", (reception, tenant)).fetchone()
+            if row is None:
+                raise KeyError(reception)
+            if row[0] == 'FAILED':
+                self.check_space()
+                self.require_queue_capacity(db)
+                db.execute("update jobs set state='QUEUED',attempts=0,error=null,updated=? where id=? and tenant=?",
+                           (time.time(), reception, tenant))
+            # Retrying an already queued/running/ready task is idempotent, never resets its budget.
+        return self.get(reception, tenant)
 
     def process_next(self):
         with self.lock:
             with self.db() as db:
                 scopes = sorted(self.allowed_tenants)
-                row = db.execute("select id,video,tenant from jobs where state='QUEUED' and updated<=? and tenant in ("
+                row = db.execute("select id,video,tenant,attempts from jobs where state='QUEUED' and updated<=? and tenant in ("
                                  + ",".join("?" for _ in scopes) + ") order by updated limit 1", (time.time(), *scopes)).fetchone()
                 if row is None:
                     return False
-                db.execute("update jobs set state='PROCESSING',updated=? where id=?", (time.time(), row[0]))
+                if row[3] >= self.max_attempts:
+                    db.execute("update jobs set state='FAILED',error='RetryExhausted',updated=? where id=?", (time.time(), row[0]))
+                    return True
+                db.execute("update jobs set state='PROCESSING',attempts=attempts+1,updated=? where id=?", (time.time(), row[0]))
             try:
+                self.execution.deadline = time.monotonic() + self.job_timeout
+                self.check_space()
                 result = self.process(row[0], bool(row[1]), row[2])
                 with self.db() as db:
                     db.execute("update jobs set state='READY',result=?,error=null,updated=? where id=?", (json.dumps(result), time.time(), row[0]))
@@ -209,8 +285,12 @@ class Worker:
                 # Never log provider responses, URLs or credentials. Explicit retry uses the same durable files/manifest.
                 with self.db() as db:
                     transient = isinstance(exc, ReceptionBusy) or isinstance(exc, (error.URLError, TimeoutError)) and (not isinstance(exc, error.HTTPError) or exc.code >= 500)
+                    retry = transient and row[3] + 1 < self.max_attempts
+                    reason = "RetryExhausted" if transient and not retry else type(exc).__name__
                     db.execute("update jobs set state=?,error=?,updated=? where id=?",
-                               ("QUEUED" if transient else "FAILED", type(exc).__name__, time.time() + (30 if transient else 0), row[0]))
+                               ("QUEUED" if retry else "FAILED", reason, time.time() + (self.retry_seconds if retry else 0), row[0]))
+            finally:
+                self.execution.deadline = float("inf")
             return True
 
     def process(self, reception, video, tenant=None):
@@ -310,8 +390,26 @@ class Worker:
         return {"assets": confirmed["assets"], "derivedReceptionId": derived["id"], **manifest["facts"]}
 
     def run(self, args):
+        self.check_space()
+        started = time.monotonic()
         with (self.root / "process.log").open("wb") as log:
-            subprocess.run(args, stdin=subprocess.DEVNULL, stdout=log, stderr=log, check=True, timeout=600)
+            process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+            try:
+                while process.poll() is None:
+                    self.check_space()
+                    if time.monotonic() - started > self.command_timeout:
+                        raise subprocess.TimeoutExpired(args, self.command_timeout)
+                    try:
+                        process.wait(timeout=0.2)
+                    except subprocess.TimeoutExpired:
+                        pass
+                if process.returncode:
+                    raise subprocess.CalledProcessError(process.returncode, args)
+                self.check_space()
+            finally:
+                if process.poll() is None:
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
 
     def video_rate(self, path):
         output = subprocess.check_output([self.ffprobe, "-v", "error", "-select_streams", "v:0",
@@ -341,8 +439,41 @@ class Worker:
         return {"key": path.name, "filename": path.name, "sizeBytes": path.stat().st_size, "sha256": digest.hexdigest()}
 
 
+class BoundedHTTPServer(ThreadingHTTPServer):
+    """Slow clients cannot create an unbounded number of request threads."""
+    daemon_threads = True
+
+    def __init__(self, address, handler):
+        self.slots = threading.BoundedSemaphore(16)
+        super().__init__(address, handler)
+
+    def process_request(self, sock, address):
+        if not self.slots.acquire(blocking=False):
+            try:
+                sock.settimeout(1)
+                sock.sendall(b"HTTP/1.0 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n")
+            finally:
+                self.shutdown_request(sock)
+            return
+        try:
+            super().process_request(sock, address)
+        except Exception:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, sock, address):
+        try:
+            super().process_request_thread(sock, address)
+        finally:
+            self.slots.release()
+
+
 def handler_for(worker, token):
     class Handler(BaseHTTPRequestHandler):
+        def setup(self):
+            super().setup()
+            self.connection.settimeout(10)
+
         def log_message(self, *args):
             pass
 
@@ -384,13 +515,23 @@ def handler_for(worker, token):
                 return self.respond(401, {})
             try:
                 tenant = self.tenant()
-                size = int(self.headers.get("Content-Length", "0"))
-                if self.path != "/jobs" or not 0 < size <= 2048:
+                lengths = self.headers.get_all("Content-Length", [])
+                if len(lengths) != 1 or self.headers.get("Transfer-Encoding"):
+                    raise ValueError("ambiguous request length")
+                size = int(lengths[0])
+                retry_match = re.fullmatch(r"/jobs/(" + JOB_ID + ")/retry", self.path)
+                if (self.path != "/jobs" and not retry_match) or not 0 < size <= 2048:
                     return self.respond(400, {})
                 body = json.loads(self.rfile.read(size))
+                if retry_match:
+                    if body != {}:
+                        raise ValueError("retry accepts only an empty object")
+                    return self.respond(200, worker.retry(retry_match[1], tenant))
                 if not isinstance(body, dict) or set(body) != {"receptionId", "video"}:
                     raise ValueError("invalid job fields")
                 self.respond(200, worker.submit(body["receptionId"], body["video"], tenant))
+            except CapacityExceeded:
+                self.respond(503, {"error": "CapacityExceeded"})
             except PermissionError:
                 self.respond(403, {})
             except KeyError:
@@ -421,14 +562,22 @@ def main():
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     scopes = os.environ.get("FILESERVER_ALLOWED_TENANTS")
     worker = Worker(root, Files(os.environ["FILESERVER_URL"], os.environ["FILESERVER_TENANT"], os.environ["FILESERVER_RECEPTION_TOKEN"]),
-                    allowed_tenants=None if scopes is None else [scope.strip() for scope in scopes.split(",")])
+                    allowed_tenants=None if scopes is None else [scope.strip() for scope in scopes.split(",")],
+                    max_pending=int(os.environ.get("MEDIA_WORKER_MAX_PENDING", "128")),
+                    max_attempts=int(os.environ.get("MEDIA_WORKER_MAX_ATTEMPTS", "5")),
+                    retry_seconds=int(os.environ.get("MEDIA_WORKER_RETRY_SECONDS", "30")),
+                    max_bytes=int(os.environ.get("MEDIA_WORKER_MAX_INPUT_BYTES", str(16 * 1024 ** 3))),
+                    max_work_bytes=int(os.environ.get("MEDIA_WORKER_MAX_WORK_BYTES", str(32 * 1024 ** 3))),
+                    min_free_bytes=int(os.environ.get("MEDIA_WORKER_MIN_FREE_BYTES", str(256 * 1024 ** 2))),
+                    command_timeout=int(os.environ.get("MEDIA_WORKER_COMMAND_TIMEOUT", "600")),
+                    job_timeout=int(os.environ.get("MEDIA_WORKER_JOB_TIMEOUT", "3600")))
 
     def consume():
         while True:
             if not worker.process_next():
                 time.sleep(1)
     threading.Thread(target=consume, daemon=True).start()
-    ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(worker, token)).serve_forever()
+    BoundedHTTPServer(("127.0.0.1", args.port), handler_for(worker, token)).serve_forever()
 
 
 if __name__ == "__main__":

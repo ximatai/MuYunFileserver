@@ -178,6 +178,13 @@ class ScopeTest(unittest.TestCase):
         self.assertEqual(404, call('GET', '/jobs/' + RAW, tenant=B)[0])
         self.assertEqual(404, call('POST', '/jobs', body, tenant=B)[0])
         self.assertEqual(A, call('GET', '/jobs/' + RAW)[1]['tenantId'])
+        self.worker.max_pending = 1
+        self.assertEqual(503, call('POST', '/jobs', {'receptionId': OTHER, 'video': False}, tenant=B)[0])
+        with self.worker.db() as db:
+            db.execute("update jobs set state='FAILED',attempts=5 where id=?", (RAW,))
+        self.assertEqual(404, call('POST', '/jobs/' + RAW + '/retry', {}, tenant=B)[0])
+        self.assertEqual(400, call('POST', '/jobs/' + RAW + '/retry', {'video': True})[0])
+        self.assertEqual(0, call('POST', '/jobs/' + RAW + '/retry', {})[1]['attempts'])
 
     def test_legacy_single_scope_can_omit_header(self):
         single = Worker(self.root, self.files)
