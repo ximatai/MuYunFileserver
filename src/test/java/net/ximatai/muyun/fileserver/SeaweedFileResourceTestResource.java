@@ -56,6 +56,7 @@ public class SeaweedFileResourceTestResource implements QuarkusTestResourceLifec
                             .withStartupTimeout(Duration.ofSeconds(60)));
             server.start();
             return Map.ofEntries(
+                    Map.entry("quarkus.http.test-port", "0"),
                     Map.entry("mfs.storage.type", "minio"),
                     Map.entry("mfs.storage.root-dir", testDirectory.resolve("storage").toString()),
                     Map.entry("mfs.storage.temp-dir", testDirectory.resolve("tmp").toString()),

@@ -16,6 +16,7 @@ from urllib import request, error
 spec = importlib.util.spec_from_file_location("media_worker", Path(__file__).with_name("worker.py"))
 module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 base, directory = sys.argv[1].rstrip("/"), Path(sys.argv[2])
+print(json.dumps({"fileServerEndpoint": base}), flush=True)
 files = module.Files(base, "tenant-seaweed", "reception-test-service-secret-only")
 worker = module.Worker(directory / "helpers", files)
 with socket.socket() as reservation:

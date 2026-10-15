@@ -231,3 +231,9 @@ FileServiceConfig 与原版 Worker/acceptance 测试核对；明确当前能力�
 消费者只读取当前允许范围。CI/release 均运行全部 test*.py，避免新隔离回归被漏掉。
 验证：Worker 原有 6 项真实 FFmpeg 故障回归加租户/HTTP/迁移测试全部通过；
 跨服务真实存储闭环安排在阶段 4，不以当前 fake 证明 FileServer 端到端隔离。
+
+
+阶段 2 补充真实回归：FileReceptionResourceTest 共 10 项全部通过（含独立 Worker 音频/视频闭环）。
+首次固定 localhost:8081 命中既有本机服务而返回 404；测试资源改为随机 HTTP 端口后通过，
+未停止或修改既有服务。acceptance 输出测试目标地址用于定位此类误连，不包含凭证。
+`2093da8` subagent review 无 actionable findings，独立复跑 10 项隔离回归通过。
