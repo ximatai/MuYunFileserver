@@ -49,6 +49,7 @@ class Files:
             raw = response.read(1024 * 1024 + 1)
             if len(raw) > 1024 * 1024:
                 raise ValueError("oversized FileServer JSON response")
+            self.space_check()
             return json.loads(raw)["data"]
 
     def download(self, asset, destination, max_bytes):
@@ -71,6 +72,7 @@ class Files:
                 digest.update(chunk)
         if size != metadata["sizeBytes"] or digest.hexdigest() != metadata["sha256"]:
             raise ValueError("recording download checksum mismatch")
+        self.space_check()
         return size
 
 
@@ -278,6 +280,7 @@ class Worker:
                 self.execution.deadline = time.monotonic() + self.job_timeout
                 self.check_space()
                 result = self.process(row[0], bool(row[1]), row[2])
+                self.check_space()
                 with self.db() as db:
                     db.execute("update jobs set state='READY',result=?,error=null,updated=? where id=?", (json.dumps(result), time.time(), row[0]))
                 shutil.rmtree(self.root / row[0], ignore_errors=True)

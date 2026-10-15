@@ -2,6 +2,8 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
 import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import subprocess
 import sys
@@ -9,7 +11,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from urllib import error
-from worker import Worker, CapacityExceeded, JobTimeout
+from worker import Worker, Files, CapacityExceeded, JobTimeout
 from test_scope import ScopedFiles, A, B, RAW, OTHER
 
 
@@ -114,6 +116,51 @@ class ReliabilityTest(unittest.TestCase):
             worker.check_space()
         worker.execution.deadline = float('inf')
         worker.check_space()
+
+    def test_final_confirmation_past_deadline_preserves_manifest_and_recovers_same_asset(self):
+        confirmed = threading.Event()
+        delay = [True]
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+            def respond(self, data):
+                payload = json.dumps({'data': data}).encode()
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            def do_GET(self):
+                self.respond({'state': 'READY', 'assets': {'index.m3u8': 'raw'}})
+            def do_PUT(self):
+                self.respond({})
+            def do_POST(self):
+                if self.path.endswith('/confirm'):
+                    confirmed.set()
+                    if delay[0]:
+                        time.sleep(1.2)
+                    self.respond({'state': 'READY', 'assets': {'audio.ogg': 'stable-asset'}})
+                else:
+                    self.respond({'id': OTHER, 'state': 'READY' if confirmed.is_set() else 'OPEN'})
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        worker = Worker(self.root, Files('http://127.0.0.1:' + str(server.server_port), A, 'test'), job_timeout=1)
+        worker.submit(RAW, False)
+        directory = self.root / RAW
+        directory.mkdir()
+        (directory / 'audio.ogg').write_bytes(b'frozen')
+        manifest = directory / 'derived-manifest.json'
+        manifest.write_text(json.dumps({'objects': [{'key': 'audio.ogg'}], 'facts': {}}))
+        worker.process_next()
+        self.assertTrue(confirmed.is_set())
+        self.assertEqual(('FAILED', 'JobTimeout'), (worker.get(RAW)['state'], worker.get(RAW)['error']))
+        self.assertTrue(manifest.exists())
+        delay[0] = False
+        worker.retry(RAW)
+        worker.process_next()
+        self.assertEqual('READY', worker.get(RAW)['state'])
+        self.assertEqual({'audio.ogg': 'stable-asset'}, worker.get(RAW)['assets'])
 
     def test_restart_reclaims_ready_residue_but_preserves_failed_evidence(self):
         worker = Worker(self.root, ScopedFiles(), allowed_tenants=[A, B])
