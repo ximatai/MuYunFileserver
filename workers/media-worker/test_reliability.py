@@ -1,5 +1,7 @@
 """Queue budgets, recovery and subprocess resource guards."""
 import json
+import sqlite3
+from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
@@ -188,6 +190,88 @@ class ReliabilityTest(unittest.TestCase):
         self.assertFalse(worker.consumer_thread.is_alive())
         self.assertEqual(('QUEUED', 0), (worker.get(RAW)['state'], worker.get(RAW)['attempts']))
         self.assertEqual('DOWN', worker.readiness(A)['status'])
+
+    def test_consumer_recovers_uncertain_terminal_writes_before_reporting_healthy(self):
+        failed = threading.Event()
+        recovering = threading.Event()
+        release = threading.Event()
+        class UncertainWrites(Worker):
+            failures = 0
+            processes = 0
+            injected = False
+            def db(self):
+                if self.failures:
+                    self.failures -= 1
+                    if not self.failures:
+                        failed.set()
+                    raise sqlite3.OperationalError('temporary simulated I/O failure')
+                return super().db()
+            def process(self, reception, video, tenant=None):
+                self.processes += 1
+                # A remote confirmation already exists. Its frozen manifest must
+                # survive an uncertain local completion, rather than creating a new job.
+                manifest = self.root / reception / 'derived-manifest.json'
+                assert manifest.read_text() == 'frozen'
+                if not self.injected:
+                    self.injected = True
+                    self.failures = 2  # READY publication and exception compensation.
+                else:
+                    recovering.set()
+                    release.wait(timeout=5)
+                return {'assets': {'audio.ogg': 'original-confirmed-asset'}}
+        worker = UncertainWrites(self.root, ScopedFiles(), allowed_tenants=[A, B])
+        worker.submit(RAW, False, A)
+        directory = self.root / RAW
+        directory.mkdir()
+        (directory / 'derived-manifest.json').write_text('frozen')
+        worker.consumer_thread = threading.Thread(target=worker.consume)
+        worker.consumer_thread.start()
+        try:
+            self.assertTrue(failed.wait(timeout=3))
+            self.assertTrue(recovering.wait(timeout=3))
+            self.assertEqual('DOWN', worker.readiness(A)['status'])
+            self.assertEqual('PROCESSING', worker.get(RAW, A)['state'])
+            release.set()
+            deadline = time.monotonic() + 3
+            while worker.get(RAW, A)['state'] != 'READY' and time.monotonic() < deadline:
+                time.sleep(0.01)
+            result = worker.get(RAW, A)
+            self.assertEqual(('READY', A, 2), (result['state'], result['tenantId'], result['attempts']))
+            self.assertEqual({'audio.ogg': 'original-confirmed-asset'}, result['assets'])
+            deadline = time.monotonic() + 3
+            while worker.readiness(A)['status'] != 'UP' and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertEqual('UP', worker.readiness(A)['status'])
+        finally:
+            release.set()
+            worker.stop_event.set()
+            worker.consumer_thread.join(timeout=3)
+
+    def test_uncertain_commit_does_not_downgrade_an_already_published_result(self):
+        class AmbiguousCommit(Worker):
+            uncertain_commit = False
+            def db(self):
+                connection = super().db()
+                if not self.uncertain_commit:
+                    return connection
+                self.uncertain_commit = False
+                @contextmanager
+                def committed_but_unacknowledged():
+                    with connection as db:
+                        yield db
+                    raise sqlite3.OperationalError('commit acknowledgement unavailable')
+                return committed_but_unacknowledged()
+            def process(self, *args):
+                self.uncertain_commit = True
+                return {'assets': {'audio.ogg': 'published-asset'}}
+        worker = AmbiguousCommit(self.root, ScopedFiles())
+        worker.submit(RAW, False)
+        worker.process_next()
+        result = worker.get(RAW)
+        self.assertEqual('READY', result['state'])
+        self.assertEqual({'audio.ogg': 'published-asset'}, result['assets'])
+        self.assertNotIn('error', result)
+        self.assertFalse(worker.process_next())
 
     def test_closed_stdout_does_not_turn_successful_work_into_failure(self):
         class Successful(Worker):

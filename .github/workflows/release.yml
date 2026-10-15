@@ -62,8 +62,8 @@ jobs:
           cp distribution/release/application.seaweedfs.example.yml "${RELEASE_DIR}/application.seaweedfs.example.yml"
           cp compose.yaml "${RELEASE_DIR}/compose.yaml"
           cp compose.seaweedfs.yaml "${RELEASE_DIR}/compose.seaweedfs.yaml"
-          mkdir -p "${RELEASE_DIR}/docs/design"
-          cp docs/design/seaweed-storage.md "${RELEASE_DIR}/docs/design/seaweed-storage.md"
+          # Ship linked contracts and execution records together.
+          cp -R docs "${RELEASE_DIR}/docs"
           mkdir -p "${RELEASE_DIR}/workers" "${RELEASE_DIR}/scripts"
           mkdir -p "${RELEASE_DIR}/workers/media-worker"
           cp workers/media-worker/worker.py workers/media-worker/README.md "${RELEASE_DIR}/workers/media-worker/"

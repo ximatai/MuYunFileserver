@@ -322,6 +322,13 @@ class Worker:
         with self.lock:
             with self.db() as db:
                 scopes = sorted(self.allowed_tenants)
+                # This lock covers execution as well as claiming, and main holds the
+                # exclusive root process lock. No previous PROCESSING job can still
+                # be active here. Reconcile uncertain terminal writes before claiming
+                # more work, preserving both its manifest and persisted attempt budget.
+                db.execute("begin immediate")
+                db.execute("update jobs set state='QUEUED' where state='PROCESSING' and tenant in ("
+                           + ",".join("?" for _ in scopes) + ")", scopes)
                 row = db.execute("select id,video,tenant,attempts from jobs where state='QUEUED' and updated<=? and tenant in ("
                                  + ",".join("?" for _ in scopes) + ") order by updated limit 1", (time.time(), *scopes)).fetchone()
                 if row is None:
@@ -348,9 +355,10 @@ class Worker:
                     stopping = isinstance(exc, WorkerStopping)
                     retry = stopping or transient and row[3] + 1 < self.max_attempts
                     reason = "RetryExhausted" if transient and not retry else type(exc).__name__
-                    db.execute("update jobs set state=?,error=?,updated=?,attempts=attempts-? where id=?",
-                               ("QUEUED" if retry else "FAILED", reason, time.time() + (self.retry_seconds if retry else 0), int(stopping), row[0]))
-                self.emit("job_deferred" if retry else "job_failed", jobId=row[0], tenantId=row[2], error=reason)
+                    changed = db.execute("update jobs set state=?,error=?,updated=?,attempts=attempts-? where id=? and state='PROCESSING'",
+                               ("QUEUED" if retry else "FAILED", reason, time.time() + (self.retry_seconds if retry else 0), int(stopping), row[0])).rowcount
+                if changed:
+                    self.emit("job_deferred" if retry else "job_failed", jobId=row[0], tenantId=row[2], error=reason)
             finally:
                 self.execution.deadline = float("inf")
             return True
