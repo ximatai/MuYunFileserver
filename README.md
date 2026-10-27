@@ -655,3 +655,5 @@ Office 预览常见错误：
 ## 开源协议
 
 本项目采用 [MIT License](./LICENSE)。
+
+Android APK (`application/vnd.android.package-archive`) 可作为不透明文件上传和授权下载，不进行安装、解包或文档预览。应用版本、签名和发布策略由业务消费者校验；此支持不放开通用二进制或其他可执行文件类型。

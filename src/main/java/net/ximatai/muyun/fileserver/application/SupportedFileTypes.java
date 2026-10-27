@@ -83,7 +83,9 @@ public class SupportedFileTypes {
             "application/rtf"
     );
 
+    // APKs are stored as opaque downloads. Signing/package policy belongs to the consuming application.
     private static final Set<String> ALLOWED_UPLOAD_MIME_TYPES = Set.<String>of(
+            "application/vnd.android.package-archive",
             "application/pdf",
             "application/rtf",
             "application/msword",
