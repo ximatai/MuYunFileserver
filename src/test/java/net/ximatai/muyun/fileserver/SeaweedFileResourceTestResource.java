@@ -73,7 +73,6 @@ public class SeaweedFileResourceTestResource implements QuarkusTestResourceLifec
                     ,Map.entry("mfs.reception.enabled", "true")
                     ,Map.entry("mfs.reception.bucket", RECEPTION_BUCKET)
                     ,Map.entry("mfs.reception.service-token", "reception-test-service-secret-only")
-                    ,Map.entry("mfs.reception.allowed-tenants", "tenant-seaweed,tenant-reception-b")
             );
         } catch (Exception exception) {
             stop();

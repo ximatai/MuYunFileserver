@@ -44,9 +44,9 @@ public class FileReceptionService {
         if(!MessageDigest.isEqual(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                 actual.getBytes(java.nio.charset.StandardCharsets.UTF_8)))throw new UnauthorizedException("invalid reception service identity");
         String tenant=context.getRequired().tenantId();
-        if(!tenant.matches("[A-Za-z0-9][A-Za-z0-9_-]{0,63}") ||
-                Arrays.stream(config.reception().allowedTenants().orElse("").split(",")).map(String::trim).noneMatch(tenant::equals))
-            throw new ForbiddenException("tenant is outside reception service scope");
+        // The authenticated business service owns tenant authorization; each reception still owns one tenant.
+        if(!tenant.matches("[A-Za-z0-9][A-Za-z0-9_-]{0,63}"))
+            throw new ForbiddenException("invalid reception tenant");
         return tenant;
     }
 

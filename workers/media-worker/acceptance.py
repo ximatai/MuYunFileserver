@@ -24,7 +24,7 @@ with socket.socket() as reservation:
     port = reservation.getsockname()[1]
 worker_token = "worker-acceptance-token-only-24chars"
 environment = dict(os.environ, MEDIA_WORKER_TOKEN=worker_token, FILESERVER_URL=base,
-                   FILESERVER_TENANT="tenant-seaweed", FILESERVER_ALLOWED_TENANTS="tenant-seaweed,tenant-reception-b", FILESERVER_RECEPTION_TOKEN="reception-test-service-secret-only")
+                   FILESERVER_TENANT="tenant-seaweed", FILESERVER_RECEPTION_TOKEN="reception-test-service-secret-only")
 log = (directory / "worker.log").open("wb")
 process = subprocess.Popen([sys.executable, str(Path(__file__).with_name("worker.py")), "--port", str(port),
                             "--root", str(directory / "queue")], env=environment, stdout=log, stderr=log)
@@ -63,7 +63,8 @@ try:
             assert exc.code == expected, exc.code
             exc.close()
     rejected('GET', '/capabilities', 400, tenant='')
-    rejected('GET', '/capabilities', 403, tenant='outside-scope')
+    assert api('GET', '/capabilities', tenant='new-business-tenant')['tenantId'] == 'new-business-tenant'
+    rejected('GET', '/capabilities', 400, tenant='../outside')
     for current_tenant, video in (("tenant-seaweed", False), ("tenant-reception-b", False),
                                   ("tenant-seaweed", True), ("tenant-reception-b", True)):
         files = module.Files(base, current_tenant, "reception-test-service-secret-only")

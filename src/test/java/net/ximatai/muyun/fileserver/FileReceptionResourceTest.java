@@ -45,9 +45,18 @@ class FileReceptionResourceTest {
 
     @Test void shouldRequireIndependentServiceIdentityAndTenantScope() {
         given().header("X-Tenant-Id",TENANT).header("X-User-Id","tester").get(BASE+"/missing").then().statusCode(401);
-        request("outside-scope").get(BASE+"/missing").then().statusCode(403);
+        request("new-business-tenant").get(BASE+"/missing").then().statusCode(404);
         var task=create(4,1024);
         request("tenant-reception-b").get(BASE+"/{id}",task.get("id")).then().statusCode(403);
+    }
+    @Test void newBusinessTenantRequiresNoConfigurationButCannotAccessAnotherTenantsReception() {
+        String tenant="business-"+UUID.randomUUID().toString().substring(0,8);
+        var body=Map.of("idempotencyKey",UUID.randomUUID().toString(),"maxObjects",4,"maxBytes",1024,"expiresInSeconds",3600);
+        String id=request(tenant).body(body).post(BASE).then().statusCode(200).extract().path("data.id");
+        request(tenant).get(BASE+"/{id}",id).then().statusCode(200);
+        request(TENANT).get(BASE+"/{id}",id).then().statusCode(403);
+        request(TENANT).get(BASE+"/{id}/objects",id).then().statusCode(403);
+        request(TENANT).body(Map.of("objects",List.of())).post(BASE+"/{id}/confirm",id).then().statusCode(403);
     }
     @Test void recordingIdentityMustNotReadOrOverwriteFormalAssets()throws Exception {
         var client=MinioClient.builder().endpoint(SeaweedFileResourceTestResource.endpoint())
