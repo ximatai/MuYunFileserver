@@ -27,7 +27,7 @@ class ReliabilityTest(unittest.TestCase):
         class Failing(Worker):
             def process(self, *args):
                 raise error.URLError('do-not-persist-sensitive-upstream-text')
-        worker = Failing(self.root, ScopedFiles(), max_attempts=2, allowed_tenants=[A, B])
+        worker = Failing(self.root, ScopedFiles(), max_attempts=2)
         worker.submit(RAW, False, A)
         worker.process_next()
         self.assertEqual('QUEUED', worker.get(RAW, A)['state'])
@@ -219,7 +219,7 @@ class ReliabilityTest(unittest.TestCase):
                     recovering.set()
                     release.wait(timeout=5)
                 return {'assets': {'audio.ogg': 'original-confirmed-asset'}}
-        worker = UncertainWrites(self.root, ScopedFiles(), allowed_tenants=[A, B])
+        worker = UncertainWrites(self.root, ScopedFiles())
         worker.submit(RAW, False, A)
         directory = self.root / RAW
         directory.mkdir()
@@ -284,7 +284,7 @@ class ReliabilityTest(unittest.TestCase):
         self.assertEqual('READY', worker.get(RAW)['state'])
 
     def test_readiness_reports_dead_consumer_and_metrics_are_scoped(self):
-        worker = Worker(self.root, ScopedFiles(), allowed_tenants=[A, B])
+        worker = Worker(self.root, ScopedFiles())
         worker.submit(RAW, False, A)
         worker.submit(OTHER, False, B)
         self.assertEqual('DOWN', worker.readiness(A)['status'])
@@ -298,7 +298,7 @@ class ReliabilityTest(unittest.TestCase):
         self.assertEqual('DOWN', worker.readiness(A)['status'])
 
     def test_restart_reclaims_ready_residue_but_preserves_failed_evidence(self):
-        worker = Worker(self.root, ScopedFiles(), allowed_tenants=[A, B])
+        worker = Worker(self.root, ScopedFiles())
         worker.submit(RAW, False, A)
         worker.submit(OTHER, False, B)
         for reception in [RAW, OTHER]:
@@ -308,7 +308,7 @@ class ReliabilityTest(unittest.TestCase):
         with worker.db() as db:
             db.execute("update jobs set state='READY',result=? where id=?", (json.dumps({'assets': {'audio.ogg': 'stable'}}), RAW))
             db.execute("update jobs set state='FAILED' where id=?", (OTHER,))
-        restored = Worker(self.root, ScopedFiles(), allowed_tenants=[A, B])
+        restored = Worker(self.root, ScopedFiles())
         self.assertFalse((self.root / RAW).exists())
         self.assertTrue((self.root / OTHER / 'derived-manifest.json').exists())
         self.assertEqual({'audio.ogg': 'stable'}, restored.get(RAW, A)['assets'])

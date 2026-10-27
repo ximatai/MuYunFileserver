@@ -71,10 +71,11 @@ MP4 重新编码增加 CPU 开销，不再声明视频原码流复制；长会�
 
 ### 租户上下文与兼容
 
-默认仍使用 `FILESERVER_TENANT`，单租户请求可省略 `X-Tenant-Id`。
-共享实例设置 `FILESERVER_ALLOWED_TENANTS=tenant-a,tenant-b`（最多 64 个，须包含默认租户），
-请求必须提供 `X-Tenant-Id`；格式与 FileServer 接收服务一致，服务端允许列表也须覆盖对应租户。
-Bearer 只供可信服务使用；拥有该凭证的服务可访问配置列表内全部租户，不提供用户级授权。
+业务系统统一确定租户，所有 HTTP 请求必须提供唯一的 `X-Tenant-Id`，格式与 FileServer 接收服务一致。
+不再配置或读取 `FILESERVER_ALLOWED_TENANTS`；新增业务租户无需修改 Worker 或 FileServer 配置。
+`FILESERVER_TENANT` 仅保留为旧单租户队列迁移的历史归属和进程内兼容默认值，不决定 HTTP 请求归属。
+Bearer 只供可信业务服务使用；业务服务负责用户级租户授权，Worker 仍验证接收任务与持久处理任务的租户归属。
+消费与重启恢复直接使用持久任务中的租户，不依赖可变配置名单，不将旧任务重新归给默认租户。
 `GET /capabilities` 同样需要认证与租户，返回 `schemaVersion=1`、`tenantScoped=true`、`tenantId`。
 任务响应附带冻结的 `tenantId`；入队前检查源接收归属及 READY，跨租户提交/查询返回 404。
 HTTP 200 的任务仍须按 state 判断结果；非法正文 400，范围外租户 403，上游暂不可达 503。

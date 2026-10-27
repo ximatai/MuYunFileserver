@@ -95,13 +95,13 @@ docker compose -f compose.seaweedfs.yaml stop
 
 接口位于 `/api/v1/internal/receptions`：POST 创建、GET 查询、GET `/{id}/objects` 列举、
 PUT `/{id}/objects/{key}` 暂存、POST `/{id}/confirm` 确认、POST `/{id}/cancel` 取消。
-除原有身份头外，必须校验独立 Bearer 与配置的租户允许列表；默认关闭。
+除原有身份头外，必须校验独立 Bearer；租户授权由可信业务服务负责，不再维护额外的业务租户允许列表。接收任务和正式文件的归属校验仍保留；接收基础设施默认关闭。
 任务保存桶、前缀、容量、对象数、有效期及冻结清单；确认租约带 token，
 元数据与 READY 在同一 SQLite 事务发布；候选副本持久跟踪，供崩溃后回收。
 已确认资产不随接收区到期删除。限制在列举/确认及内部 PUT 时检查，
 不能当作直接 S3 上传的硬配额；上线需设置存储容量与告警。
 
-启用时须配置 `mfs.reception.enabled=true`、`bucket`、`service-token`、`allowed-tenants`。
+启用时须配置 `mfs.reception.enabled=true`、`bucket`、`service-token`；已移除 `allowed-tenants`。
 接收桶必须与正式桶不同；大视频需同时协调 `mfs.upload.max-file-size-bytes`、
 `quarkus.http.limits.max-body-size`、临时磁盘和 Worker 容量，不能仅提高任务总容量。
 

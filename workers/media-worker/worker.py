@@ -133,7 +133,7 @@ class CapacityExceeded(Exception):
 
 class Worker:
     def __init__(self, root, files, ffmpeg="ffmpeg", ffprobe="ffprobe", max_bytes=16 * 1024 ** 3,
-                 allowed_tenants=None, max_pending=128, max_attempts=5, retry_seconds=30,
+                 max_pending=128, max_attempts=5, retry_seconds=30,
                  max_work_bytes=32 * 1024 ** 3, min_free_bytes=256 * 1024 ** 2, command_timeout=600, job_timeout=3600):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
@@ -151,11 +151,8 @@ class Worker:
         if isinstance(files, Files):
             self.files = Files(files.base, files.tenant, files.token, self.check_space)
         self.default_tenant = getattr(files, "tenant", "default")
-        self.allowed_tenants = frozenset(allowed_tenants if allowed_tenants is not None else [self.default_tenant])
-        if (not self.allowed_tenants or len(self.allowed_tenants) > 64 or self.default_tenant not in self.allowed_tenants
-                or any(not isinstance(t, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", t)
-                       for t in self.allowed_tenants)):
-            raise ValueError("invalid explicit worker tenant scopes")
+        if not isinstance(self.default_tenant, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", self.default_tenant):
+            raise ValueError("invalid legacy worker tenant")
         self.lock = threading.Lock()
         with self.db() as db:
             db.execute("begin immediate")
@@ -249,12 +246,11 @@ class Worker:
                 self.stop_event.wait(1)
 
     def tenant(self, value=None):
+        # Only in-process legacy callers may omit scope; HTTP always requires an explicit business tenant.
         if value is None:
-            if len(self.allowed_tenants) != 1:
-                raise ValueError("an explicit tenant is required")
             return self.default_tenant
-        if value not in self.allowed_tenants:
-            raise PermissionError("tenant is not configured")
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", value):
+            raise ValueError("invalid worker tenant")
         return value
 
     def submit(self, reception, video, tenant=None):
@@ -321,16 +317,13 @@ class Worker:
     def process_next(self):
         with self.lock:
             with self.db() as db:
-                scopes = sorted(self.allowed_tenants)
                 # This lock covers execution as well as claiming, and main holds the
                 # exclusive root process lock. No previous PROCESSING job can still
                 # be active here. Reconcile uncertain terminal writes before claiming
                 # more work, preserving both its manifest and persisted attempt budget.
                 db.execute("begin immediate")
-                db.execute("update jobs set state='QUEUED' where state='PROCESSING' and tenant in ("
-                           + ",".join("?" for _ in scopes) + ")", scopes)
-                row = db.execute("select id,video,tenant,attempts from jobs where state='QUEUED' and updated<=? and tenant in ("
-                                 + ",".join("?" for _ in scopes) + ") order by updated limit 1", (time.time(), *scopes)).fetchone()
+                db.execute("update jobs set state='QUEUED' where state='PROCESSING'")
+                row = db.execute("select id,video,tenant,attempts from jobs where state='QUEUED' and updated<=? order by updated limit 1", (time.time(),)).fetchone()
                 if row is None:
                     return False
                 if row[3] >= self.max_attempts:
@@ -563,9 +556,9 @@ def handler_for(worker, token):
 
         def tenant(self):
             values = self.headers.get_all("X-Tenant-Id", [])
-            if len(values) > 1:
-                raise ValueError("ambiguous tenant")
-            return worker.tenant(values[0] if values else None)
+            if len(values) != 1:
+                raise ValueError("an explicit tenant is required")
+            return worker.tenant(values[0])
 
         def do_GET(self):
             if not self.authenticated():
@@ -646,9 +639,7 @@ def main():
     root = Path(args.root).resolve(); root.mkdir(parents=True, exist_ok=True)
     lock = (root / "worker.lock").open("w")
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    scopes = os.environ.get("FILESERVER_ALLOWED_TENANTS")
     worker = Worker(root, Files(os.environ["FILESERVER_URL"], os.environ["FILESERVER_TENANT"], os.environ["FILESERVER_RECEPTION_TOKEN"]),
-                    allowed_tenants=None if scopes is None else [scope.strip() for scope in scopes.split(",")],
                     max_pending=int(os.environ.get("MEDIA_WORKER_MAX_PENDING", "128")),
                     max_attempts=int(os.environ.get("MEDIA_WORKER_MAX_ATTEMPTS", "5")),
                     retry_seconds=int(os.environ.get("MEDIA_WORKER_RETRY_SECONDS", "30")),
