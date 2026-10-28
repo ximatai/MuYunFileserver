@@ -55,6 +55,9 @@ class UploadFilePreparer {
     @Inject
     SupportedFileTypes supportedFileTypes;
 
+    @Inject
+    UploadMimePolicy uploadMimePolicy;
+
     List<PreparedUpload> prepare(UploadRequest uploadRequest, RequestContext requestContext) {
         List<PreparedUpload> prepared = new java.util.ArrayList<>();
         try {
@@ -184,7 +187,7 @@ class UploadFilePreparer {
     }
 
     private void validateMimeType(String mimeType) {
-        if (!supportedFileTypes.isAllowedUploadMimeType(mimeType)) {
+        if (!uploadMimePolicy.allows(mimeType)) {
             throw new UnsupportedMediaTypeException("unsupported media type");
         }
     }

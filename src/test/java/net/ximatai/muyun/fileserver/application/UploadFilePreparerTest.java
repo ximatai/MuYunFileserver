@@ -42,6 +42,7 @@ class UploadFilePreparerTest {
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("01JABCDEF1234567890ABCDEF", Set.of("01JABCDEF1234567890ABCDEF"));
         preparer.supportedFileTypes = new SupportedFileTypes();
+        preparer.uploadMimePolicy = new UploadMimePolicy(preparer.supportedFileTypes, null);
 
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("hello.txt", "hello".getBytes(), "text/plain")),
@@ -76,6 +77,7 @@ class UploadFilePreparerTest {
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("01ARZ3NDEKTSV4RRFFQ69G5FAV", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
         preparer.supportedFileTypes = new SupportedFileTypes();
+        preparer.uploadMimePolicy = new UploadMimePolicy(preparer.supportedFileTypes, null);
         byte[] broken = new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a};
         UploadRequest request = new UploadRequest(List.of(
                 TestFormValue.file("first.txt", "first".getBytes(), "text/plain"),
@@ -97,6 +99,7 @@ class UploadFilePreparerTest {
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("generated", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
         preparer.supportedFileTypes = new SupportedFileTypes();
+        preparer.uploadMimePolicy = new UploadMimePolicy(preparer.supportedFileTypes, null);
 
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("hello.txt", "hello".getBytes(), "text/plain")),
@@ -120,6 +123,7 @@ class UploadFilePreparerTest {
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("bad-ulid", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
         preparer.supportedFileTypes = new SupportedFileTypes();
+        preparer.uploadMimePolicy = new UploadMimePolicy(preparer.supportedFileTypes, null);
 
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("hello.txt", "hello".getBytes(), "text/plain")),
@@ -143,6 +147,7 @@ class UploadFilePreparerTest {
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("01ARZ3NDEKTSV4RRFFQ69G5FAV", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
         preparer.supportedFileTypes = new SupportedFileTypes();
+        preparer.uploadMimePolicy = new UploadMimePolicy(preparer.supportedFileTypes, null);
 
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("script.sh", "echo hi".getBytes(), "application/x-sh")),
@@ -166,6 +171,7 @@ class UploadFilePreparerTest {
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("01JABCDEF1234567890ABCDE1", Set.of("01JABCDEF1234567890ABCDE1"));
         preparer.supportedFileTypes = new SupportedFileTypes();
+        preparer.uploadMimePolicy = new UploadMimePolicy(preparer.supportedFileTypes, null);
 
         UploadRequest request = new UploadRequest(
                 List.of(TestFormValue.file("sound.wav", minimalWavBytes(), "audio/x-wav")),
