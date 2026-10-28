@@ -384,7 +384,17 @@ Readiness 在两种模式下的行为：
 
 ### 零配置模式说明
 
-文件上传与统一查看的类型支持矩阵由系统内建维护，运行时不需要配置 MIME 白名单。常见 MIME 别名也由系统内部兼容；后续新增文件类型支持时，通常通过升级服务版本获得。
+普通上传默认使用内建 MIME 允许清单。部署时可设置 `mfs.upload.allowed-mime-types`（环境变量 `MFS_UPLOAD_ALLOWED_MIME_TYPES`），用 MIME 类型数组完整替换默认清单；环境变量使用逗号分隔，例如 `application/pdf,application/vnd.android.package-archive`。YAML 示例：
+
+```yaml
+mfs:
+  upload:
+    allowed-mime-types:
+      - application/pdf
+      - application/vnd.android.package-archive
+```
+
+空值、通配符和非法类型会导致启动失败；配置变更只影响新上传，不影响已保存文件的访问。查看能力和 MIME 别名仍由系统内建维护，允许上传不代表支持预览。受控媒体接收不使用此上传策略：其不识别的类型仍以 `application/octet-stream` 登记。MIME 检测会使用文件名，无法确定时可能使用客户端声明的类型，不能代替内容、签名或病毒检查。
 
 ## 接口接入
 

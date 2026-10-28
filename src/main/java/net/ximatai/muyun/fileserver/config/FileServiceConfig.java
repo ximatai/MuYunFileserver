@@ -66,6 +66,8 @@ public interface FileServiceConfig {
     }
 
     interface Upload {
+        Optional<java.util.List<String>> allowedMimeTypes();
+
         @Min(1)
         long maxFileSizeBytes();
 
