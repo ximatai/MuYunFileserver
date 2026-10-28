@@ -20,19 +20,32 @@ public class UploadMimePolicy {
 
     @Inject
     public UploadMimePolicy(SupportedFileTypes types) {
-        this(types, configuredValue());
+        this(types, configuredValue(ConfigProvider.getConfig()));
     }
 
-    private static String configuredValue() {
-        var config = ConfigProvider.getConfig();
+    static String configuredValue(org.eclipse.microprofile.config.Config config) {
+        var smallrye = config.unwrap(io.smallrye.config.SmallRyeConfig.class);
         String name = "mfs.upload.allowed-mime-types";
-        var value = config.getConfigValue(name);
-        if (value.getRawValue() != null) {
-            return value.getValue() == null ? "" : value.getValue();
+        var root = smallrye.getConfigValue(name);
+        var indices = new java.util.TreeMap<Integer, io.smallrye.config.ConfigValue>();
+        var pattern = Pattern.compile(Pattern.quote(name) + "\\[(\\d+)\\]");
+        for (String property : config.getPropertyNames()) {
+            var match = pattern.matcher(property);
+            if (match.matches()) indices.put(Integer.parseInt(match.group(1)), smallrye.getConfigValue(property));
         }
-        // YAML sequences may also be exposed as indexed configuration properties.
-        var indexed = config.getOptionalValues(name, String.class);
-        return indexed.map(values -> String.join(",", values)).orElse(null);
+        var sourceRanks = new java.util.HashMap<String, Integer>();
+        int rank = 0;
+        for (var source : config.getConfigSources()) sourceRanks.putIfAbsent(source.getName(), rank++);
+        int rootRank = root.getRawValue() == null ? Integer.MAX_VALUE : sourceRanks.getOrDefault(root.getSourceName(), Integer.MAX_VALUE);
+        int indexRank = indices.values().stream().filter(v -> v.getRawValue() != null)
+                .mapToInt(v -> sourceRanks.getOrDefault(v.getSourceName(), Integer.MAX_VALUE)).min().orElse(Integer.MAX_VALUE);
+        if (rootRank <= indexRank && rootRank != Integer.MAX_VALUE) {
+            return root.getValue() == null ? "" : root.getValue();
+        }
+        if (indexRank == Integer.MAX_VALUE) return null;
+        return indices.values().stream().filter(v -> v.getRawValue() != null
+                        && sourceRanks.getOrDefault(v.getSourceName(), Integer.MAX_VALUE) == indexRank)
+                .map(v -> v.getValue() == null ? "" : v.getValue()).collect(Collectors.joining(","));
     }
 
     UploadMimePolicy(SupportedFileTypes types, String value) {
