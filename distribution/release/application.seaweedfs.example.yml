@@ -5,7 +5,6 @@ mfs:
     enabled: ${MFS_RECEPTION_ENABLED:false}
     bucket: ${MFS_RECEPTION_BUCKET:muyun-recording}
     service-token: ${MFS_RECEPTION_TOKEN:}
-    allowed-tenants: ${MFS_RECEPTION_TENANTS:}
   storage:
     type: minio
     temp-dir: ${user.dir}/var/tmp

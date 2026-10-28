@@ -95,13 +95,13 @@ docker compose -f compose.seaweedfs.yaml stop
 
 接口位于 `/api/v1/internal/receptions`：POST 创建、GET 查询、GET `/{id}/objects` 列举、
 PUT `/{id}/objects/{key}` 暂存、POST `/{id}/confirm` 确认、POST `/{id}/cancel` 取消。
-除原有身份头外，必须校验独立 Bearer 与配置的租户允许列表；默认关闭。
+除原有身份头外，必须校验独立 Bearer；租户授权由可信业务服务负责，不再维护额外的业务租户允许列表。接收任务和正式文件的归属校验仍保留；接收基础设施默认关闭。
 任务保存桶、前缀、容量、对象数、有效期及冻结清单；确认租约带 token，
 元数据与 READY 在同一 SQLite 事务发布；候选副本持久跟踪，供崩溃后回收。
 已确认资产不随接收区到期删除。限制在列举/确认及内部 PUT 时检查，
 不能当作直接 S3 上传的硬配额；上线需设置存储容量与告警。
 
-启用时须配置 `mfs.reception.enabled=true`、`bucket`、`service-token`、`allowed-tenants`。
+启用时须配置 `mfs.reception.enabled=true`、`bucket`、`service-token`；已移除 `allowed-tenants`。
 接收桶必须与正式桶不同；大视频需同时协调 `mfs.upload.max-file-size-bytes`、
 `quarkus.http.limits.max-body-size`、临时磁盘和 Worker 容量，不能仅提高任务总容量。
 
@@ -178,18 +178,18 @@ S3 请求超时或旧上传晚于清理完成后，后续清理仍按原 key 删
 租户是可信调用方提供的不透明隔离标识。接收服务当前允许
 `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`；Worker 与其对齐，不解释组织关系。
 原 Worker 已实现“一实例一租户”（启动配置 `FILESERVER_TENANT`），并非完全不支持租户。
-目标同时支持单租户部署及显式允许列表内的共享 Worker；每个持久队列任务冻结租户，
+支持单租户部署及共享 Worker；每个持久队列任务冻结租户，
 原文件读取、派生接收、结果查询和恢复始终延续同一归属。
 
 安全边界必须区分三条路径：
 
 | 路径 | 当前机制与目标约束 |
 | --- | --- |
-| 调用方 → Worker | 已有独立 Bearer；目标增加明确租户范围，多租户请求必须显式携带租户，禁止仅靠 receptionId 认领归属 |
-| Worker → FileServer 内部接收 API | 已有独立接收 Bearer + `X-Tenant-Id` + `X-User-Id`，租户受接收允许列表约束；当前一个密钥覆盖配置的全部租户，不声称具有按调用方细分授权 |
+| 调用方 → Worker | 独立 Bearer；所有请求显式携带租户，业务后端负责授权，禁止仅靠 receptionId 认领归属 |
+| Worker → FileServer 内部接收 API | 已有独立接收 Bearer + `X-Tenant-Id` + `X-User-Id`，租户授权由可信业务后端负责；共享密钥不提供按调用方细分授权 |
 | Worker → FileServer 普通文件读取 | 当前可信身份头模式，不能把身份头存在当作凭证认证；FileServer 入口由内网/网关限制为可信后端，浏览器使用业务授权后签发的短时文件凭证 |
 
-共享 Worker 的 Bearer 同样代表受信任服务在配置范围内发起处理，不能发给普通用户。
+共享 Worker 的 Bearer 同样代表受信任服务代表业务租户发起处理，不能发给普通用户。
 多业务方需要不同权限时，应使用分实例或可信网关约束调用方范围；本轮不新增身份平台。
 文件头接口不得绕开网关开放给互联网。Worker 不接受任意 URL/文件路径，不向重定向转发凭证。
 
@@ -205,8 +205,8 @@ S3 请求超时或旧上传晚于清理完成后，后续清理仍按原 key 删
 
 FileServer 接口保留 `success/data` 包装，Worker 保留直接 JSON；不为了形式统一破坏现有客户端。
 Worker 的 `receptionId` 是全局接收 UUID；同一 ID、租户、处理配置重复提交返回原任务，
-配置变化拒绝。目标中跨租户查询或提交返回 404，不泄露任务结果；未知租户返回 403，
-缺少/无效凭证返回 401，格式错误返回 400，FileServer 暂时不可达在入队前返回 503。
+配置变化拒绝。跨租户查询或提交返回 404，不泄露任务结果；
+缺少/无效凭证返回 401，租户或正文格式错误返回 400，FileServer 暂时不可达在入队前返回 503。
 Worker 的错误规则不改变 FileServer 既有跨租户 403 规则。
 
 ### 媒体、容量与状态

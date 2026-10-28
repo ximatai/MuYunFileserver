@@ -71,24 +71,25 @@ MP4 重新编码增加 CPU 开销，不再声明视频原码流复制；长会�
 
 ### 租户上下文与兼容
 
-默认仍使用 `FILESERVER_TENANT`，单租户请求可省略 `X-Tenant-Id`。
-共享实例设置 `FILESERVER_ALLOWED_TENANTS=tenant-a,tenant-b`（最多 64 个，须包含默认租户），
-请求必须提供 `X-Tenant-Id`；格式与 FileServer 接收服务一致，服务端允许列表也须覆盖对应租户。
-Bearer 只供可信服务使用；拥有该凭证的服务可访问配置列表内全部租户，不提供用户级授权。
+业务系统统一确定租户，所有 HTTP 请求必须提供唯一的 `X-Tenant-Id`，格式与 FileServer 接收服务一致。
+不再配置或读取 `FILESERVER_ALLOWED_TENANTS`；新增业务租户无需修改 Worker 或 FileServer 配置。
+`FILESERVER_TENANT` 仅保留为旧单租户队列迁移的历史归属和进程内兼容默认值，不决定 HTTP 请求归属。
+Bearer 只供可信业务服务使用；业务服务负责用户级租户授权，Worker 仍验证接收任务与持久处理任务的租户归属。
+消费与重启恢复直接使用持久任务中的租户，不依赖可变配置名单，不将旧任务重新归给默认租户。
 `GET /capabilities` 同样需要认证与租户，返回 `schemaVersion=1`、`tenantScoped=true`、`tenantId`。
 任务响应附带冻结的 `tenantId`；入队前检查源接收归属及 READY，跨租户提交/查询返回 404。
-HTTP 200 的任务仍须按 state 判断结果；非法正文 400，范围外租户 403，上游暂不可达 503。
+HTTP 200 的任务仍须按 state 判断结果；非法正文或租户格式 400，上游暂不可达 503。
 
 旧 jobs.db 首次升级时以 **原 FILESERVER_TENANT** 回填租户，并在 worker_metadata 固定迁移来源。
 升级前停止 Worker，备份 jobs.db 与完整工作目录；不能先改默认租户再升级。
-后续更改默认租户不会改写已有任务；移除允许列表中的租户后，该租户旧队列不会被消费或转给其他租户。
+后续更改默认租户不会改写已有任务；所有持久任务继续按原租户消费。
 同一 root 仍只允许运行一个进程；不要将旧程序直接指向升级后的队列。
 
 ### 任务预算和资源阈值
 
 | 环境变量 | 默认值 | 语义 |
 | --- | --- | --- |
-| MEDIA_WORKER_MAX_PENDING | 128 | 全实例 QUEUED + PROCESSING 上限，包含暂时移出允许范围的待办 |
+| MEDIA_WORKER_MAX_PENDING | 128 | 全实例 QUEUED + PROCESSING 上限，覆盖所有租户 |
 | MEDIA_WORKER_MAX_ATTEMPTS | 5 | 每轮最多执行次数，持久保存；进程崩溃也消耗已开始的次数 |
 | MEDIA_WORKER_RETRY_SECONDS | 30 | 暂时网络/5xx/确认忙的重试间隔 |
 | MEDIA_WORKER_MAX_INPUT_BYTES | 17179869184 | 单任务原素材下载总量 |

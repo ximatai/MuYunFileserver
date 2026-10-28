@@ -34,7 +34,6 @@ public interface FileServiceConfig {
         Optional<String> bucket();
         @WithDefault("false") boolean enabled();
         Optional<String> serviceToken();
-        Optional<String> allowedTenants();
         @WithDefault("4096") int maxObjects();
         @WithDefault("17179869184") long maxTotalBytes();
         @WithDefault("600") long leaseSeconds();

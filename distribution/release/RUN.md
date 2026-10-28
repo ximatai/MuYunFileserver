@@ -225,28 +225,28 @@ FileServer 使用既有 `minio` 客户端适配，不自动迁移历史文件。
 
 Worker 是独立 Python 进程，需另装 Python 3.10+ 与支持 libopus/H.264/AAC 的 ffmpeg/ffprobe；
 运行与全部环境变量见 `workers/media-worker/README.md`。文件服务普通身份头入口仅供可信后端，
-接收 API 另配 Bearer 与租户允许列表；Worker Bearer 和接收 Bearer 分别管理，不给普通客户端。
+接收 API 另配 Bearer，租户授权由可信业务后端负责；Worker Bearer 和接收 Bearer 分别管理，不给普通客户端。
 服务经内网或受控 HTTPS 网关连接，网关约束调用方租户及总请求时长，不将身份头当作用户认证。
 
 ### 启动与验收
 
 1. 准备独立接收桶和正式资产桶、FileServer SQLite/临时目录、Worker 持久 root；配置受限身份。
 2. 启动存储、FileServer，确认 `/q/health/ready`；接收 API 默认关闭，需显式启用且桶不同。
-3. 配置 Worker 固定 FileServer 地址、原默认租户、两份独立服务凭证；共享实例另配租户允许列表。
+3. 配置 Worker 固定 FileServer 地址、原默认租户、两份独立服务凭证。
    由进程管理器保存环境，配置 CPU/内存限制、工作卷配额与 stdout 轮转，勿把密钥写进命令行或提交配置。
 4. 启动 `python3 workers/media-worker/worker.py --root var/media-worker --port 8096`，使用受信任身份
-   请求 `/capabilities`、`/health/ready`；共享实例必须传 `X-Tenant-Id`，健康只代表 Worker 本地状态。
+   请求 `/capabilities`、`/health/ready`；所有请求必须传 `X-Tenant-Id`，健康只代表 Worker 本地状态。
 5. 经业务后端创建并确认一份合成媒体接收任务，提交 `/jobs`，轮询到 READY，检查结果归属并下载解码。
    浏览器只使用业务后端授权后的短时播放凭证；不要为了验收打开公网可信身份头接口。
 
 ### 故障处理
 
-- 401/403：核对调用身份、租户允许范围和可信网关；不能通过改任务租户或扩大公网权限绕过。
+- 401/403：核对调用身份、任务租户归属和可信网关；不能通过改任务租户或扩大公网权限绕过。
 - 503：分别检查 FileServer/存储、Worker readiness、待办数量、磁盘与最近 consumer_error。
 - FAILED：按 jobId/tenantId 查 JSON 日志与任务目录 process.log，排除损坏格式、磁盘或上游问题。
   修复后由可信操作方向 `POST /jobs/{id}/retry` 提交 `{}`，保持原租户；不要直接改数据库状态。
 - CONFIRMING/超时：保留冻结清单并查询同一任务；恢复会核对原派生任务，不另起 UUID 掩盖不确定结果。
-- 队列中的移除租户仍占容量：先排空或恢复原范围处理，不得用另一个默认租户接管。
+- 持久任务按原租户处理；不得通过更改默认租户来转移任务归属。
 
 ### 备份、升级与回退
 

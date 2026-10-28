@@ -39,7 +39,7 @@ class ScopeTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.files = ScopedFiles()
-        self.worker = Worker(self.root, self.files, allowed_tenants=[A, B])
+        self.worker = Worker(self.root, self.files)
 
     def test_source_ownership_checked_before_claiming_task_id(self):
         with self.assertRaises(error.HTTPError):
@@ -76,21 +76,26 @@ class ScopeTest(unittest.TestCase):
                 files.call('GET', '/api/v1/internal/receptions/' + reception)
                 seen.append((reception, files.tenant, video))
                 return {'assets': {}, 'tenantId': 'cannot-override-scope'}
-        recovered = RecoverWorker(self.root, self.files.for_tenant(B), allowed_tenants=[A, B])
+        recovered = RecoverWorker(self.root, self.files.for_tenant(B))
         self.assertTrue(recovered.process_next())
         self.assertTrue(recovered.process_next())
         self.assertEqual([(RAW, A, False), (OTHER, B, True)], seen)
         self.assertEqual(A, recovered.get(RAW, A)['tenantId'])
         self.assertEqual(B, recovered.get(OTHER, B)['tenantId'])
 
-    def test_removed_tenant_tasks_are_not_consumed_or_reassigned(self):
+    def test_new_default_does_not_hide_or_reassign_persisted_business_jobs(self):
         self.worker.submit(RAW, False, A)
-        restricted = Worker(self.root, self.files.for_tenant(B))
-        self.assertFalse(restricted.process_next())
-        with self.assertRaises(PermissionError):
-            restricted.get(RAW, A)
-        with restricted.db() as db:
-            self.assertEqual((A, 'QUEUED'), db.execute('select tenant,state from jobs').fetchone())
+        seen = []
+        class Recovered(Worker):
+            def process(self, reception, video, tenant=None):
+                seen.append(tenant)
+                return {'assets': {}}
+        recovered = Recovered(self.root, self.files.for_tenant(B))
+        self.assertTrue(recovered.process_next())
+        self.assertEqual([A], seen)
+        self.assertEqual(A, recovered.get(RAW, A)['tenantId'])
+        with self.assertRaises(KeyError):
+            recovered.get(RAW, B)
 
     def test_legacy_migration_freezes_original_tenant_and_preserves_result(self):
         legacy = self.root / 'legacy'
@@ -99,7 +104,7 @@ class ScopeTest(unittest.TestCase):
             db.execute('create table jobs(id text primary key,video integer,state text,result text,error text,updated real)')
             db.execute('insert into jobs values(?,0,\'READY\',?,null,0)', (RAW, json.dumps({'assets': {'audio.ogg': 'stable'}})))
         Worker(legacy, self.files)
-        changed = Worker(legacy, self.files.for_tenant(B), allowed_tenants=[A, B])
+        changed = Worker(legacy, self.files.for_tenant(B))
         self.assertEqual({'audio.ogg': 'stable'}, changed.get(RAW, A)['assets'])
         with self.assertRaises(KeyError):
             changed.get(RAW, B)
@@ -119,7 +124,7 @@ class ScopeTest(unittest.TestCase):
                 if method == 'POST':
                     return {'id': OTHER, 'state': 'OPEN'}
                 return {'state': 'READY', 'assets': {'index.m3u8': 'source'}}
-        worker = Worker(self.root, ProcessingFiles(A), allowed_tenants=[A, B])
+        worker = Worker(self.root, ProcessingFiles(A))
         worker.submit(RAW, False, B)
         directory = self.root / RAW
         directory.mkdir()
@@ -138,7 +143,7 @@ class ScopeTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Files('http://127.0.0.1', bad, TOKEN)
         with self.assertRaises(ValueError):
-            Worker(self.root, self.files, allowed_tenants=[A, 'bad.scope'])
+            Worker(self.root, ScopedFiles('bad.scope'))
 
     def test_real_http_authorization_scope_and_body_errors(self):
         server = ThreadingHTTPServer(('127.0.0.1', 0), handler_for(self.worker, TOKEN))
@@ -171,7 +176,8 @@ class ScopeTest(unittest.TestCase):
         self.assertEqual(401, call('GET', '/capabilities', authorization='wrong')[0])
         self.assertEqual(401, call('GET', '/capabilities', duplicate=('Authorization', 'Bearer ' + TOKEN))[0])
         self.assertEqual(400, call('GET', '/capabilities', tenant=None)[0])
-        self.assertEqual(403, call('GET', '/capabilities', tenant='outside')[0])
+        self.assertEqual(200, call('GET', '/capabilities', tenant='new-business-tenant')[0])
+        self.assertEqual(400, call('GET', '/capabilities', tenant='../outside')[0])
         self.assertEqual(400, call('GET', '/capabilities', duplicate=('X-Tenant-Id', B))[0])
         self.assertEqual({'schemaVersion': 1, 'tenantScoped': True, 'tenantId': A}, call('GET', '/capabilities')[1])
         for malformed in [{}, [], {'receptionId': RAW}, {'receptionId': None, 'video': False}]:
