@@ -34,55 +34,30 @@ python3 scripts/release_manifest.py verify .
 公开访问须配置签名密钥与受控路由；接收及 Worker 使用独立服务凭据，业务后端承担用户与租户授权。
 Office 预览默认开启，需要安装 LibreOffice；无需此能力时显式关闭 `office-enabled`。
 
-## Local 模式
+## 外置配置与工作目录
 
-1. 准备目录：
-
-```sh
-mkdir -p var/storage var/tmp var/data
-```
-
-2. 按需参考 `application.local.example.yml` 调整 `application.yml`
-
-如果你要启用 `mfs.viewer.pdf-rendering.office-enabled`，请先安装 `LibreOffice`，并确保 `soffice` 可执行。
-
-3. 启动：
+以下命令中 `release_dir` 指向解压后的绝对路径。先校验，再创建外部配置与工作目录；
+发布目录只读，启动和配置都不能修改其中的文件。
 
 ```sh
-java -jar quarkus-app/quarkus-run.jar
+release_dir=/opt/muyun-fileserver/releases/VERSION
+python3 "$release_dir/scripts/release_manifest.py" verify "$release_dir"
+mkdir -p /data/muyun-fileserver /etc/muyun-fileserver
+cp "$release_dir/application.local.example.yml" /etc/muyun-fileserver/application.yml
 ```
 
-## MinIO 模式
-
-1. 启动 MinIO：
+按环境修改 `/etc/muyun-fileserver/application.yml`，存储、临时文件、SQLite 和 Office profile
+目录使用外部绝对路径或外部工作目录。默认 Office 预览需安装 LibreOffice，无此能力时显式关闭。
 
 ```sh
-docker run -d \
-  --name muyun-minio \
-  -p 9000:9000 \
-  -p 9001:9001 \
-  -e MINIO_ROOT_USER=minioadmin \
-  -e MINIO_ROOT_PASSWORD=minioadmin \
-  -v $(pwd)/.data/minio:/data \
-  minio/minio:RELEASE.2023-09-04T19-57-37Z \
-  server /data --console-address ":9001"
+cd /data/muyun-fileserver
+java -Dquarkus.config.locations=/etc/muyun-fileserver/application.yml \
+  -jar "$release_dir/quarkus-app/quarkus-run.jar"
 ```
 
-2. 准备临时目录和数据库目录：
-
-```sh
-mkdir -p var/tmp var/data
-```
-
-3. 按需参考 `application.minio.example.yml` 调整 `application.yml`
-
-如果你要启用 `mfs.viewer.pdf-rendering.office-enabled`，请同时确保运行环境里可执行 `soffice`。
-
-4. 启动：
-
-```sh
-java -jar quarkus-app/quarkus-run.jar
-```
+MinIO/S3 模式改为复制 `application.minio.example.yml` 或 `application.seaweedfs.example.yml`
+到外置配置目录，准备独立的存储凭据和桶；存储示例见包内 `compose.seaweedfs.yaml`。
+配置与数据目录由运行账号管理，环境凭据不放入版本目录。容器部署也须保持相同的外置边界。
 
 ## 验证
 

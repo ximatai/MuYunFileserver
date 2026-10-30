@@ -139,7 +139,7 @@ python3 -m unittest discover -s workers/media-worker -p 'test*.py' -v
 两个租户分别执行音频、音视频，共四条真实链路；入队前跨租户拒绝、派生资产归属、
 下载哈希、全文件解码、播放 Range 和无效播放凭证均断言；随后重启 Worker 并改变默认租户，
 验证四项结果与资产 ID 不变。该短样本不代表长会吞吐、生产容量或多节点高可用。
-备份、升级和恢复步骤见 release 包 `RUN.md` 的 FileServer / Worker 章节。
+备份、升级和恢复步骤见独立包同目录 `RUN.md`（源码位置为 `distribution/release/WORKER.md`）。
 
 
 ### 消费者写库故障恢复

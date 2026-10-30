@@ -11,7 +11,7 @@
 
 FileServer 可单独使用。Worker 通过受控 HTTP 文件接收协议读写原始及衍生文件，维护自己的任务队列，
 不读取 FileServer 数据库或直接操作其存储目录；业务系统负责授权、提交任务及关联结果。
-两个组件独立启停、可分别升级。版本号可以不同，但须符合 `contracts/media-processing-v1.json`，
+两个组件独立启停、可分别升级。版本号可以不同，但须满足各组件清单的 provides/requires（见 `contracts/components.json`），
 并在部署清单中记录验证过的组合。当前发布流水线同时产出同版本组件包，这是分发便利，不是协议要求。
 
 不需要媒体处理时，无须安装 Python、FFmpeg 或启动 Worker。启用处理时，配置独立服务凭据、

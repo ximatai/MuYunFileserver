@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "components": {
+    "fileserver": {
+      "provides": {
+        "fileReception": [
+          1
+        ]
+      },
+      "requires": {}
+    },
+    "media-worker": {
+      "provides": {
+        "workerJobs": [
+          1
+        ]
+      },
+      "requires": {
+        "fileReception": [
+          1
+        ]
+      }
+    }
+  }
+}
