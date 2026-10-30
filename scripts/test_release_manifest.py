@@ -90,7 +90,11 @@ class ReleaseManifestTest(unittest.TestCase):
 
     def test_worker_packages_without_java_and_suite_reuses_component_bytes(self):
         repo = self.root / 'source'
-        shutil.copytree(REPO, repo, ignore=shutil.ignore_patterns('.git', '.gradle', 'build', 'node_modules', 'var', 'dist', '.codex', '__pycache__', '.quarkus'))
+        repo.mkdir()
+        for directory in ('scripts', 'contracts', 'docs', 'distribution', 'src/main/resources', 'workers/media-worker'):
+            shutil.copytree(REPO / directory, repo / directory, ignore=shutil.ignore_patterns('__pycache__'))
+        for name in ('README.md', 'compose.yaml', 'compose.seaweedfs.yaml'):
+            shutil.copy2(REPO / name, repo / name)
         output = self.root / 'out'
         worker = assemble(repo, output, '0.27.1', 'a' * 40, 'media-worker')
         self.assertFalse((worker / 'quarkus-app').exists())
