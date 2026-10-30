@@ -54,7 +54,9 @@ jobs:
       - name: Assemble release bundle
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
-        run: python3 scripts/package_release.py --version "$APP_VERSION"
+        run: |
+          python3 scripts/package_release.py --version "$APP_VERSION"
+          python3 scripts/verify_release_runtime.py "dist/MuYunFileServer-$APP_VERSION"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

@@ -42,7 +42,8 @@ Office 预览默认开启，需要安装 LibreOffice；无需此能力时显式�
 ```sh
 release_dir=/opt/muyun-fileserver/releases/VERSION
 python3 "$release_dir/scripts/release_manifest.py" verify "$release_dir"
-mkdir -p /data/muyun-fileserver /etc/muyun-fileserver
+mkdir -p /data/muyun-fileserver/var/storage /data/muyun-fileserver/var/tmp /data/muyun-fileserver/var/data
+mkdir -p /etc/muyun-fileserver
 cp "$release_dir/application.local.example.yml" /etc/muyun-fileserver/application.yml
 ```
 
