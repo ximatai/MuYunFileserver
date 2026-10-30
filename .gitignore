@@ -50,3 +50,6 @@ demo-files/*
 /.quarkus/cli/plugins/
 # TLS Certificates
 .certs/
+
+# Immutable release assembly output
+/dist/

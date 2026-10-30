@@ -4,26 +4,36 @@
 
 ## 目录说明
 
+- `release-manifest.json`：统一版本、源码提交和完整文件 SHA-256 清单
+- `scripts/release_manifest.py`：发布包完整性校验工具
+- `workers/media-worker/`：同版本、可选启用的媒体 Worker
 - `quarkus-app/`：可直接运行的 Quarkus 应用
 - `application.yml`：默认配置
 - `application.local.example.yml`：本地文件系统示例配置
 - `application.minio.example.yml`：MinIO 示例配置
 - `compose.yaml`：单容器 Docker 运行模板
 
-## 零配置模式
+## 统一版本与默认部署
 
-当前 release 包默认采用“零配置文件类型策略”：
+FileServer 与媒体 Worker 由同一源码提交、同一版本号和同一正式包交付；两者可以独立运行，
+但部署清单应分别记录实际程序路径，并归属同一包版本。地址、租户授权、存储和凭据来自外置配置，
+不修改程序文件，也不把业务配置提交到开源仓库。归档标签不属于可部署正式版本。
 
-- 文件上传与统一查看的类型支持矩阵由服务内部固定维护
-- 常见 `MIME` 别名兼容也由服务内部处理
-- 默认支持的文件类型会随 release 版本演进而扩展
+解压后、写入环境配置或创建数据目录前校验：
 
-大多数部署场景下，你只需要关注：
+```sh
+python3 scripts/release_manifest.py verify .
+```
 
-- 存储模式和目录
-- 数据库路径
-- 上传大小限制
-- Office PDF 渲染是否启用
+此命令核对包内所有文件（含 Worker），拒绝文件缺失、变更、额外文件或符号链接；
+不能代替可信发布渠道和外部压缩包 SHA-256 校验。旧版本未提供清单时继续使用该版本发布附件的摘要，
+不要为旧制品伪造新的构建来源。验证后将发布目录保持只读，使用外部工作目录和配置文件。
+
+默认使用本地文件系统与 SQLite，适合本地验证；上传类型由内建 MIME 策略管理，也支持显式配置覆盖。
+普通身份头 API 只面向可信后端，不能把“零配置本地启动”理解为“可直接公开到互联网”。
+签名访问、内部接收和测试控制台默认关闭；媒体 Worker 按需单独启动。
+公开访问须配置签名密钥与受控路由；接收及 Worker 使用独立服务凭据，业务后端承担用户与租户授权。
+Office 预览默认开启，需要安装 LibreOffice；无需此能力时显式关闭 `office-enabled`。
 
 ## Local 模式
 
@@ -232,7 +242,8 @@ Worker 是独立 Python 进程，需另装 Python 3.10+ 与支持 libopus/H.264/
 
 1. 准备独立接收桶和正式资产桶、FileServer SQLite/临时目录、Worker 持久 root；配置受限身份。
 2. 启动存储、FileServer，确认 `/q/health/ready`；接收 API 默认关闭，需显式启用且桶不同。
-3. 配置 Worker 固定 FileServer 地址、原默认租户、两份独立服务凭证。
+3. 配置 Worker 固定 FileServer 地址、`FILESERVER_TENANT` 兼容默认值及两份独立服务凭证。
+   HTTP 请求归属始终由 `X-Tenant-Id` 决定；升级旧队列须保留原默认租户，不能借此改变历史任务归属。
    由进程管理器保存环境，配置 CPU/内存限制、工作卷配额与 stdout 轮转，勿把密钥写进命令行或提交配置。
 4. 启动 `python3 workers/media-worker/worker.py --root var/media-worker --port 8096`，使用受信任身份
    请求 `/capabilities`、`/health/ready`；所有请求必须传 `X-Tenant-Id`，健康只代表 Worker 本地状态。
