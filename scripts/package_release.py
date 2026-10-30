@@ -7,9 +7,12 @@ import shutil
 import tarfile
 import zipfile
 from release_manifest import create, source_identity, verify
+from build_release import build_fileserver, validate_build
 
 
 def assemble(repo, output, version, commit, component):
+    if component == 'fileserver':
+        validate_build(repo, version, commit)
     product = {'fileserver': 'MuYunFileServer', 'media-worker': 'MuYunMediaWorker', 'suite': 'MuYunFileSuite'}[component]
     root = output / f'{product}-{version}'
     if root.exists():
@@ -17,9 +20,11 @@ def assemble(repo, output, version, commit, component):
     root.mkdir(parents=True)
     (root / 'scripts').mkdir()
     shutil.copy2(repo / 'scripts/release_manifest.py', root / 'scripts/release_manifest.py')
+    shutil.copy2(repo / 'LICENSE', root / 'LICENSE')
     shutil.copytree(repo / 'contracts', root / 'contracts')
     if component == 'fileserver':
         shutil.copytree(repo / 'build/quarkus-app', root / 'quarkus-app')
+        shutil.copy2(validate_build(repo, version, commit), root / 'build-origin.json')
         shutil.copytree(repo / 'docs', root / 'docs')
         for name in ('README.md', 'compose.yaml', 'compose.seaweedfs.yaml'):
             shutil.copy2(repo / name, root / name)
@@ -28,6 +33,7 @@ def assemble(repo, output, version, commit, component):
         shutil.copy2(repo / 'src/main/resources/application.yml', root / 'application.yml')
         shutil.copy2(repo / 'scripts/render-seaweed-identities.py', root / 'scripts/render-seaweed-identities.py')
     elif component == 'media-worker':
+        shutil.copy2(repo / 'distribution/release/WORKER.md', root / 'RUN.md')
         shutil.copytree(repo / 'docs', root / 'docs')
         for name in ('worker.py', 'README.md'):
             shutil.copy2(repo / 'workers/media-worker' / name, root / name)
@@ -63,6 +69,8 @@ def main():
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     commit = source_identity(repo, args.version)
+    if args.component in ('fileserver', 'all'):
+        build_fileserver(repo, args.version, commit)
     for component in (['fileserver', 'media-worker', 'suite'] if args.component == 'all' else [args.component]):
         archive(assemble(repo, args.output.resolve(), args.version, commit, component))
 

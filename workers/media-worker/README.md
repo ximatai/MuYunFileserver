@@ -73,7 +73,7 @@ CI 安装 FFmpeg 并执行损坏输入、分片边界及连续时间轴回归。
 `FILESERVER_TENANT` 仅保留为旧单租户队列迁移的历史归属和进程内兼容默认值，不决定 HTTP 请求归属。
 Bearer 只供可信业务服务使用；业务服务负责用户级租户授权，Worker 仍验证接收任务与持久处理任务的租户归属。
 消费与重启恢复直接使用持久任务中的租户，不依赖可变配置名单，不将旧任务重新归给默认租户。
-`GET /capabilities` 同样需要认证与租户，返回 `schemaVersion=1`、`tenantScoped=true`、`tenantId`。
+`GET /capabilities` 同样需要认证与租户，返回 `schemaVersion=1`、`tenantScoped=true`、`tenantId` 以及 `provides.workerJobs`、`requires.fileReception`。schemaVersion 表示响应格式，不绑定任务协议版本；旧调用方可继续读取原字段。
 任务响应附带冻结的 `tenantId`；入队前检查源接收归属及 READY，跨租户提交/查询返回 404。
 HTTP 200 的任务仍须按 state 判断结果；非法正文或租户格式 400，上游暂不可达 503。
 
@@ -139,7 +139,7 @@ python3 -m unittest discover -s workers/media-worker -p 'test*.py' -v
 两个租户分别执行音频、音视频，共四条真实链路；入队前跨租户拒绝、派生资产归属、
 下载哈希、全文件解码、播放 Range 和无效播放凭证均断言；随后重启 Worker 并改变默认租户，
 验证四项结果与资产 ID 不变。该短样本不代表长会吞吐、生产容量或多节点高可用。
-备份、升级和恢复步骤见 release 包 `RUN.md` 的 FileServer / Worker 章节。
+备份、升级和恢复步骤见独立包同目录 `RUN.md`（源码位置为 `distribution/release/WORKER.md`）。
 
 
 ### 消费者写库故障恢复

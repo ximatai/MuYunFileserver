@@ -179,7 +179,7 @@ class ScopeTest(unittest.TestCase):
         self.assertEqual(200, call('GET', '/capabilities', tenant='new-business-tenant')[0])
         self.assertEqual(400, call('GET', '/capabilities', tenant='../outside')[0])
         self.assertEqual(400, call('GET', '/capabilities', duplicate=('X-Tenant-Id', B))[0])
-        self.assertEqual({'schemaVersion': 1, 'tenantScoped': True, 'tenantId': A}, call('GET', '/capabilities')[1])
+        self.assertEqual({'schemaVersion': 1, 'tenantScoped': True, 'tenantId': A, 'provides': {'workerJobs': [1]}, 'requires': {'fileReception': [1]}}, call('GET', '/capabilities')[1])
         for malformed in [{}, [], {'receptionId': RAW}, {'receptionId': None, 'video': False}]:
             self.assertEqual(400, call('POST', '/jobs', malformed)[0])
         body = {'receptionId': RAW, 'video': False}
