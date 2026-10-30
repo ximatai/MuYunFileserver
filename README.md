@@ -1,9 +1,10 @@
 # MuYunFileServer
 
-FileServer 与可选媒体 Worker 使用同一主线、同一正式版本和发布包；业务差异通过外置配置表达。
-Worker 是独立 Python/FFmpeg 进程，不要求仅使用文件服务的用户启动它。
-正式包提供 `release-manifest.json` 记录源码提交和组件文件摘要，部署与校验约定见
-[运行指南](distribution/release/RUN.md#统一版本与默认部署)。旧包继续以其原始发布摘要追溯，不重标版本。
+FileServer 与可选媒体 Worker 在同一仓库维护，通过版本化 HTTP 契约协作，独立运行和部署。
+正式发布分别提供 FileServer、Media Worker 和组合包；组合包复用相同组件制品。
+组件不要求版本号相同，兼容范围见 [媒体处理契约](contracts/README.md)。
+每个包的 `release-manifest.json` 记录版本、源码和文件摘要；旧包保持原始发布身份。
+
 
 
 `MuYunFileServer` 是一个基于 `Quarkus` 的轻量文件资产服务，当前提供文件上传、元数据查询、统一查看、下载、删除和健康检查能力。

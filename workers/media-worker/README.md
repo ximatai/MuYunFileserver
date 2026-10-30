@@ -2,7 +2,8 @@
 
 独立 Python 3.10+ 进程，依赖 `ffmpeg` / `ffprobe`（含 libopus、H.264 / AAC 解码支持）。
 不使用 Python 三方包，不连接媒体供应商，不访问业务数据库。
-随 FileServer 的同一正式包和版本发布，独立运行、按需启用，不维护业务专用分支。
+提供独立发布包，也可从组合包获取；通过媒体处理协议与 FileServer 协作，组件版本号不要求相同。
+不维护业务专用分支；兼容规则见源码仓库的 `contracts/`。
 由可信服务提交已确认 FileServer 接收任务，保存输入任务与衍生任务关系。
 
 ## 运行
@@ -11,7 +12,7 @@
 `FILESERVER_TENANT`、`FILESERVER_RECEPTION_TOKEN`；不将凭据写入源码或终端日志。
 
 ```sh
-python3 workers/media-worker/worker.py --root var/media-worker --port 8096
+python3 /path/to/MuYunMediaWorker/worker.py --root /data/media-worker --port 8096
 ```
 
 仅监听 `127.0.0.1`；跨主机通过自有 HTTPS 反向代理访问并保留 Bearer 认证。

@@ -43,7 +43,7 @@ jobs:
 
       - name: Verify media worker failure recovery
         run: |
-          python3 -m unittest discover -s scripts -p 'test_release_manifest.py' -v
+          python3 -m unittest discover -s scripts -p 'test_release*.py' -v
           python3 -m unittest discover -s workers/media-worker -p 'test*.py' -v
 
       - name: Build application
@@ -54,40 +54,13 @@ jobs:
       - name: Assemble release bundle
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          APP_NAME=MuYunFileServer
-          VERSION="$APP_VERSION"
-          RELEASE_DIR="dist/${APP_NAME}-${VERSION}"
-          mkdir -p "${RELEASE_DIR}"
-          cp -R build/quarkus-app "${RELEASE_DIR}/quarkus-app"
-          cp src/main/resources/application.yml "${RELEASE_DIR}/application.yml"
-          cp distribution/release/application.local.example.yml "${RELEASE_DIR}/application.local.example.yml"
-          cp distribution/release/application.minio.example.yml "${RELEASE_DIR}/application.minio.example.yml"
-          cp distribution/release/application.seaweedfs.example.yml "${RELEASE_DIR}/application.seaweedfs.example.yml"
-          cp compose.yaml "${RELEASE_DIR}/compose.yaml"
-          cp compose.seaweedfs.yaml "${RELEASE_DIR}/compose.seaweedfs.yaml"
-          # Ship linked contracts and execution records together.
-          cp -R docs "${RELEASE_DIR}/docs"
-          mkdir -p "${RELEASE_DIR}/workers" "${RELEASE_DIR}/scripts"
-          mkdir -p "${RELEASE_DIR}/workers/media-worker"
-          cp workers/media-worker/worker.py workers/media-worker/README.md "${RELEASE_DIR}/workers/media-worker/"
-          cp scripts/render-seaweed-identities.py "${RELEASE_DIR}/scripts/render-seaweed-identities.py"
-          cp scripts/release_manifest.py "${RELEASE_DIR}/scripts/release_manifest.py"
-          cp README.md "${RELEASE_DIR}/README.md"
-          cp distribution/release/RUN.md "${RELEASE_DIR}/RUN.md"
-          python3 scripts/release_manifest.py create "$RELEASE_DIR" --version "$VERSION"
-          (
-            cd dist
-            zip -r "${APP_NAME}-${VERSION}.zip" "${APP_NAME}-${VERSION}"
-            tar -czf "${APP_NAME}-${VERSION}.tar.gz" "${APP_NAME}-${VERSION}"
-            shasum -a 256 "${APP_NAME}-${VERSION}.zip" "${APP_NAME}-${VERSION}.tar.gz" > "${APP_NAME}-${VERSION}.sha256"
-          )
+        run: python3 scripts/package_release.py --version "$APP_VERSION"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            dist/MuYunFileServer-${{ steps.version.outputs.version }}.zip
-            dist/MuYunFileServer-${{ steps.version.outputs.version }}.tar.gz
-            dist/MuYunFileServer-${{ steps.version.outputs.version }}.sha256
+            dist/*.zip
+            dist/*.tar.gz
+            dist/*.sha256
