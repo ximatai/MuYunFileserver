@@ -574,7 +574,8 @@ def handler_for(worker, token):
                 if self.path == "/metrics":
                     return self.respond(200, worker.metrics(tenant))
                 if self.path == "/capabilities":
-                    return self.respond(200, {"schemaVersion": 1, "tenantScoped": True, "tenantId": tenant})
+                    return self.respond(200, {"schemaVersion": 1, "tenantScoped": True, "tenantId": tenant,
+                                              "provides": {"workerJobs": [1]}, "requires": {"fileReception": [1]}})
                 if not match:
                     return self.respond(404, {})
                 self.respond(200, worker.get(match[1], tenant))

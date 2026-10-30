@@ -73,7 +73,9 @@ try:
         declarations=json.loads(Path('contracts/components.json').read_text())['components']
         assert declarations['fileserver']['provides']['fileReception']==[1]
         assert declarations['media-worker']['requires']['fileReception']==[1]
-        assert declarations['media-worker']['provides']['workerJobs']==[capability['schemaVersion']]==[1]
+        assert capability['schemaVersion']==1
+        assert declarations['media-worker']['provides']==capability['provides']
+        assert declarations['media-worker']['requires']==capability['requires']
         assert capability['tenantScoped'] and capability['tenantId'] == current_tenant
         source = directory / (current_tenant + ("-video-source" if video else "-audio-source")); source.mkdir()
         args = ["ffmpeg", "-nostdin", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=16000"]

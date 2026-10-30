@@ -6,7 +6,7 @@ FileServer 拥有文件接收、不可变资产、访问授权和生命周期；
 当前能力声明为 `components.json`：FileServer 提供 fileReception v1；Worker 提供 workerJobs v1、依赖 fileReception v1。
 
 - FileServer 提供 `/api/v1/internal/receptions` 接收及确认接口，Worker 仅消费已确认输入。
-- Worker 提供认证后的 `/capabilities`，消费者检查 `schemaVersion=1`、`tenantScoped=true` 和请求租户。
+- Worker 提供认证后的 `/capabilities`，消费者检查 `schemaVersion=1`、`tenantScoped=true` 和请求租户；新增 provides/requires 字段分别描述任务 API 和接收依赖。schemaVersion 是能力响应的格式版本，不是 workerJobs 协议版本。
 - 所有 Worker 请求及文件接收请求均携带可信业务确定的唯一租户；服务 Bearer 与用户凭据分离。
 - 以接收任务 ID 幂等提交处理；业务查询 QUEUED/PROCESSING/READY/FAILED，失败恢复为显式命令。
 - 输出先固定清单再确认，重试不重复发布资产；原始文件不因 Worker 停机或处理失败而删除。
