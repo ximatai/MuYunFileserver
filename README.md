@@ -1,5 +1,12 @@
 # MuYunFileServer
 
+FileServer 与可选媒体 Worker 在同一仓库维护，通过版本化 HTTP 契约协作，独立运行和部署。
+正式发布分别提供 FileServer、Media Worker 和组合包；组合包复用相同组件制品。
+组件不要求版本号相同，兼容范围见 [媒体处理契约](contracts/README.md)。
+每个包的 `release-manifest.json` 记录版本、源码和文件摘要；旧包保持原始发布身份。
+
+
+
 `MuYunFileServer` 是一个基于 `Quarkus` 的轻量文件资产服务，当前提供文件上传、元数据查询、统一查看、下载、删除和健康检查能力。
 
 它适合这类场景：

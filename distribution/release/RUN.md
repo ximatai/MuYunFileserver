@@ -4,26 +4,35 @@
 
 ## 目录说明
 
+- `release-manifest.json`：统一版本、源码提交和完整文件 SHA-256 清单
+- `scripts/release_manifest.py`：发布包完整性校验工具
 - `quarkus-app/`：可直接运行的 Quarkus 应用
 - `application.yml`：默认配置
 - `application.local.example.yml`：本地文件系统示例配置
 - `application.minio.example.yml`：MinIO 示例配置
 - `compose.yaml`：单容器 Docker 运行模板
 
-## 零配置模式
+## 统一版本与默认部署
 
-当前 release 包默认采用“零配置文件类型策略”：
+FileServer 与媒体 Worker 分别提供独立包，组合包引用相同组件目录。部署清单分别记录版本、
+来源和路径；兼容依据是媒体处理协议，不要求组件版本号相同。组合包布局见其 README.md。地址、租户授权、存储和凭据来自外置配置，
+不修改程序文件，也不把业务配置提交到开源仓库。归档标签不属于可部署正式版本。
 
-- 文件上传与统一查看的类型支持矩阵由服务内部固定维护
-- 常见 `MIME` 别名兼容也由服务内部处理
-- 默认支持的文件类型会随 release 版本演进而扩展
+解压后、写入环境配置或创建数据目录前校验：
 
-大多数部署场景下，你只需要关注：
+```sh
+python3 scripts/release_manifest.py verify .
+```
 
-- 存储模式和目录
-- 数据库路径
-- 上传大小限制
-- Office PDF 渲染是否启用
+此命令核对当前包内所有文件，拒绝文件缺失、变更、额外文件或符号链接；
+不能代替可信发布渠道和外部压缩包 SHA-256 校验。旧版本未提供清单时继续使用该版本发布附件的摘要，
+不要为旧制品伪造新的构建来源。验证后将发布目录保持只读，使用外部工作目录和配置文件。
+
+默认使用本地文件系统与 SQLite，适合本地验证；上传类型由内建 MIME 策略管理，也支持显式配置覆盖。
+普通身份头 API 只面向可信后端，不能把“零配置本地启动”理解为“可直接公开到互联网”。
+签名访问、内部接收和测试控制台默认关闭；媒体 Worker 按需单独启动。
+公开访问须配置签名密钥与受控路由；接收及 Worker 使用独立服务凭据，业务后端承担用户与租户授权。
+Office 预览默认开启，需要安装 LibreOffice；无需此能力时显式关闭 `office-enabled`。
 
 ## Local 模式
 
@@ -224,7 +233,7 @@ FileServer 使用既有 `minio` 客户端适配，不自动迁移历史文件。
 ## FileServer / Worker 链路运维
 
 Worker 是独立 Python 进程，需另装 Python 3.10+ 与支持 libopus/H.264/AAC 的 ffmpeg/ffprobe；
-运行与全部环境变量见 `workers/media-worker/README.md`。文件服务普通身份头入口仅供可信后端，
+运行与全部环境变量见独立 Worker 包中的 `README.md`。文件服务普通身份头入口仅供可信后端，
 接收 API 另配 Bearer，租户授权由可信业务后端负责；Worker Bearer 和接收 Bearer 分别管理，不给普通客户端。
 服务经内网或受控 HTTPS 网关连接，网关约束调用方租户及总请求时长，不将身份头当作用户认证。
 
@@ -232,9 +241,10 @@ Worker 是独立 Python 进程，需另装 Python 3.10+ 与支持 libopus/H.264/
 
 1. 准备独立接收桶和正式资产桶、FileServer SQLite/临时目录、Worker 持久 root；配置受限身份。
 2. 启动存储、FileServer，确认 `/q/health/ready`；接收 API 默认关闭，需显式启用且桶不同。
-3. 配置 Worker 固定 FileServer 地址、原默认租户、两份独立服务凭证。
+3. 配置 Worker 固定 FileServer 地址、`FILESERVER_TENANT` 兼容默认值及两份独立服务凭证。
+   HTTP 请求归属始终由 `X-Tenant-Id` 决定；升级旧队列须保留原默认租户，不能借此改变历史任务归属。
    由进程管理器保存环境，配置 CPU/内存限制、工作卷配额与 stdout 轮转，勿把密钥写进命令行或提交配置。
-4. 启动 `python3 workers/media-worker/worker.py --root var/media-worker --port 8096`，使用受信任身份
+4. 启动 `python3 /path/to/MuYunMediaWorker/worker.py --root /data/media-worker --port 8096`，使用受信任身份
    请求 `/capabilities`、`/health/ready`；所有请求必须传 `X-Tenant-Id`，健康只代表 Worker 本地状态。
 5. 经业务后端创建并确认一份合成媒体接收任务，提交 `/jobs`，轮询到 READY，检查结果归属并下载解码。
    浏览器只使用业务后端授权后的短时播放凭证；不要为了验收打开公网可信身份头接口。

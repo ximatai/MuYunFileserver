@@ -1,0 +1,13 @@
+{
+  "contract": "muyun.media-processing",
+  "version": 1,
+  "workerApi": {"schemaVersion": 1, "tenantScoped": true},
+  "fileReceptionApi": {"basePath": "/api/v1/internal/receptions", "version": 1},
+  "responsibilities": {
+    "fileserver": "Own immutable file and reception facts; authorize access and confirm manifests.",
+    "media-worker": "Own processing jobs, retries and derived output submission through HTTP APIs.",
+    "business": "Authorize users and tenants, initiate processing and associate result files with business records."
+  },
+  "compatibility": "Component versions need not match. Both must support the same reception contract; consumers require worker schemaVersion 1 and tenantScoped true.",
+  "isolation": "Separate processes and databases. No direct access to another component's database or storage directories."
+}
