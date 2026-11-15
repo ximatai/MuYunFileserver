@@ -9,7 +9,9 @@ import net.ximatai.muyun.fileserver.common.context.RequestContextHolder;
 import net.ximatai.muyun.fileserver.common.log.OperationLog;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
-import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
+import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
+import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
+import net.ximatai.muyun.fileserver.domain.file.StoredObject;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput;
 
@@ -31,7 +33,10 @@ public class UploadService {
     FileMetadataRepository repository;
 
     @Inject
-    StorageProvider storageProvider;
+    AssetStorage assetStorage;
+
+    @Inject
+    LocalWorkspace workspace;
 
     @Inject
     UploadFilePreparer uploadFilePreparer;
@@ -59,7 +64,7 @@ public class UploadService {
 
         List<PreparedUpload> preparedUploads = new ArrayList<>();
         List<FileMetadata> insertedMetadata = new ArrayList<>();
-        List<String> movedStorageKeys = new ArrayList<>();
+        List<StoredObject> writtenObjects = new ArrayList<>();
 
         try {
             preparedUploads.addAll(uploadFilePreparer.prepare(uploadRequest, requestContext));
@@ -69,7 +74,7 @@ public class UploadService {
                     uploadRequest.remark(),
                     requestContext,
                     insertedMetadata,
-                    movedStorageKeys
+                    writtenObjects
             );
 
             LOG.info(OperationLog.format(
@@ -78,19 +83,19 @@ public class UploadService {
                     "tenant_id", requestContext.tenantId(),
                     "user_id", requestContext.userId(),
                     "request_id", requestContext.requestId(),
-                    "storage_provider", storageProvider.providerName(),
+                    "storage_provider", assetStorage.writeLocation().type(),
                     "file_count", String.valueOf(responseItems.size())
             ));
             return new UploadFilesResponse(List.copyOf(responseItems));
         } catch (RuntimeException exception) {
-            rollback(insertedMetadata, movedStorageKeys);
+            rollback(insertedMetadata, writtenObjects);
             LOG.warn(OperationLog.format(
                     "upload",
                     "failure",
                     "tenant_id", requestContext.tenantId(),
                     "user_id", requestContext.userId(),
                     "request_id", requestContext.requestId(),
-                    "storage_provider", storageProvider.providerName(),
+                    "storage_provider", assetStorage.writeLocation().type(),
                     "reason", exception.getMessage()
             ));
             throw exception;
@@ -104,14 +109,14 @@ public class UploadService {
             String remark,
             RequestContext requestContext,
             List<FileMetadata> insertedMetadata,
-            List<String> movedStorageKeys
+            List<StoredObject> writtenObjects
     ) {
         List<UploadFileItemResponse> responseItems = new ArrayList<>();
         for (PreparedUpload preparedUpload : preparedUploads) {
-            storageProvider.moveToPermanent(preparedUpload.tempFile(), preparedUpload.storageKey());
-            movedStorageKeys.add(preparedUpload.storageKey());
+            assetStorage.write(preparedUpload.tempFile(), preparedUpload.storedObject());
+            writtenObjects.add(preparedUpload.storedObject());
 
-            FileMetadata metadata = preparedUpload.toMetadata(remark, requestContext.userId(), storageProvider.providerName());
+            FileMetadata metadata = preparedUpload.toMetadata(remark, requestContext.userId());
             repository.insert(metadata);
             insertedMetadata.add(metadata);
 
@@ -127,7 +132,7 @@ public class UploadService {
         return responseItems;
     }
 
-    private void rollback(List<FileMetadata> insertedMetadata, List<String> movedStorageKeys) {
+    private void rollback(List<FileMetadata> insertedMetadata, List<StoredObject> writtenObjects) {
         for (int index = insertedMetadata.size() - 1; index >= 0; index--) {
             try {
                 repository.deleteById(insertedMetadata.get(index).id());
@@ -141,15 +146,15 @@ public class UploadService {
             }
         }
 
-        for (int index = movedStorageKeys.size() - 1; index >= 0; index--) {
+        for (int index = writtenObjects.size() - 1; index >= 0; index--) {
             try {
-                storageProvider.deleteIfExists(movedStorageKeys.get(index));
+                assetStorage.deleteIfExists(writtenObjects.get(index));
             } catch (RuntimeException exception) {
                 LOG.error(OperationLog.format(
                         "upload_rollback_storage",
                         "failure",
-                        "storage_key", movedStorageKeys.get(index),
-                        "storage_provider", storageProvider.providerName(),
+                        "storage_key", writtenObjects.get(index).key(),
+                        "storage_location", writtenObjects.get(index).locationId(),
                         "reason", exception.getMessage()
                 ), exception);
             }
@@ -159,13 +164,13 @@ public class UploadService {
     private void cleanupTemporaryFiles(List<PreparedUpload> preparedUploads) {
         for (PreparedUpload preparedUpload : preparedUploads) {
             try {
-                storageProvider.deleteTempFile(preparedUpload.tempFile());
+                workspace.deleteTempFile(preparedUpload.tempFile());
             } catch (RuntimeException exception) {
                 LOG.error(OperationLog.format(
                         "temp_cleanup",
                         "failure",
                         "file_id", preparedUpload.fileId(),
-                        "storage_provider", storageProvider.providerName(),
+                        "storage_provider", assetStorage.writeLocation().type(),
                         "reason", exception.getMessage()
                 ), exception);
             }

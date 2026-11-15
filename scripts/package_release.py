@@ -28,10 +28,11 @@ def assemble(repo, output, version, commit, component):
         shutil.copytree(repo / 'docs', root / 'docs')
         for name in ('README.md', 'compose.yaml', 'compose.seaweedfs.yaml'):
             shutil.copy2(repo / name, root / name)
-        for name in ('application.local.example.yml', 'application.minio.example.yml', 'application.seaweedfs.example.yml', 'RUN.md'):
+        for name in ('application.local.example.yml', 'application.minio.example.yml', 'application.seaweedfs.example.yml', 'minio-recorder-policy.example.json', 'RUN.md'):
             shutil.copy2(repo / 'distribution/release' / name, root / name)
         shutil.copy2(repo / 'src/main/resources/application.yml', root / 'application.yml')
         shutil.copy2(repo / 'scripts/render-seaweed-identities.py', root / 'scripts/render-seaweed-identities.py')
+        shutil.copy2(repo / 'scripts/storage_cutover.py', root / 'scripts/storage_cutover.py')
     elif component == 'media-worker':
         shutil.copy2(repo / 'distribution/release/WORKER.md', root / 'RUN.md')
         shutil.copytree(repo / 'docs', root / 'docs')

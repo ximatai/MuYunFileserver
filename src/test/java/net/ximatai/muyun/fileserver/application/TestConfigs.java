@@ -14,44 +14,17 @@ public final class TestConfigs {
     }
 
     public static FileServiceConfig fileServiceConfig() {
-        return fileServiceConfig("local", null, null, null, null, "soffice");
+        return fileServiceConfigWithRenderedPdfCommand("soffice");
     }
 
     public static FileServiceConfig fileServiceConfigWithRenderedPdfCommand(String command) {
-        return fileServiceConfig("local", null, null, null, null, command);
-    }
-
-    public static FileServiceConfig minioFileServiceConfig(String endpoint, String accessKey, String secretKey, String bucket) {
-        return fileServiceConfig("minio", endpoint, accessKey, secretKey, bucket, "soffice");
-    }
-
-    private static FileServiceConfig fileServiceConfig(
-            String storageType,
-            String endpoint,
-            String accessKey,
-            String secretKey,
-            String bucket,
-            String renderedPdfCommand
-    ) {
-        Path testRoot = Path.of(System.getProperty("user.dir"), "build", "test-config-storage");
-        Path testTemp = Path.of(System.getProperty("user.dir"), "build", "test-config-tmp");
         Path renderedPdfProfileRoot = Path.of(System.getProperty("user.dir"), "build", "test-config-libreoffice-profile");
-        ensureDirectory(testRoot);
+        Path testTemp = renderedPdfProfileRoot.resolveSibling("test-config-tmp");
         ensureDirectory(testTemp);
         ensureDirectory(renderedPdfProfileRoot);
 
         FileServiceConfig.Storage storage = proxy(FileServiceConfig.Storage.class, methodName -> switch (methodName) {
-            case "type" -> storageType;
-            case "rootDir" -> testRoot;
             case "tempDir" -> testTemp;
-            case "minio" -> proxy(FileServiceConfig.Minio.class, minioMethod -> switch (minioMethod) {
-                case "endpoint" -> java.util.Optional.ofNullable(endpoint);
-                case "accessKey" -> java.util.Optional.ofNullable(accessKey);
-                case "secretKey" -> java.util.Optional.ofNullable(secretKey);
-                case "bucket" -> java.util.Optional.ofNullable(bucket);
-                case "autoCreateBucket" -> true;
-                default -> throw new UnsupportedOperationException(minioMethod);
-            });
             default -> throw new UnsupportedOperationException(methodName);
         });
 
@@ -93,7 +66,7 @@ public final class TestConfigs {
             case "officeEnabled" -> true;
             case "renderer" -> "libreoffice";
             case "libreoffice" -> proxy(FileServiceConfig.Libreoffice.class, renderedPdfMethod -> switch (renderedPdfMethod) {
-                case "command" -> renderedPdfCommand;
+                case "command" -> command;
                 case "timeout" -> Duration.ofSeconds(5);
                 case "maxConcurrency" -> 1;
                 case "retryFailureAfter" -> Duration.ofMinutes(5);

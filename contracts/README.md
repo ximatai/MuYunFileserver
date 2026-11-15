@@ -16,8 +16,8 @@ FileServer 拥有文件接收、不可变资产、访问授权和生命周期；
 但清单分别记录身份，组合清单引用已验证版本；以后独立发布不需要改变调用方向或共享数据库。
 新增可选能力保持协议 v1 时应向后兼容；删除字段、改变状态或租户语义时需新协议和迁移说明，不能只比较版本号。
 
-协作验收由 `FileReceptionResourceTest` 和 `workers/media-worker/acceptance.py` 覆盖真实文件接收、
-音视频转换、租户隔离、幂等确认及 Worker 重启；Worker 单测覆盖上游故障和队列恢复。
+协作验收由 `S3ReceptionContract` 和 `workers/media-worker/acceptance.py` 在 MinIO、SeaweedFS 两个真实后端上覆盖文件接收、
+音视频转换、租户隔离、幂等确认及 Worker 重启。Worker 单测覆盖上游故障和队列恢复。
 普通文件测试独立于 Worker 运行，文件服务关闭接收 API 时也可单独使用。
 
 独立打包：`python3 scripts/package_release.py --version VERSION --component media-worker` 无需 Java 构建；

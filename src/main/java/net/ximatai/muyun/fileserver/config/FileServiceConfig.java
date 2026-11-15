@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotNull;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @ConfigMapping(prefix = "mfs")
@@ -31,6 +33,7 @@ public interface FileServiceConfig {
     Reception reception();
 
     interface Reception {
+        Optional<String> location();
         Optional<String> bucket();
         @WithDefault("false") boolean enabled();
         Optional<String> serviceToken();
@@ -49,10 +52,29 @@ public interface FileServiceConfig {
         @NotNull
         Path tempDir();
 
-        Minio minio();
+        S3 minio();
+
+        S3 s3();
+
+        Optional<String> defaultLocation();
+
+        Optional<List<String>> legacyAssetLocations();
+
+        Optional<List<String>> legacyReceptionLocations();
+
+        Optional<String> legacyCandidateLocation();
+
+        Map<String, StorageLocation> locations();
     }
 
-    interface Minio {
+    interface StorageLocation {
+        String type();
+        @WithDefault("asset") String role();
+        Optional<Path> rootDir();
+        S3 s3();
+    }
+
+    interface S3 {
         Optional<String> endpoint();
 
         Optional<String> accessKey();

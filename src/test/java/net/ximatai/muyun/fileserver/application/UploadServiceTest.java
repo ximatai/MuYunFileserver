@@ -2,7 +2,9 @@ package net.ximatai.muyun.fileserver.application;
 
 import net.ximatai.muyun.fileserver.common.context.RequestContext;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
-import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
+import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
+import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
+import net.ximatai.muyun.fileserver.domain.file.StoredObject;
 import org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput;
 import org.junit.jupiter.api.Test;
 
@@ -74,24 +76,42 @@ class UploadServiceTest {
                     }
                     return null;
                 });
-        service.storageProvider = (StorageProvider) Proxy.newProxyInstance(
-                getClass().getClassLoader(), new Class<?>[]{StorageProvider.class}, (proxy, method, args) -> {
+        service.assetStorage = (AssetStorage) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{AssetStorage.class}, (proxy, method, args) -> {
                     switch (method.getName()) {
-                        case "providerName": return "test";
-                        case "moveToPermanent": return null;
-                        case "deleteIfExists": removedStorage.add((String) args[0]); return null;
-                        case "deleteTempFile":
-                            cleaned.add((Path) args[0]);
-                            if (args[0].equals(Path.of("first.tmp"))) throw new IllegalStateException("cleanup unavailable");
-                            return null;
+                        case "writeLocation": return new AssetStorage.Location("test", "local", null);
+                        case "write": return null;
+                        case "deleteIfExists": removedStorage.add(((StoredObject) args[0]).key()); return null;
                         default: throw new UnsupportedOperationException(method.getName());
                     }
                 });
+        service.workspace = new LocalWorkspace() {
+            @Override
+            public Path createTempFile() {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Path createPdfWorkDirectory() {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void deletePdfWorkDirectory(Path directory) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void deleteTempFile(Path path) {
+                cleaned.add(path);
+                if (path.equals(Path.of("first.tmp"))) throw new IllegalStateException("cleanup unavailable");
+            }
+        };
         return service;
     }
 
     private PreparedUpload prepared(String id) {
         return new PreparedUpload(id, context.tenantId(), id + ".txt", "txt", "text/plain",
-                5L, "hash", null, id, Instant.EPOCH, false, Path.of(id + ".tmp"), null, null);
+                5L, "hash", new AssetStorage.Location("test", "local", null), id, Instant.EPOCH, false, Path.of(id + ".tmp"), null, null);
     }
 }

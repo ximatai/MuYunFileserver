@@ -5,6 +5,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.job.FileCleanupJob;
 import net.ximatai.muyun.fileserver.common.exception.mapper.UnhandledExceptionMapper;
+import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +58,9 @@ class FileResourceTest {
 
     @Inject
     FileCleanupJob fileCleanupJob;
+
+    @Inject
+    FileServiceConfig config;
 
     @Test
     void shouldKeepUnknownPathsAs404WithoutUnhandledErrorLogs() {
@@ -657,7 +661,7 @@ class FileResourceTest {
     }
 
     @Test
-    void shouldGenerateRenderedPdfForOfficeViewContentAndReuseCachedPdf() {
+    void shouldGenerateRenderedPdfForOfficeViewContentAndReuseCachedPdf() throws java.io.IOException {
         String fileId = uploadSingleFile(
                 "report.docx",
                 minimalDocxBytes(),
@@ -674,6 +678,9 @@ class FileResourceTest {
 
         Path previewPath = previewStoragePath(fileId);
         org.junit.jupiter.api.Assertions.assertTrue(Files.exists(previewPath));
+        try (var workDirs = Files.newDirectoryStream(config.storage().tempDir(), "rendered-pdf-work-*")) {
+            org.junit.jupiter.api.Assertions.assertFalse(workDirs.iterator().hasNext(), "preview source copy leaked");
+        }
 
         long modifiedTime = previewPath.toFile().lastModified();
 

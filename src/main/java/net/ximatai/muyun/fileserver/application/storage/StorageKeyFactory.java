@@ -1,4 +1,4 @@
-package net.ximatai.muyun.fileserver.infrastructure.storage;
+package net.ximatai.muyun.fileserver.application.storage;
 
 import jakarta.enterprise.context.ApplicationScoped;
 

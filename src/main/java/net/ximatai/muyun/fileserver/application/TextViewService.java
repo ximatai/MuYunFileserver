@@ -6,7 +6,7 @@ import net.ximatai.muyun.fileserver.common.exception.PayloadTooLargeException;
 import net.ximatai.muyun.fileserver.common.exception.UnprocessableContentException;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
-import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
+import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -24,7 +24,7 @@ public class TextViewService {
     private static final String CONTENT_TOO_LARGE = "text content exceeds inline viewing limit";
 
     @Inject
-    StorageProvider storageProvider;
+    AssetStorage assetStorage;
 
     @Inject
     FileServiceConfig config;
@@ -34,7 +34,7 @@ public class TextViewService {
             throw new PayloadTooLargeException(CONTENT_TOO_LARGE);
         }
         byte[] originalBytes;
-        try (InputStream inputStream = storageProvider.open(metadata.storageKey())) {
+        try (InputStream inputStream = assetStorage.open(metadata.storedObject())) {
             originalBytes = inputStream.readAllBytes();
         } catch (IOException exception) {
             throw new IllegalStateException("failed to read text content", exception);

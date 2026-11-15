@@ -38,16 +38,14 @@ public class LibreOfficePdfRenderer implements OfficePdfRenderer {
     }
 
     @Override
-    public RenderedPdfConversionResult convert(Path sourceFile, String originalFilename) {
+    public RenderedPdfConversionResult convert(Path sourceFile, String originalFilename, Path workDir) {
         Objects.requireNonNull(sourceFile, "sourceFile");
         Objects.requireNonNull(originalFilename, "originalFilename");
         verifyReadiness();
         acquire();
 
-        Path workDir = null;
         Path profileDir = null;
         try {
-            workDir = Files.createTempDirectory(config.storage().tempDir(), "rendered-pdf-work-");
             profileDir = Files.createDirectories(config.viewer().pdfRendering().libreoffice().profileRoot()
                     .resolve("profile-" + Instant.now().toEpochMilli() + "-" + Thread.currentThread().threadId()));
             Path sourceCopy = workDir.resolve(sanitizeFilename(originalFilename));
@@ -100,10 +98,6 @@ public class LibreOfficePdfRenderer implements OfficePdfRenderer {
         } finally {
             release();
             deleteDirectory(profileDir);
-            // Keep work dir for returned output only on success.
-            if (workDir != null && !containsRenderedPdfOutput(workDir)) {
-                deleteDirectory(workDir);
-            }
         }
     }
 
@@ -196,14 +190,6 @@ public class LibreOfficePdfRenderer implements OfficePdfRenderer {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         digest.update(Files.readAllBytes(path));
         return HexFormat.of().formatHex(digest.digest()).toLowerCase(Locale.ROOT);
-    }
-
-    private boolean containsRenderedPdfOutput(Path workDir) {
-        try (var stream = Files.list(workDir)) {
-            return stream.anyMatch(path -> path.getFileName().toString().endsWith(".pdf"));
-        } catch (IOException exception) {
-            return false;
-        }
     }
 
     private void deleteDirectory(Path directory) {

@@ -19,7 +19,7 @@
 | MR | 录制策略、会议归档完整性、业务权限、转写和指导工作流 |
 
 录制数据：声网 → HTTPS 网关 → SeaweedFS 接收区。
-文件数据：FileServer / Worker → 内部 S3 地址 → SeaweedFS。
+文件数据：Worker → FileServer HTTP API；FileServer → 内部 S3 地址 → SeaweedFS。
 播放数据：浏览器 → FileServer 受限下载接口 → 正式资产存储。
 控制：MR → FileServer 创建接收任务；MR → Bridge 启停录制；
 Bridge 持有独立录制存储身份，核对 MR 传入的服务端接收桶及位置；MR 发起归档确认和处理。
@@ -37,8 +37,8 @@ SeaweedFS 管理、filer、master、volume 等端口不得一起公开。
 - 固定 SeaweedFS 4.48 镜像；Compose 使用镜像摘要，避免 tag 被覆盖。
 - 单机 `mini`；关闭 Admin UI、WebDAV、Iceberg、Lance。
 - 本地仅发布回环 S3 端口，使用专用 Docker 数据卷。
-- 沿用 `mfs.storage.type=minio` 与 `mfs.storage.minio.*`；这是既有客户端适配名称，
-  不代表部署 MinIO 服务。暂不迁移历史元数据的 provider 名称。
+- 用 `mfs.storage.type=s3` 与 `mfs.storage.s3.*` 配置；旧版 `minio` 配置仍可兼容。
+  存储位置、旧记录回填及双后端验收见 [存储平台设计](storage-platform.md) 和 [后端支持范围](storage-backends.md)。
 - `SeaweedFileResourceTest` 使用隔离容器、数据库和临时目录。
   验证 HTTP 文件上传/下载、Range、租户拒绝、签名下载和软删、12 MiB 音频字节校验，
   以及直接 S3 分段上传、索引覆盖、列举、错误签名和存储重启恢复。

@@ -10,7 +10,10 @@ import net.ximatai.muyun.fileserver.common.exception.*;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import net.ximatai.muyun.fileserver.domain.file.*;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.*;
-import net.ximatai.muyun.fileserver.infrastructure.storage.*;
+import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
+import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
+import net.ximatai.muyun.fileserver.application.storage.ReceptionStorage;
+import net.ximatai.muyun.fileserver.application.storage.StorageKeyFactory;
 import net.ximatai.muyun.fileserver.infrastructure.ulid.UlidGenerator;
 import java.nio.file.*;
 import java.security.*;
@@ -23,8 +26,9 @@ public class FileReceptionService {
     @Inject RequestContextHolder context;
     @Inject FileReceptionRepository receptions;
     @Inject FileMetadataRepository files;
-    @Inject StorageProvider storage;
-    @Inject ReceptionObjectStore objects;
+    @Inject AssetStorage storage;
+    @Inject LocalWorkspace workspace;
+    @Inject ReceptionStorage objects;
     @Inject StorageKeyFactory keys;
     @Inject UlidGenerator ids;
     @Inject ObjectMapper json;
@@ -34,10 +38,8 @@ public class FileReceptionService {
                            int maxObjects,long maxBytes,Map<String,String> assets) { }
 
     public String authorize(String bearer) {
-        if(!config.reception().enabled() || !"minio".equalsIgnoreCase(config.storage().type()))
+        if(!config.reception().enabled())
             throw new ServiceUnavailableException("file reception is disabled");
-        if(config.reception().bucket().isEmpty()||config.reception().bucket().equals(config.storage().minio().bucket()))
-            throw new ServiceUnavailableException("file reception requires a separate source bucket");
         String secret=config.reception().serviceToken().filter(v->v.length()>=24).orElseThrow(
                 ()->new ServiceUnavailableException("file reception service identity is not configured"));
         String actual=bearer!=null && bearer.startsWith("Bearer ")?bearer.substring(7):"";
@@ -57,8 +59,9 @@ public class FileReceptionService {
                 || request.expiresInSeconds()<1 || request.expiresInSeconds()>604800)
             throw new ValidationException("invalid reception limits or idempotency key");
         String id=UUID.randomUUID().toString();
+        var target=objects.target();
         var value=receptions.create(new FileReception(id,tenant,request.idempotencyKey(),"receiving/"+id.replace("-", "")+"/",
-                "OPEN",request.maxObjects(),request.maxBytes(),now()+request.expiresInSeconds()*1000,null,null,null,objects.bucket(),request.expiresInSeconds()));
+                "OPEN",request.maxObjects(),request.maxBytes(),now()+request.expiresInSeconds()*1000,null,null,null,target.bucket(),request.expiresInSeconds(),target.locationId()));
         if(value.maxObjects()!=request.maxObjects() || value.maxBytes()!=request.maxBytes()||value.ttlSeconds()!=request.expiresInSeconds())
             throw new ConflictException("idempotency key was used with different limits");
         return snapshot(value);
@@ -72,7 +75,7 @@ public class FileReceptionService {
         if(!task.state().equals("OPEN")||task.expiresAt()<=now())throw new ConflictException("reception no longer accepts writes");
         if(key==null||!key.matches("[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*")||key.length()>512
                 ||Arrays.stream(key.split("/")).anyMatch(v->v.equals(".")||v.equals("..")))throw new ValidationException("invalid reception key");
-        Path temporary=storage.createTempFile();
+        Path temporary=workspace.createTempFile();
         try {
             long limit=Math.min(task.maxBytes(),config.upload().maxFileSizeBytes());long size=0;long spaceChecked=0;
             try(var output=Files.newOutputStream(temporary)) {
@@ -91,16 +94,16 @@ public class FileReceptionService {
             // Check again after a potentially slow upload. Confirm validates a separate immutable copy.
             task=require(tenant,id);
             if(!task.state().equals("OPEN")||task.expiresAt()<=now())throw new ConflictException("reception no longer accepts writes");
-            objects.upload(task.bucket(),task.prefix()+key,temporary);
-        }finally{storage.deleteTempFile(temporary);}
+            objects.upload(task.object(key),temporary);
+        }finally{workspace.deleteTempFile(temporary);}
     }
 
-    public List<ReceptionObjectStore.ObjectInfo> list(String tenant,String id)throws Exception {
+    public List<ReceptionStorage.ObjectInfo> list(String tenant,String id)throws Exception {
         var value=require(tenant,id);
         if(!value.state().equals("OPEN") && !value.state().equals("CONFIRMING"))
             throw new ConflictException("reception is no longer accepting objects");
         if(value.expiresAt()<=now())throw new ConflictException("reception expired");
-        var result=objects.list(value.bucket(),value.prefix(),value.maxObjects()+1);
+        var result=objects.list(value.storageLocationId(),value.prefix(),value.maxObjects()+1);
         if(result.size()>value.maxObjects())throw new ConflictException("reception object limit exceeded");
         return result;
     }
@@ -116,14 +119,15 @@ public class FileReceptionService {
         String token=UUID.randomUUID().toString();
         if(!receptions.claim(id,hash,token,now(),leaseUntil()))throw new ConflictException("reception expired, busy or manifest changed");
         var prepared=new LinkedHashMap<String,FileMetadata>();
+        var destination=storage.writeLocation();
         try {
             for(var entry:entries) {
-                Path temporary=storage.createTempFile();
+                Path temporary=workspace.createTempFile();
                 try {
                     if(Files.getFileStore(temporary).getUsableSpace()-config.upload().minFreeSpaceBytes()<entry.sizeBytes())
                         throw new ServiceUnavailableException("insufficient reception staging space");
                     var digest=MessageDigest.getInstance("SHA-256");long size=0;long renewed=now();
-                    try(var source=objects.open(value.bucket(),value.prefix()+entry.key());var target=Files.newOutputStream(temporary)) {
+                    try(var source=objects.open(value.object(entry.key()));var target=Files.newOutputStream(temporary)) {
                         byte[] buffer=new byte[65536];int read;
                         while((read=source.read(buffer))!=-1) {
                             size+=read;
@@ -143,12 +147,13 @@ public class FileReceptionService {
                     if(!types.isAllowedUploadMimeType(mime))mime="application/octet-stream";
                     String fileId=ids.nextUlid();String key=keys.build(tenant,fileId);
                     receptions.renew(id,token,now(),leaseUntil());
-                    receptions.stage(id,token,fileId,key);
-                    storage.moveToPermanent(temporary,key);
+                    var object=destination.object(key);
+                    receptions.stage(id,token,fileId,object);
+                    storage.write(temporary,object);
                     prepared.put(entry.key(),new FileMetadata(fileId,tenant,entry.filename(),extension(entry.filename()),
-                            mime,size,checksum,storage.providerName(),storage.storageBucket(),key,FileStatus.ACTIVE,
+                            mime,size,checksum,destination.type(),destination.bucket(),key,destination.id(),FileStatus.ACTIVE,
                             false,"service:file-reception",Instant.now(),null,null,"reception:"+id,null,null));
-                }finally{storage.deleteTempFile(temporary);}
+                }finally{workspace.deleteTempFile(temporary);}
             }
             receptions.publish(id,token,now(),prepared);
             return snapshot(require(tenant,id));
@@ -175,12 +180,12 @@ public class FileReceptionService {
 
     @Scheduled(every="1h")
     public void cleanup() {
-        if(!config.reception().enabled() || !"minio".equalsIgnoreCase(config.storage().type()))return;
+        if(!config.reception().enabled())return;
         for(var task:receptions.expireAndFindCleanup(now())) {
             try {
                 // Prefixes are generated by the server, never supplied by the caller.
-                var batch=objects.list(task.bucket(),task.prefix(),1000);
-                for(var item:batch)objects.delete(task.bucket(),task.prefix()+item.key());
+                var batch=objects.list(task.storageLocationId(),task.prefix(),1000);
+                for(var item:batch)objects.delete(task.object(item.key()));
                 for(var item:receptions.staged(task.id()).entrySet()) {
                     if(!files.existsById(item.getKey())) {
                         storage.deleteIfExists(item.getValue());

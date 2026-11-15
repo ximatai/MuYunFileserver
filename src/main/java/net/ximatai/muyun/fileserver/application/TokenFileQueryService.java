@@ -10,7 +10,7 @@ import net.ximatai.muyun.fileserver.common.exception.ValidationException;
 import net.ximatai.muyun.fileserver.common.log.OperationLog;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
-import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
+import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
 import net.ximatai.muyun.fileserver.infrastructure.ulid.UlidGenerator;
 import org.jboss.logging.Logger;
 
@@ -29,7 +29,7 @@ public class TokenFileQueryService {
     UlidGenerator ulidGenerator;
 
     @Inject
-    StorageProvider storageProvider;
+    AssetStorage assetStorage;
 
     @Inject
     RenderedPdfService renderedPdfService;
@@ -57,7 +57,7 @@ public class TokenFileQueryService {
 
     public DownloadFile openDownload(String fileId, String accessToken) {
         FileMetadata metadata = requireAccessibleFile(fileId, accessToken, "download", DownloadTokenSigner.VIEWER_PURPOSE);
-        if (!storageProvider.exists(metadata.storageKey())) {
+        if (!assetStorage.exists(metadata.storedObject())) {
             throw new NotFoundException("file not found");
         }
 
@@ -75,8 +75,8 @@ public class TokenFileQueryService {
                 metadata.originalFilename(),
                 metadata.mimeType(),
                 metadata.sizeBytes(),
-                () -> storageProvider.open(metadata.storageKey()),
-                (start, length) -> storageProvider.openRange(metadata.storageKey(), start, length)
+                () -> assetStorage.open(metadata.storedObject()),
+                (start, length) -> assetStorage.openRange(metadata.storedObject(), start, length)
         );
     }
 
@@ -159,7 +159,7 @@ public class TokenFileQueryService {
             );
         }
         if (viewerType == ViewerType.IMAGE || viewerType == ViewerType.VIDEO || viewerType == ViewerType.AUDIO) {
-            if (!storageProvider.exists(metadata.storageKey())) {
+            if (!assetStorage.exists(metadata.storedObject())) {
                 throw new NotFoundException("file not found");
             }
             LOG.info(OperationLog.format(
@@ -176,8 +176,8 @@ public class TokenFileQueryService {
                     metadata.originalFilename(),
                     metadata.mimeType(),
                     metadata.sizeBytes(),
-                    () -> storageProvider.open(metadata.storageKey()),
-                    (start, length) -> storageProvider.openRange(metadata.storageKey(), start, length)
+                    () -> assetStorage.open(metadata.storedObject()),
+                    (start, length) -> assetStorage.openRange(metadata.storedObject(), start, length)
             );
         }
         if (viewerType == ViewerType.TEXT) {

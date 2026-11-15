@@ -43,7 +43,7 @@ flowchart LR
     U["Browser / Client"] --> B["Business Backend / BFF"]
     B --> G["Gateway"]
     G --> F["MuYunFileServer"]
-    F --> S["StorageProvider"]
+    F --> S["Asset storage · Local / S3"]
     F --> D["Metadata DB"]
 
     B -. "business auth / token issue" .-> U

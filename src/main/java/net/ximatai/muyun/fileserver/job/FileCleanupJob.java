@@ -8,7 +8,7 @@ import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.application.RenderedPdfService;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
-import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
+import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
@@ -27,7 +27,7 @@ public class FileCleanupJob {
     FileMetadataRepository fileMetadataRepository;
 
     @Inject
-    StorageProvider storageProvider;
+    AssetStorage assetStorage;
 
     @Inject
     RenderedPdfService renderedPdfService;
@@ -49,8 +49,7 @@ public class FileCleanupJob {
                 "temporary_file_cleanup",
                 "started",
                 "retention", config.cleanup().temporaryRetention().toString(),
-                "batch_size", String.valueOf(config.cleanup().batchSize()),
-                "storage_provider", storageProvider.providerName()
+                "batch_size", String.valueOf(config.cleanup().batchSize())
         ));
         for (FileMetadata item : items) {
             try {
@@ -58,7 +57,7 @@ public class FileCleanupJob {
                     continue;
                 }
                 renderedPdfService.deleteRenderedPdfIfExists(item);
-                storageProvider.deleteIfExists(item.storageKey());
+                assetStorage.deleteIfExists(item.storedObject());
                 fileMetadataRepository.deleteById(item.id());
                 LOG.info(OperationLog.format(
                         "temporary_file_cleanup",
@@ -87,13 +86,12 @@ public class FileCleanupJob {
                 "file_cleanup",
                 "started",
                 "retention", config.cleanup().deletedRetention().toString(),
-                "batch_size", String.valueOf(config.cleanup().batchSize()),
-                "storage_provider", storageProvider.providerName()
+                "batch_size", String.valueOf(config.cleanup().batchSize())
         ));
         for (FileMetadata item : items) {
             try {
                 renderedPdfService.deleteRenderedPdfIfExists(item);
-                storageProvider.deleteIfExists(item.storageKey());
+                assetStorage.deleteIfExists(item.storedObject());
                 fileMetadataRepository.deleteById(item.id());
                 LOG.info(OperationLog.format(
                         "file_cleanup",

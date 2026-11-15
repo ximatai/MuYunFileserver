@@ -15,6 +15,7 @@ import subprocess
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 from urllib import request, error, parse
 
 
@@ -514,6 +515,11 @@ class BoundedHTTPServer(ThreadingHTTPServer):
     def __init__(self, address, handler):
         self.slots = threading.BoundedSemaphore(16)
         super().__init__(address, handler)
+
+    def server_bind(self):
+        # The listener is local and needs no reverse DNS lookup to identify itself.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
     def process_request(self, sock, address):
         if not self.slots.acquire(blocking=False):
