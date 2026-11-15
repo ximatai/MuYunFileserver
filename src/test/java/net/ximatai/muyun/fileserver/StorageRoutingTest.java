@@ -32,6 +32,13 @@ class StorageRoutingTest {
     @Inject FileCleanupJob cleanup;
 
     @Test
+    void startupReclaimsOldPreviewWorkspaceButPreservesUnmanagedDirectories() throws Exception {
+        Path workspace = config.storage().tempDir();
+        assertFalse(Files.exists(workspace.resolve("rendered-pdf-work-abandoned")));
+        assertEquals("keep", Files.readString(workspace.resolve("unmanaged/sentinel")));
+    }
+
+    @Test
     void upgradingWithNewDefaultKeepsLegacyDownloadsPreviewsAndCleanupOnTheirOriginalLocation() throws Exception {
         var storage = config.storage().locations();
         Path oldRoot = storage.get("old").rootDir().orElseThrow();
@@ -73,6 +80,11 @@ class StorageRoutingTest {
                 directory = Files.createTempDirectory("mfs-storage-routing-");
                 Path oldRoot = Files.createDirectory(directory.resolve("old"));
                 Path newRoot = Files.createDirectory(directory.resolve("new"));
+                Path workspace = Files.createDirectory(directory.resolve("workspace"));
+                Path abandoned = Files.createDirectory(workspace.resolve("rendered-pdf-work-abandoned"));
+                Files.writeString(abandoned.resolve("source.docx"), "abandoned document");
+                Path unmanaged = Files.createDirectory(workspace.resolve("unmanaged"));
+                Files.writeString(unmanaged.resolve("sentinel"), "keep");
                 Files.writeString(oldRoot.resolve("old-object"), "legacy-bytes");
                 Files.writeString(oldRoot.resolve("old-preview"), "legacy-preview");
                 Files.writeString(newRoot.resolve("old-object"), "other-object");
@@ -104,7 +116,7 @@ class StorageRoutingTest {
                 }
                 return Map.of(
                         "mfs.database.path", db.toString(),
-                        "mfs.storage.temp-dir", directory.resolve("workspace").toString(),
+                        "mfs.storage.temp-dir", workspace.toString(),
                         "mfs.storage.default-location", "new",
                         "mfs.storage.legacy-asset-locations", "old",
                         "mfs.storage.locations.old.type", "local",

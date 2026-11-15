@@ -114,7 +114,7 @@ def asset_references(db, location_id):
         select storage_key, size_bytes, sha256, 1 from file_metadata where storage_location_id=?
         union all
         select storage_key, size_bytes, sha256, 1 from file_preview_artifact
-            where storage_location_id=? and storage_key is not null
+            where storage_location_id=? and source_kind='GENERATED_PDF' and storage_key is not null
         union all
         select storage_key, null, null, 0 from file_reception_staged where storage_location_id=?
         """, (location_id,) * 3)
@@ -163,6 +163,11 @@ def switch_references(db, old, new):
         return db.execute("""
             update file_reception set storage_location_id=?, bucket=? where storage_location_id=?
             """, (new.id, new.bucket, old.id)).rowcount
+    # Original PDF previews use the file's object. Drop the cached alias so the next view rebuilds it.
+    db.execute("""
+        delete from file_preview_artifact where source_kind='ORIGINAL_PDF' and
+            (storage_location_id=? or file_id in (select id from file_metadata where storage_location_id=?))
+        """, (old.id, old.id))
     changed = 0
     for table in ("file_metadata", "file_preview_artifact"):
         changed += db.execute(f"""

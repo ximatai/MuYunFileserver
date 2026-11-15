@@ -6,5 +6,5 @@ public interface OfficePdfRenderer {
 
     void verifyReadiness();
 
-    RenderedPdfConversionResult convert(Path sourceFile, String originalFilename);
+    RenderedPdfConversionResult convert(Path sourceFile, String originalFilename, Path workDirectory);
 }

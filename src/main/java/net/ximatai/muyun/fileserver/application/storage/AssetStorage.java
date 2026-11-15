@@ -14,6 +14,7 @@ public interface AssetStorage {
 
     Location writeLocation();
 
+    /** A backend may consume the staged file. The caller still owns cleanup of its workspace. */
     void write(Path staged, StoredObject object);
 
     InputStream open(StoredObject object);

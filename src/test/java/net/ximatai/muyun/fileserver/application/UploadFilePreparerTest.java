@@ -302,6 +302,16 @@ class UploadFilePreparerTest {
         }
 
         @Override
+        public Path createPdfWorkDirectory() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void deletePdfWorkDirectory(Path directory) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public void deleteTempFile(Path tempFile) {
             try {
                 Files.deleteIfExists(tempFile);

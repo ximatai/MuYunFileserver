@@ -192,14 +192,14 @@ public class RenderedPdfService {
         }
 
         Path sourceTemp = null;
-        Path pdfTemp = null;
+        Path workDir = null;
         try {
             sourceTemp = createSourceTempFile(metadata);
-            RenderedPdfConversionResult result = officePdfRenderer.convert(sourceTemp, metadata.originalFilename());
-            pdfTemp = result.outputFile();
+            workDir = workspace.createPdfWorkDirectory();
+            RenderedPdfConversionResult result = officePdfRenderer.convert(sourceTemp, metadata.originalFilename(), workDir);
             String storageKey = renderedPdfPathResolver.storageKey(metadata);
             var location = assetStorage.writeLocation();
-            assetStorage.write(pdfTemp, location.object(storageKey));
+            assetStorage.write(result.outputFile(), location.object(storageKey));
             Instant now = Instant.now();
             viewArtifactRepository.save(new FileViewArtifact(
                     metadata.id(),
@@ -229,14 +229,13 @@ public class RenderedPdfService {
             saveFailure(metadata, ViewArtifactFailureCode.CONVERSION_FAILED, exception.getMessage());
             throw exception;
         } finally {
-            if (sourceTemp != null) {
-                workspace.deleteTempFile(sourceTemp);
-            }
-            if (pdfTemp != null && Files.exists(pdfTemp)) {
-                workspace.deleteTempFile(pdfTemp);
-                Path parent = pdfTemp.getParent();
-                if (parent != null && parent.startsWith(config.storage().tempDir())) {
-                    deleteDirectory(parent);
+            try {
+                if (workDir != null) {
+                    workspace.deletePdfWorkDirectory(workDir);
+                }
+            } finally {
+                if (sourceTemp != null) {
+                    workspace.deleteTempFile(sourceTemp);
                 }
             }
         }
@@ -282,16 +281,4 @@ public class RenderedPdfService {
         ));
     }
 
-    private void deleteDirectory(Path directory) {
-        try (var walk = Files.walk(directory)) {
-            walk.sorted(java.util.Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.deleteIfExists(path);
-                        } catch (Exception ignored) {
-                        }
-                    });
-        } catch (Exception ignored) {
-        }
-    }
 }

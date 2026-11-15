@@ -6,4 +6,8 @@ public interface LocalWorkspace {
     Path createTempFile();
 
     void deleteTempFile(Path path);
+
+    Path createPdfWorkDirectory();
+
+    void deletePdfWorkDirectory(Path directory);
 }

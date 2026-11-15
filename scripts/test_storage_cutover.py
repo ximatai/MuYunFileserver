@@ -135,6 +135,25 @@ class StorageCutoverTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "recorded metadata"):
             check_and_switch(self.database, [("source", "target")], {}, apply=True)
 
+    def test_original_pdf_aliases_are_rebuilt_after_verified_cutover(self):
+        with sqlite3.connect(self.database) as db:
+            self.insert_file(db, "native-pdf", "native.pdf", b"pdf bytes", "source")
+            db.executemany("""
+                insert into file_preview_artifact(file_id,artifact_key,tenant_id,source_kind,status,target_mime_type,
+                    storage_provider,storage_key,generated_at,last_accessed_at,storage_location_id)
+                values (?,'view_pdf','tenant','ORIGINAL_PDF','READY','application/pdf',
+                    'local',?,'2026-01-01','2026-01-01','source')
+                """, [("native-pdf", "native.pdf"), ("deleted-pdf", "deleted.pdf")])
+        with self.assertRaisesRegex(ValueError, "between locations"):
+            check_and_switch(self.database, [("source", "target")], {}, apply=True)
+        self.assertEqual(3, len(self.rows("select file_id from file_preview_artifact")))
+        shutil.copy2(self.source / "native.pdf", self.target / "native.pdf")
+        check_and_switch(self.database, [("source", "target")], {}, apply=True)
+        self.assertEqual([("native-pdf", "target")], self.rows(
+            "select id,storage_location_id from file_metadata where id='native-pdf'"))
+        self.assertEqual([("file-id", "GENERATED_PDF", "target")], self.rows(
+            "select file_id,source_kind,storage_location_id from file_preview_artifact"))
+
     def test_rejects_local_storage_keys_that_escape_the_root(self):
         with sqlite3.connect(self.database) as db:
             db.execute("update file_metadata set storage_key='../outside'")

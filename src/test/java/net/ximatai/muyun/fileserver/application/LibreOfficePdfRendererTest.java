@@ -4,6 +4,7 @@ import net.ximatai.muyun.fileserver.common.exception.GatewayTimeoutException;
 import net.ximatai.muyun.fileserver.common.exception.ServiceUnavailableException;
 import net.ximatai.muyun.fileserver.common.exception.UnprocessableEntityException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,16 +15,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LibreOfficePdfRendererTest {
 
+    @TempDir
+    Path workDir;
+
     @Test
     void shouldConvertWithExecutableCommand() throws Exception {
         Path script = createSuccessfulScript();
         LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
         converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
 
-        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
+        Path source = Files.createTempFile(workDir, "rendered-pdf-converter", ".docx");
         Files.writeString(source, "fake");
 
-        RenderedPdfConversionResult result = converter.convert(source, "contract.docx");
+        RenderedPdfConversionResult result = converter.convert(source, "contract.docx", workDir);
 
         assertTrue(Files.exists(result.outputFile()));
         assertEquals("application/pdf", new org.apache.tika.Tika().detect(result.outputFile()));
@@ -34,10 +38,10 @@ class LibreOfficePdfRendererTest {
         LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
         converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand("missing-soffice-command");
 
-        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
+        Path source = Files.createTempFile(workDir, "rendered-pdf-converter", ".docx");
         Files.writeString(source, "fake");
 
-        assertThrows(ServiceUnavailableException.class, () -> converter.convert(source, "contract.docx"));
+        assertThrows(ServiceUnavailableException.class, () -> converter.convert(source, "contract.docx", workDir));
     }
 
     @Test
@@ -46,10 +50,10 @@ class LibreOfficePdfRendererTest {
         LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
         converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
 
-        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
+        Path source = Files.createTempFile(workDir, "rendered-pdf-converter", ".docx");
         Files.writeString(source, "fake");
 
-        assertThrows(GatewayTimeoutException.class, () -> converter.convert(source, "contract.docx"));
+        assertThrows(GatewayTimeoutException.class, () -> converter.convert(source, "contract.docx", workDir));
     }
 
     @Test
@@ -58,10 +62,10 @@ class LibreOfficePdfRendererTest {
         LibreOfficePdfRenderer converter = new LibreOfficePdfRenderer();
         converter.config = TestConfigs.fileServiceConfigWithRenderedPdfCommand(script.toString());
 
-        Path source = Files.createTempFile("rendered-pdf-converter", ".docx");
+        Path source = Files.createTempFile(workDir, "rendered-pdf-converter", ".docx");
         Files.writeString(source, "fake");
 
-        assertThrows(UnprocessableEntityException.class, () -> converter.convert(source, "contract.docx"));
+        assertThrows(UnprocessableEntityException.class, () -> converter.convert(source, "contract.docx", workDir));
     }
 
     private Path createSuccessfulScript() throws Exception {

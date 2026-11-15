@@ -23,7 +23,7 @@ python3 scripts/storage_cutover.py /data/muyun-fileserver/var/data/muyun-fileser
   --profile target-files=target --profile target-receptions=target
 ```
 
-4. 对照输出的角色、位置和已核对对象数，在保持停写的情况下给同一命令加 `--apply`。工具再次比对对象大小及 SHA-256，并用一个 SQLite 事务更新所有 `--move` 的位置引用。它会保留原始文件、预览、候选副本、任务 ID、任务状态以及已有媒体资产之间的关联。
+4. 对照输出的角色、位置和已核对对象数，在保持停写的情况下给同一命令加 `--apply`。工具再次比对对象大小及 SHA-256，并用一个 SQLite 事务更新所有 `--move` 的位置引用。它会保留原始文件、生成的预览、候选副本、任务 ID、任务状态以及已有媒体资产之间的关联。原生 PDF 的预览引用由主文件验证，切换时清除受影响的缓存引用，下次查看时重建。
 5. 按新默认位置和业务直传配置重启。验证历史 `fileId`、预览、在途任务确认和新文件，复核 Worker 已登记的结果可以下载，之后恢复录制和清理。数据库仍有引用的位置必须保留配置。
 
 ## 回退与数据保护

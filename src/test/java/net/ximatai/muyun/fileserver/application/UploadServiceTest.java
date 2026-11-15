@@ -92,6 +92,16 @@ class UploadServiceTest {
             }
 
             @Override
+            public Path createPdfWorkDirectory() {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void deletePdfWorkDirectory(Path directory) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
             public void deleteTempFile(Path path) {
                 cleaned.add(path);
                 if (path.equals(Path.of("first.tmp"))) throw new IllegalStateException("cleanup unavailable");
