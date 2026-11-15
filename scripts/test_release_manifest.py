@@ -112,6 +112,8 @@ class ReleaseManifestTest(unittest.TestCase):
         self.assertFalse((fs / 'worker.py').exists())
         self.assertEqual((REPO / 'distribution/release/minio-recorder-policy.example.json').read_bytes(),
                          (fs / 'minio-recorder-policy.example.json').read_bytes())
+        self.assertEqual((REPO / 'scripts/storage_cutover.py').read_bytes(),
+                         (fs / 'scripts/storage_cutover.py').read_bytes())
         suite = assemble(repo, output, '0.27.1', 'a' * 40, 'suite')
         for name, component in [('fileserver', fs), ('media-worker', worker)]:
             for file in component.rglob('*'):

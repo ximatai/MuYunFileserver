@@ -32,6 +32,7 @@ def assemble(repo, output, version, commit, component):
             shutil.copy2(repo / 'distribution/release' / name, root / name)
         shutil.copy2(repo / 'src/main/resources/application.yml', root / 'application.yml')
         shutil.copy2(repo / 'scripts/render-seaweed-identities.py', root / 'scripts/render-seaweed-identities.py')
+        shutil.copy2(repo / 'scripts/storage_cutover.py', root / 'scripts/storage_cutover.py')
     elif component == 'media-worker':
         shutil.copy2(repo / 'distribution/release/WORKER.md', root / 'RUN.md')
         shutil.copytree(repo / 'docs', root / 'docs')

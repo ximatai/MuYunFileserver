@@ -210,7 +210,7 @@ docker compose -f distribution/release/compose.yaml up -d
 可用 `compose.seaweedfs.yaml` 启动自有 S3 存储，配置参考
 `application.seaweedfs.example.yml`，详细步骤和生产边界见
 `docs/design/seaweed-storage.md`。需要自行生成环境凭证；示例入口仅绑定回环地址。
-FileServer 使用统一 `s3` 适配。已有数据的切换步骤见 `docs/design/storage-platform.md`。
+FileServer 使用统一 `s3` 适配。已有数据的切换步骤见 `docs/design/storage-cutover.md`，核对工具随包提供于 `scripts/storage_cutover.py`。
 若 FileServer 与存储均在容器中运行，须加入同一内部网络并使用服务地址，
 不能使用 `127.0.0.1` 互访。
 
