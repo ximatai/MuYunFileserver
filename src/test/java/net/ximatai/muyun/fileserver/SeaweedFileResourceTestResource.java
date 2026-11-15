@@ -45,7 +45,7 @@ public class SeaweedFileResourceTestResource implements QuarkusTestResourceLifec
                     .withEnv("AWS_SECRET_ACCESS_KEY", SECRET_KEY)
                     .withEnv("S3_BUCKET", BUCKET+","+RECEPTION_BUCKET)
                     .withCopyFileToContainer(org.testcontainers.utility.MountableFile.forHostPath(identities),"/etc/seaweedfs/s3.json")
-                    .withCommand("mini", "-dir=/data", "-admin.ui=false", "-webdav=false",
+                    .withCommand("mini", "-dir=/data", "-master.volumeSizeLimitMB=128", "-volume.max=16", "-admin.ui=false", "-webdav=false",
                             "-s3.port.iceberg=0", "-s3.port.lance=0", "-s3.config=/etc/seaweedfs/s3.json")
                     .withExposedPorts(8333)
                     // Docker can reassign an automatically published port on restart.

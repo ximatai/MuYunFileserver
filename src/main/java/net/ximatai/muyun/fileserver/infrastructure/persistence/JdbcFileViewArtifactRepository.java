@@ -40,8 +40,8 @@ public class JdbcFileViewArtifactRepository implements FileViewArtifactRepositor
                 insert into file_preview_artifact (
                     file_id, artifact_key, tenant_id, source_kind, status, target_mime_type, storage_provider,
                     storage_bucket, storage_key, size_bytes, sha256, generated_at, last_accessed_at,
-                    failure_code, failure_message
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    failure_code, failure_message, storage_location_id
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict(file_id, artifact_key) do update set
                     tenant_id = excluded.tenant_id,
                     source_kind = excluded.source_kind,
@@ -50,6 +50,7 @@ public class JdbcFileViewArtifactRepository implements FileViewArtifactRepositor
                     storage_provider = excluded.storage_provider,
                     storage_bucket = excluded.storage_bucket,
                     storage_key = excluded.storage_key,
+                    storage_location_id = excluded.storage_location_id,
                     size_bytes = excluded.size_bytes,
                     sha256 = excluded.sha256,
                     generated_at = excluded.generated_at,
@@ -78,6 +79,7 @@ public class JdbcFileViewArtifactRepository implements FileViewArtifactRepositor
             statement.setString(13, artifact.lastAccessedAt().toString());
             statement.setString(14, artifact.failureCode() == null ? null : artifact.failureCode().name());
             statement.setString(15, artifact.failureMessage());
+            statement.setString(16, artifact.storageLocationId());
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to save file view artifact", exception);
@@ -121,6 +123,7 @@ public class JdbcFileViewArtifactRepository implements FileViewArtifactRepositor
                 resultSet.getString("storage_provider"),
                 resultSet.getString("storage_bucket"),
                 resultSet.getString("storage_key"),
+                resultSet.getString("storage_location_id"),
                 resultSet.getObject("size_bytes") == null ? null : resultSet.getLong("size_bytes"),
                 resultSet.getString("sha256"),
                 Instant.parse(resultSet.getString("generated_at")),

@@ -1,5 +1,7 @@
 package net.ximatai.muyun.fileserver.domain.view;
 
+import net.ximatai.muyun.fileserver.domain.file.StoredObject;
+
 import java.time.Instant;
 
 public record FileViewArtifact(
@@ -12,6 +14,7 @@ public record FileViewArtifact(
         String storageProvider,
         String storageBucket,
         String storageKey,
+        String storageLocationId,
         Long sizeBytes,
         String sha256,
         Instant generatedAt,
@@ -19,4 +22,7 @@ public record FileViewArtifact(
         ViewArtifactFailureCode failureCode,
         String failureMessage
 ) {
+    public StoredObject storedObject() {
+        return new StoredObject(storageLocationId, storageKey);
+    }
 }

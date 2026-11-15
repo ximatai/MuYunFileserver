@@ -25,7 +25,7 @@ class FileCommandServiceTest {
         AtomicInteger deleted = new AtomicInteger();
         AtomicInteger cleanup = new AtomicInteger();
         FileMetadata metadata = new FileMetadata(fileId, "tenant-a", "test.docx", "docx", "application/octet-stream",
-                1, "sha", "local", null, "key", FileStatus.ACTIVE, false, "user-1", Instant.EPOCH,
+                1, "sha", "local", null, "key", "legacy-assets", FileStatus.ACTIVE, false, "user-1", Instant.EPOCH,
                 null, null, null, null, null);
         FileCommandService commands = new FileCommandService();
         commands.repository = (FileMetadataRepository) Proxy.newProxyInstance(getClass().getClassLoader(),

@@ -12,8 +12,9 @@ import net.ximatai.muyun.fileserver.common.exception.UnsupportedMediaTypeExcepti
 import net.ximatai.muyun.fileserver.common.exception.ValidationException;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
-import net.ximatai.muyun.fileserver.infrastructure.storage.StorageKeyFactory;
-import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
+import net.ximatai.muyun.fileserver.application.storage.StorageKeyFactory;
+import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
+import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
 import net.ximatai.muyun.fileserver.infrastructure.ulid.UlidGenerator;
 import org.apache.tika.Tika;
 import org.jboss.resteasy.reactive.server.multipart.FileItem;
@@ -44,7 +45,10 @@ class UploadFilePreparer {
     FileMetadataRepository repository;
 
     @Inject
-    StorageProvider storageProvider;
+    AssetStorage assetStorage;
+
+    @Inject
+    LocalWorkspace workspace;
 
     @Inject
     StorageKeyFactory storageKeyFactory;
@@ -81,7 +85,7 @@ class UploadFilePreparer {
         validateReportedSize(uploadFile.fileItem());
 
         String fileId = resolveFileId(requestedFileId);
-        Path tempFile = storageProvider.createTempFile();
+        Path tempFile = workspace.createTempFile();
         try {
             FileDigest fileDigest = streamToTemp(uploadFile.fileItem(), tempFile);
             validateStreamedSize(fileDigest.sizeBytes());
@@ -99,7 +103,7 @@ class UploadFilePreparer {
                     mimeType,
                     fileDigest.sizeBytes(),
                     fileDigest.sha256(),
-                    storageProvider.storageBucket(),
+                    assetStorage.writeLocation(),
                     storageKeyFactory.build(requestContext.tenantId(), fileId),
                     Instant.now(),
                     temporary,
@@ -115,7 +119,7 @@ class UploadFilePreparer {
 
     private void discardTemp(Path path, RuntimeException failure) {
         try {
-            storageProvider.deleteTempFile(path);
+            workspace.deleteTempFile(path);
         } catch (RuntimeException cleanupFailure) {
             failure.addSuppressed(cleanupFailure);
         }

@@ -124,8 +124,9 @@ class FileReceptionResourceTest {
     @Test void shouldRetainCandidateTrackingAndReclaimUploadArrivingAfterCleanup()throws Exception {
         var task=create(2,1024);String id=(String)task.get("id");
         String key="late-candidate-"+UUID.randomUUID();String fileId="unpublished-"+UUID.randomUUID();
-        repository.stage(id,"stale-owner",fileId,key);expire(id);
-        service.cleanup();assertEquals(key,repository.staged(id).get(fileId));
+        var location=new net.ximatai.muyun.fileserver.domain.file.StoredObject("legacy-assets",key);
+        repository.stage(id,"stale-owner",fileId,location);expire(id);
+        service.cleanup();assertEquals(location,repository.staged(id).get(fileId));
         var client=MinioClient.builder().endpoint(SeaweedFileResourceTestResource.endpoint())
                 .credentials(SeaweedFileResourceTestResource.ACCESS_KEY,SeaweedFileResourceTestResource.SECRET_KEY).build();
         byte[] raw="late-upload".getBytes(StandardCharsets.UTF_8);
@@ -134,7 +135,7 @@ class FileReceptionResourceTest {
         repository.cleaned(id,0);service.cleanup();
         var rejected=assertThrows(io.minio.errors.ErrorResponseException.class,()->client.statObject(StatObjectArgs.builder()
                 .bucket(SeaweedFileResourceTestResource.BUCKET).object(key).build()));
-        assertEquals(404,rejected.response().code());assertEquals(key,repository.staged(id).get(fileId));
+        assertEquals(404,rejected.response().code());assertEquals(location,repository.staged(id).get(fileId));
     }
 
     @Test void shouldCancelAndExpireWithoutDeletingOtherTasks() throws Exception {

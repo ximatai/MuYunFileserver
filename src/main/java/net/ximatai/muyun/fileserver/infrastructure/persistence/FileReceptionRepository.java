@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.domain.file.FileReception;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
+import net.ximatai.muyun.fileserver.domain.file.StoredObject;
 import net.ximatai.muyun.fileserver.common.exception.ConflictException;
 import javax.sql.DataSource;
 import java.sql.*;
@@ -17,12 +18,12 @@ public class FileReceptionRepository {
     public FileReception create(FileReception value) {
         try (var c = source.getConnection(); var s = c.prepareStatement("""
                 insert or ignore into file_reception
-                (id,tenant_id,idempotency_key,prefix,state,max_objects,max_bytes,expires_at,bucket,ttl_seconds)
-                values (?,?,?,?,?,?,?,?,?,?)
+                (id,tenant_id,idempotency_key,prefix,state,max_objects,max_bytes,expires_at,bucket,ttl_seconds,storage_location_id)
+                values (?,?,?,?,?,?,?,?,?,?,?)
                 """)) {
             s.setString(1,value.id()); s.setString(2,value.tenantId()); s.setString(3,value.idempotencyKey());
             s.setString(4,value.prefix()); s.setString(5,"OPEN"); s.setInt(6,value.maxObjects());
-            s.setLong(7,value.maxBytes()); s.setLong(8,value.expiresAt());s.setString(9,value.bucket());s.setLong(10,value.ttlSeconds());s.executeUpdate();
+            s.setLong(7,value.maxBytes()); s.setLong(8,value.expiresAt());s.setString(9,value.bucket());s.setLong(10,value.ttlSeconds());s.setString(11,value.storageLocationId());s.executeUpdate();
             try (var q = c.prepareStatement("select * from file_reception where tenant_id=? and idempotency_key=?")) {
                 q.setString(1,value.tenantId()); q.setString(2,value.idempotencyKey());
                 try (var rows = q.executeQuery()) {
@@ -108,16 +109,17 @@ public class FileReceptionRepository {
         }catch(SQLException e){throw new IllegalStateException("failed to query reception cleanup",e);}
     }
 
-    public void stage(String id,String token,String fileId,String key) {
-        update("insert into file_reception_staged(file_id,reception_id,lease_token,storage_key) values(?,?,?,?)",fileId,id,token,key);
+    public void stage(String id,String token,String fileId,StoredObject object) {
+        update("insert into file_reception_staged(file_id,reception_id,lease_token,storage_key,storage_location_id) values(?,?,?,?,?)",
+                fileId,id,token,object.key(),object.locationId());
     }
-    public Map<String,String> staged(String id) {
+    public Map<String,StoredObject> staged(String id) {
         return staged(id,null);
     }
-    public Map<String,String> staged(String id,String token) {
-        try(var c=source.getConnection();var s=c.prepareStatement("select file_id,storage_key from file_reception_staged where reception_id=?"+(token==null?"":" and lease_token=?"))) {
-            s.setString(1,id);if(token!=null)s.setString(2,token);var values=new LinkedHashMap<String,String>();
-            try(var r=s.executeQuery()){while(r.next())values.put(r.getString(1),r.getString(2));}return values;
+    public Map<String,StoredObject> staged(String id,String token) {
+        try(var c=source.getConnection();var s=c.prepareStatement("select file_id,storage_key,storage_location_id from file_reception_staged where reception_id=?"+(token==null?"":" and lease_token=?"))) {
+            s.setString(1,id);if(token!=null)s.setString(2,token);var values=new LinkedHashMap<String,StoredObject>();
+            try(var r=s.executeQuery()){while(r.next())values.put(r.getString(1),new StoredObject(r.getString(3),r.getString(2)));}return values;
         }catch(SQLException e){throw new IllegalStateException("failed to query staged reception files",e);}
     }
     public void unstage(String fileId){update("delete from file_reception_staged where file_id=?",fileId);}
@@ -132,6 +134,6 @@ public class FileReceptionRepository {
         return new FileReception(r.getString("id"),r.getString("tenant_id"),r.getString("idempotency_key"),
                 r.getString("prefix"),r.getString("state"),r.getInt("max_objects"),r.getLong("max_bytes"),
                 r.getLong("expires_at"),r.getString("manifest_hash"),r.getString("lease_token"),
-                r.getObject("lease_until")==null?null:r.getLong("lease_until"),r.getString("bucket"),r.getLong("ttl_seconds"));
+                r.getObject("lease_until")==null?null:r.getLong("lease_until"),r.getString("bucket"),r.getLong("ttl_seconds"),r.getString("storage_location_id"));
     }
 }

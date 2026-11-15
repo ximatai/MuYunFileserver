@@ -9,8 +9,10 @@ import net.ximatai.muyun.fileserver.common.exception.UnsupportedMediaTypeExcepti
 import net.ximatai.muyun.fileserver.common.exception.ValidationException;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
-import net.ximatai.muyun.fileserver.infrastructure.storage.StorageKeyFactory;
-import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
+import net.ximatai.muyun.fileserver.application.storage.StorageKeyFactory;
+import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
+import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
+import net.ximatai.muyun.fileserver.domain.file.StoredObject;
 import net.ximatai.muyun.fileserver.infrastructure.ulid.UlidGenerator;
 import org.jboss.resteasy.reactive.server.multipart.FileItem;
 import org.jboss.resteasy.reactive.server.multipart.FormValue;
@@ -38,7 +40,8 @@ class UploadFilePreparerTest {
         UploadFilePreparer preparer = new UploadFilePreparer();
         preparer.config = TestConfigs.fileServiceConfig();
         preparer.repository = new InMemoryRepository(Set.of());
-        preparer.storageProvider = new TestStorageProvider(Files.createTempDirectory("upload-preparer-test"));
+        preparer.assetStorage = new TestAssets();
+        preparer.workspace = new TestWorkspace(Files.createTempDirectory("upload-preparer-test"));
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("01JABCDEF1234567890ABCDEF", Set.of("01JABCDEF1234567890ABCDEF"));
         preparer.supportedFileTypes = new SupportedFileTypes();
@@ -73,7 +76,8 @@ class UploadFilePreparerTest {
         UploadFilePreparer preparer = new UploadFilePreparer();
         preparer.config = TestConfigs.fileServiceConfig();
         preparer.repository = new InMemoryRepository(Set.of());
-        preparer.storageProvider = new TestStorageProvider(temporary);
+        preparer.assetStorage = new TestAssets();
+        preparer.workspace = new TestWorkspace(temporary);
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("01ARZ3NDEKTSV4RRFFQ69G5FAV", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
         preparer.supportedFileTypes = new SupportedFileTypes();
@@ -95,7 +99,8 @@ class UploadFilePreparerTest {
         UploadFilePreparer preparer = new UploadFilePreparer();
         preparer.config = TestConfigs.fileServiceConfig();
         preparer.repository = new InMemoryRepository(Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
-        preparer.storageProvider = new TestStorageProvider(Files.createTempDirectory("upload-preparer-conflict"));
+        preparer.assetStorage = new TestAssets();
+        preparer.workspace = new TestWorkspace(Files.createTempDirectory("upload-preparer-conflict"));
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("generated", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
         preparer.supportedFileTypes = new SupportedFileTypes();
@@ -119,7 +124,8 @@ class UploadFilePreparerTest {
         UploadFilePreparer preparer = new UploadFilePreparer();
         preparer.config = TestConfigs.fileServiceConfig();
         preparer.repository = new InMemoryRepository(Set.of());
-        preparer.storageProvider = new TestStorageProvider(Files.createTempDirectory("upload-preparer-invalid"));
+        preparer.assetStorage = new TestAssets();
+        preparer.workspace = new TestWorkspace(Files.createTempDirectory("upload-preparer-invalid"));
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("bad-ulid", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
         preparer.supportedFileTypes = new SupportedFileTypes();
@@ -143,7 +149,8 @@ class UploadFilePreparerTest {
         UploadFilePreparer preparer = new UploadFilePreparer();
         preparer.config = TestConfigs.fileServiceConfig();
         preparer.repository = new InMemoryRepository(Set.of());
-        preparer.storageProvider = new TestStorageProvider(Files.createTempDirectory("upload-preparer-mime"));
+        preparer.assetStorage = new TestAssets();
+        preparer.workspace = new TestWorkspace(Files.createTempDirectory("upload-preparer-mime"));
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("01ARZ3NDEKTSV4RRFFQ69G5FAV", Set.of("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
         preparer.supportedFileTypes = new SupportedFileTypes();
@@ -167,7 +174,8 @@ class UploadFilePreparerTest {
         UploadFilePreparer preparer = new UploadFilePreparer();
         preparer.config = TestConfigs.fileServiceConfig();
         preparer.repository = new InMemoryRepository(Set.of());
-        preparer.storageProvider = new TestStorageProvider(Files.createTempDirectory("upload-preparer-alias"));
+        preparer.assetStorage = new TestAssets();
+        preparer.workspace = new TestWorkspace(Files.createTempDirectory("upload-preparer-alias"));
         preparer.storageKeyFactory = new StorageKeyFactory();
         preparer.ulidGenerator = new FixedUlidGenerator("01JABCDEF1234567890ABCDE1", Set.of("01JABCDEF1234567890ABCDE1"));
         preparer.supportedFileTypes = new SupportedFileTypes();
@@ -277,25 +285,11 @@ class UploadFilePreparerTest {
         }
     }
 
-    private static final class TestStorageProvider implements StorageProvider {
+    private static final class TestWorkspace implements LocalWorkspace {
         private final Path tempDir;
 
-        private TestStorageProvider(Path tempDir) {
+        private TestWorkspace(Path tempDir) {
             this.tempDir = tempDir;
-        }
-
-        @Override
-        public String providerName() {
-            return "test";
-        }
-
-        @Override
-        public String storageBucket() {
-            return null;
-        }
-
-        @Override
-        public void verifyReadiness() {
         }
 
         @Override
@@ -308,26 +302,6 @@ class UploadFilePreparerTest {
         }
 
         @Override
-        public void moveToPermanent(Path tempFile, String storageKey) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public InputStream open(String storageKey) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public InputStream openRange(String storageKey, long start, long length) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void deleteIfExists(String storageKey) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public void deleteTempFile(Path tempFile) {
             try {
                 Files.deleteIfExists(tempFile);
@@ -336,9 +310,37 @@ class UploadFilePreparerTest {
             }
         }
 
+    }
+
+    private static final class TestAssets implements AssetStorage {
         @Override
-        public boolean exists(String storageKey) {
-            return false;
+        public Location writeLocation() {
+            return new Location("test", "local", null);
+        }
+
+        @Override
+        public void write(Path staged, StoredObject object) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public InputStream open(StoredObject object) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public InputStream openRange(StoredObject object, long start, long length) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void deleteIfExists(StoredObject object) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean exists(StoredObject object) {
+            throw new UnsupportedOperationException();
         }
     }
 

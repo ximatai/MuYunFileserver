@@ -48,8 +48,8 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
                 insert into file_metadata (
                     id, tenant_id, original_filename, extension, mime_type, size_bytes, sha256,
                     storage_provider, storage_bucket, storage_key, status, temporary, uploaded_by, uploaded_at,
-                    deleted_at, delete_marked_by, remark, image_width, image_height
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    deleted_at, delete_marked_by, remark, image_width, image_height, storage_location_id
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (var statement = connection.prepareStatement(sql)) {
             statement.setString(1, metadata.id());
@@ -71,6 +71,7 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
             statement.setString(17, metadata.remark());
             statement.setObject(18, metadata.imageWidth(), java.sql.Types.INTEGER);
             statement.setObject(19, metadata.imageHeight(), java.sql.Types.INTEGER);
+            statement.setString(20, metadata.storageLocationId());
             statement.executeUpdate();
         }
     }
@@ -261,6 +262,7 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
                 resultSet.getString("storage_provider"),
                 resultSet.getString("storage_bucket"),
                 resultSet.getString("storage_key"),
+                resultSet.getString("storage_location_id"),
                 FileStatus.valueOf(resultSet.getString("status")),
                 resultSet.getBoolean("temporary"),
                 resultSet.getString("uploaded_by"),

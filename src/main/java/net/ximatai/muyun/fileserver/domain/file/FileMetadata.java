@@ -13,6 +13,7 @@ public record FileMetadata(
         String storageProvider,
         String storageBucket,
         String storageKey,
+        String storageLocationId,
         FileStatus status,
         boolean temporary,
         String uploadedBy,
@@ -23,4 +24,7 @@ public record FileMetadata(
         Integer imageWidth,
         Integer imageHeight
 ) {
+    public StoredObject storedObject() {
+        return new StoredObject(storageLocationId, storageKey);
+    }
 }

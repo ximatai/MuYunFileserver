@@ -5,7 +5,8 @@ import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.config.FileServiceConfig;
 import net.ximatai.muyun.fileserver.common.exception.StorageException;
 import net.ximatai.muyun.fileserver.application.OfficePdfRenderer;
-import net.ximatai.muyun.fileserver.infrastructure.storage.StorageProvider;
+import net.ximatai.muyun.fileserver.infrastructure.storage.DiskWorkspace;
+import net.ximatai.muyun.fileserver.infrastructure.storage.StorageLocations;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.HealthCheckResponseBuilder;
@@ -25,7 +26,10 @@ public class StorageReadinessCheck implements HealthCheck {
     FileServiceConfig config;
 
     @Inject
-    StorageProvider storageProvider;
+    StorageLocations locations;
+
+    @Inject
+    DiskWorkspace workspace;
 
     @Inject
     OfficePdfRenderer officePdfRenderer;
@@ -43,10 +47,11 @@ public class StorageReadinessCheck implements HealthCheck {
         }
 
         try {
-            storageProvider.verifyReadiness();
+            workspace.verifyReadiness();
+            locations.verifyReadiness();
         } catch (StorageException exception) {
             return builder.down()
-                    .withData("storageType", config.storage().type())
+                    .withData("storageType", locations.defaultAssets().type())
                     .withData("storage", exception.getMessage())
                     .build();
         }
