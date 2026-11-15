@@ -2,13 +2,16 @@ package net.ximatai.muyun.fileserver.infrastructure.storage;
 
 import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
+import io.minio.ListObjectsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
+import io.minio.UploadObjectArgs;
 import io.minio.errors.ErrorResponseException;
 import io.minio.errors.MinioException;
+import net.ximatai.muyun.fileserver.application.storage.ReceptionStorage.ObjectInfo;
 import net.ximatai.muyun.fileserver.common.exception.StorageException;
 
 import java.io.IOException;
@@ -17,6 +20,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
 
 final class S3StorageBackend implements ObjectStorageBackend {
     private final String bucket;
@@ -56,8 +61,21 @@ final class S3StorageBackend implements ObjectStorageBackend {
         }
     }
 
-    MinioClient client() {
-        return client;
+    List<ObjectInfo> list(String prefix, int limit) throws Exception {
+        var result = new ArrayList<ObjectInfo>();
+        var args = ListObjectsArgs.builder().bucket(bucket).prefix(prefix).recursive(true).build();
+        for (var value : client.listObjects(args)) {
+            var item = value.get();
+            result.add(new ObjectInfo(item.objectName().substring(prefix.length()), item.size(), item.etag()));
+            if (result.size() == limit) {
+                break;
+            }
+        }
+        return result;
+    }
+
+    void upload(String key, Path path) throws Exception {
+        client.uploadObject(UploadObjectArgs.builder().bucket(bucket).object(key).filename(path.toString()).build());
     }
 
     @Override

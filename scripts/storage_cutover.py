@@ -7,7 +7,6 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
-import sys
 from urllib.parse import urlsplit
 
 

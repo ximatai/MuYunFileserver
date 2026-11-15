@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -21,8 +22,8 @@ import java.util.Optional;
 
 @ApplicationScoped
 public class StorageLocations {
-    public static final String LEGACY_ASSETS = "legacy-assets";
-    public static final String LEGACY_RECEPTION = "legacy-reception";
+    private static final String LEGACY_ASSETS = "legacy-assets";
+    private static final String LEGACY_RECEPTION = "legacy-reception";
 
     public enum Role { ASSET, RECEPTION }
 
@@ -141,7 +142,7 @@ public class StorageLocations {
 
     private void validateLegacyMappings(List<String> ids, Role role) {
         record LegacyKey(String type, String bucket) { }
-        var used = new java.util.HashSet<LegacyKey>();
+        var used = new HashSet<LegacyKey>();
         for (String id : ids) {
             Location location = require(id, role);
             if (!used.add(new LegacyKey(location.type(), location.bucket()))) {
@@ -151,15 +152,19 @@ public class StorageLocations {
     }
 
     public Location require(String id, Role role) {
+        return binding(id, role).location();
+    }
+
+    ObjectStorageBackend backend(String id, Role role) {
+        return binding(id, role).backend();
+    }
+
+    private Binding binding(String id, Role role) {
         Binding binding = id == null ? null : bindings.get(id);
         if (binding == null || binding.location().role() != role) {
             throw new StorageException("unavailable " + role.name().toLowerCase(Locale.ROOT) + " storage location: " + id);
         }
-        return binding.location();
-    }
-
-    ObjectStorageBackend backend(String id, Role role) {
-        return bindings.get(require(id, role).id()).backend();
+        return binding;
     }
 
     public void verifyReadiness() {

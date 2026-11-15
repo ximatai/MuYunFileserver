@@ -2,6 +2,8 @@ package net.ximatai.muyun.fileserver.application;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
+import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
 import net.ximatai.muyun.fileserver.common.exception.ForbiddenException;
 import net.ximatai.muyun.fileserver.common.exception.GatewayTimeoutException;
 import net.ximatai.muyun.fileserver.common.exception.NotFoundException;
@@ -15,13 +17,12 @@ import net.ximatai.muyun.fileserver.domain.view.ViewArtifactFailureCode;
 import net.ximatai.muyun.fileserver.domain.view.ViewArtifactSourceKind;
 import net.ximatai.muyun.fileserver.domain.view.ViewArtifactStatus;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileViewArtifactRepository;
-import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
-import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
 
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -100,29 +101,14 @@ public class RenderedPdfService {
         viewArtifactRepository.touchAccessedAt(metadata.id(), DEFAULT_ARTIFACT_KEY, Instant.now());
 
         String filename = renderedPdfPathResolver.renderedPdfFilename(metadata);
-        InputStreamSupplier inputStreamSupplier = switch (artifact.sourceKind()) {
-            case ORIGINAL_PDF -> () -> assetStorage.open(metadata.storedObject());
-            case GENERATED_PDF -> {
-                if (artifact.storageKey() == null || !assetStorage.exists(artifact.storedObject())) {
-                    throw new NotFoundException("rendered pdf not found");
-                }
-                yield () -> assetStorage.open(artifact.storedObject());
-            }
-        };
-        RangeInputStreamSupplier rangeInputStreamSupplier = switch (artifact.sourceKind()) {
-            case ORIGINAL_PDF -> (start, length) -> assetStorage.openRange(metadata.storedObject(), start, length);
-            case GENERATED_PDF -> {
-                if (artifact.storageKey() == null || !assetStorage.exists(artifact.storedObject())) {
-                    throw new NotFoundException("rendered pdf not found");
-                }
-                yield (start, length) -> assetStorage.openRange(artifact.storedObject(), start, length);
-            }
-        };
-
-        long sizeBytes = artifact.sourceKind() == ViewArtifactSourceKind.ORIGINAL_PDF
-                ? metadata.sizeBytes()
-                : artifact.sizeBytes() == null ? 0L : artifact.sizeBytes();
-        return new RenderedPdfResolution(filename, PDF_MIME_TYPE, sizeBytes, inputStreamSupplier, rangeInputStreamSupplier);
+        boolean original = artifact.sourceKind() == ViewArtifactSourceKind.ORIGINAL_PDF;
+        var object = original ? metadata.storedObject() : artifact.storedObject();
+        if (!original && (object.key() == null || !assetStorage.exists(object))) {
+            throw new NotFoundException("rendered pdf not found");
+        }
+        long sizeBytes = original ? metadata.sizeBytes() : Objects.requireNonNullElse(artifact.sizeBytes(), 0L);
+        return new RenderedPdfResolution(filename, PDF_MIME_TYPE, sizeBytes,
+                () -> assetStorage.open(object), (start, length) -> assetStorage.openRange(object, start, length));
     }
 
     public void deleteRenderedPdfIfExists(FileMetadata metadata) {
