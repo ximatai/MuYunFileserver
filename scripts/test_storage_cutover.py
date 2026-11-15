@@ -118,7 +118,16 @@ class StorageCutoverTest(unittest.TestCase):
         with sqlite3.connect(self.database) as db:
             self.insert_file(db, "target-file", "original", b"original bytes", "target")
         with self.assertRaisesRegex(ValueError, "already referenced"):
+            check_and_switch(self.database, [("source", "target")], {}, preflight=True)
+        with self.assertRaisesRegex(ValueError, "already referenced"):
             check_and_switch(self.database, [("source", "target")], {}, apply=True)
+
+    def test_preflight_does_not_require_objects_to_have_been_copied(self):
+        shutil.rmtree(self.target)
+        self.receptions.clear()
+        report = check_and_switch(self.database, self.moves, {}, preflight=True)
+        self.assertEqual(["ASSET", "RECEPTION"], [item["role"] for item in report])
+        self.assertEqual([("source",)], self.rows("select storage_location_id from file_metadata"))
 
     def test_refuses_copies_that_disagree_with_a_registered_checksum(self):
         for root in (self.source, self.target):

@@ -121,12 +121,16 @@ def asset_references(db, location_id):
         """, (location_id,) * 3)
 
 
-def compare_assets(db, old, new, source, target):
+def check_asset_key_collisions(db, old, new):
     target_keys = {row[0] for row in asset_references(db, new.id)}
-    checked = {}
-    for key, size, sha, required in asset_references(db, old.id):
+    for key, *_ in asset_references(db, old.id):
         if key in target_keys:
             raise ValueError(f"object key already referenced in target location: {key!r}")
+
+
+def compare_assets(db, old, source, target):
+    checked = {}
+    for key, size, sha, required in asset_references(db, old.id):
         if key not in checked:
             checked[key] = compare_object(source, target, key)
         original = checked[key]
@@ -172,7 +176,9 @@ def switch_references(db, old, new):
     return changed
 
 
-def check_and_switch(database, moves, profiles, apply=False):
+def check_and_switch(database, moves, profiles, apply=False, preflight=False):
+    if apply and preflight:
+        raise ValueError("the preflight cannot apply changes")
     ids = [location_id for move in moves for location_id in move]
     if len(set(ids)) != len(ids):
         raise ValueError("each location may appear only once in a cutover")
@@ -193,16 +199,21 @@ def check_and_switch(database, moves, profiles, apply=False):
             old, new = location(db, old_id), location(db, new_id)
             if old.role != new.role or old.namespace == new.namespace:
                 raise ValueError(f"incompatible locations: {old.id!r} -> {new.id!r}")
+            if old.role == "ASSET":
+                check_asset_key_collisions(db, old, new)
+            elif old.role != "RECEPTION" or old.type != "s3" or new.type != "s3":
+                raise ValueError(f"unsupported location pair: {old.id!r} -> {new.id!r}")
+            result = {"source": old.id, "target": new.id, "role": old.role}
+            if preflight:
+                report.append(result)
+                continue
             source, target = reader(old), reader(new)
             if old.role == "RECEPTION":
                 verified = compare_receptions(db, old, source, target)
-            elif old.role == "ASSET":
-                verified = compare_assets(db, old, new, source, target)
             else:
-                raise ValueError(f"unknown storage role {old.role!r}")
+                verified = compare_assets(db, old, source, target)
             updated = switch_references(db, old, new) if apply else 0
-            report.append({"source": old.id, "target": new.id, "role": old.role,
-                           "objectsVerified": verified, "referencesUpdated": updated})
+            report.append({**result, "objectsVerified": verified, "referencesUpdated": updated})
     return report
 
 
@@ -218,13 +229,15 @@ def main():
     parser.add_argument("database", type=Path)
     parser.add_argument("--move", action="append", type=assignment, required=True, metavar="SOURCE=TARGET")
     parser.add_argument("--profile", action="append", type=assignment, default=[], metavar="LOCATION=AWS_PROFILE")
-    parser.add_argument("--apply", action="store_true", help="update references after verification; stop all writers first")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--preflight", action="store_true", help="check location and key conflicts before copying data")
+    mode.add_argument("--apply", action="store_true", help="update references after verification; stop all writers first")
     args = parser.parse_args()
     try:
-        result = check_and_switch(args.database, args.move, dict(args.profile), args.apply)
+        result = check_and_switch(args.database, args.move, dict(args.profile), args.apply, args.preflight)
     except (OSError, ValueError, sqlite3.Error) as e:
         parser.exit(1, f"cutover refused: {e}\n")
-    print(json.dumps({"applied": args.apply, "moves": result}, indent=2))
+    print(json.dumps({"preflight": args.preflight, "applied": args.apply, "moves": result}, indent=2))
 
 
 if __name__ == "__main__":
