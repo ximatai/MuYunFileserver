@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -57,9 +58,11 @@ public interface FileServiceConfig {
 
         Optional<String> defaultLocation();
 
-        Optional<String> legacyAssetLocation();
+        Optional<List<String>> legacyAssetLocations();
 
-        Optional<String> legacyReceptionLocation();
+        Optional<List<String>> legacyReceptionLocations();
+
+        Optional<String> legacyCandidateLocation();
 
         Map<String, StorageLocation> locations();
     }

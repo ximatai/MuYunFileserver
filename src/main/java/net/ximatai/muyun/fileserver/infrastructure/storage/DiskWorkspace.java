@@ -16,8 +16,7 @@ import java.nio.file.Path;
 public class DiskWorkspace implements LocalWorkspace {
     @Inject FileServiceConfig config;
 
-    void initialize(@Observes StartupEvent ignored, StorageLocations locations) {
-        locations.validateWorkspace();
+    void initialize(@Observes StartupEvent ignored) {
         Path root = config.storage().tempDir();
         try {
             Files.createDirectories(root);

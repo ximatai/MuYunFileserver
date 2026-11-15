@@ -40,7 +40,12 @@ public class StorageLocationMigration {
 
     private void pinBindings(Connection connection) throws SQLException {
         try (var insert = connection.prepareStatement("""
-                insert or ignore into storage_location_binding(location_id, namespace, role) values (?, ?, ?)
+                insert into storage_location_binding(location_id, namespace, role) values (?, ?, ?)
+                on conflict(location_id) do update set namespace=excluded.namespace, role=excluded.role
+                where not exists(select 1 from file_metadata where storage_location_id=excluded.location_id)
+                  and not exists(select 1 from file_preview_artifact where storage_location_id=excluded.location_id)
+                  and not exists(select 1 from file_reception where storage_location_id=excluded.location_id)
+                  and not exists(select 1 from file_reception_staged where storage_location_id=excluded.location_id)
                 """);
              var select = connection.prepareStatement("""
                 select namespace, role from storage_location_binding where location_id=?
@@ -63,8 +68,7 @@ public class StorageLocationMigration {
     }
 
     private void bindLegacyRows(Connection connection) throws SQLException {
-        if (locations.legacyAssets() != null) {
-            var assets = locations.require(locations.legacyAssets(), Role.ASSET);
+        for (var assets : locations.legacyAssets()) {
             String oldType = "s3".equals(assets.type()) ? "minio" : assets.type();
             for (String table : new String[] {"file_metadata", "file_preview_artifact"}) {
                 update(connection, "update " + table + """
@@ -72,12 +76,13 @@ public class StorageLocationMigration {
                          and storage_key is not null and storage_provider=? and storage_bucket is ?
                         """, assets.id(), oldType, assets.bucket());
             }
+        }
+        if (locations.legacyCandidates() != null) {
             update(connection, """
                     update file_reception_staged set storage_location_id=? where storage_location_id is null
-                    """, assets.id());
+                    """, locations.legacyCandidates());
         }
-        if (locations.legacyReception() != null) {
-            var receptions = locations.require(locations.legacyReception(), Role.RECEPTION);
+        for (var receptions : locations.legacyReceptions()) {
             update(connection, """
                     update file_reception set storage_location_id=? where storage_location_id is null and bucket=?
                     """, receptions.id(), receptions.bucket());

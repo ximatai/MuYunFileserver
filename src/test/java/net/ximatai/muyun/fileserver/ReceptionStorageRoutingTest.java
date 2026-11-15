@@ -39,6 +39,7 @@ class ReceptionStorageRoutingTest {
     @Test
     void existingReceptionsAndCandidatesKeepTheirOriginalLocations() throws Exception {
         assertEquals("old-reception", receptions.find(OPEN).orElseThrow().storageLocationId());
+        assertEquals("new-reception", receptions.find(EXPIRED).orElseThrow().storageLocationId());
         assertEquals(new StoredObject("old-assets", CANDIDATE), receptions.staged(EXPIRED).get("legacy-candidate"));
 
         var manifest = Map.of("objects", List.of(Map.of("key", "part.txt", "filename", "part.txt", "sizeBytes", 3)));
@@ -85,8 +86,8 @@ class ReceptionStorageRoutingTest {
                 location(properties, "new-reception", "reception", NEW_RECEPTION);
                 properties.put("mfs.storage.default-location", "new-assets");
                 properties.put("mfs.reception.location", "new-reception");
-                properties.put("mfs.storage.legacy-asset-location", "old-assets");
-                properties.put("mfs.storage.legacy-reception-location", "old-reception");
+                properties.put("mfs.storage.legacy-asset-locations", "old-assets");
+                properties.put("mfs.storage.legacy-reception-locations", "old-reception,new-reception");
                 return properties;
             } catch (Exception e) {
                 String diagnostics = server.getLogs();
@@ -112,7 +113,7 @@ class ReceptionStorageRoutingTest {
                     receptions.setString(2, id);
                     receptions.setString(3, id + "/");
                     receptions.setLong(4, id.equals(OPEN) ? System.currentTimeMillis() + 3_600_000 : 0);
-                    receptions.setString(5, RECEPTION_BUCKET);
+                    receptions.setString(5, id.equals(OPEN) ? RECEPTION_BUCKET : NEW_RECEPTION);
                     receptions.executeUpdate();
                 }
                 candidates.setString(1, EXPIRED);

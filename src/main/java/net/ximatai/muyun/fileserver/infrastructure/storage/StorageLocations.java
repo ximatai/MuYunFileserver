@@ -37,26 +37,30 @@ public class StorageLocations {
     private final Map<String, Binding> bindings = new LinkedHashMap<>();
     private String defaultAssets;
     private String defaultReception;
-    private String legacyAssets;
-    private String legacyReception;
+    private List<String> legacyAssets = List.of();
+    private List<String> legacyReceptions = List.of();
+    private String legacyCandidates;
 
     @PostConstruct
     void configure() {
         var storage = config.storage();
         var reception = config.reception();
         if (storage.locations().isEmpty()) {
-            if (storage.defaultLocation().isPresent() || storage.legacyAssetLocation().isPresent()
-                    || storage.legacyReceptionLocation().isPresent() || reception.location().isPresent()) {
+            if (storage.defaultLocation().isPresent() || storage.legacyAssetLocations().isPresent()
+                    || storage.legacyReceptionLocations().isPresent() || storage.legacyCandidateLocation().isPresent()
+                    || reception.location().isPresent()) {
                 throw configuration("named location settings require storage.locations");
             }
-            defaultAssets = legacyAssets = LEGACY_ASSETS;
+            defaultAssets = legacyCandidates = LEGACY_ASSETS;
+            legacyAssets = List.of(LEGACY_ASSETS);
             switch (storage.type().toLowerCase(Locale.ROOT)) {
                 case "local" -> addLocal(defaultAssets, storage.rootDir());
                 case "minio", "s3" -> {
                     var s3 = "minio".equalsIgnoreCase(storage.type()) ? storage.minio() : storage.s3();
                     addS3(defaultAssets, Role.ASSET, s3, required(s3.bucket(), "S3 asset bucket"), s3.autoCreateBucket());
                     reception.bucket().ifPresent(bucket -> {
-                        defaultReception = legacyReception = LEGACY_RECEPTION;
+                        defaultReception = LEGACY_RECEPTION;
+                        legacyReceptions = List.of(LEGACY_RECEPTION);
                         addS3(defaultReception, Role.RECEPTION, s3, bucket, false);
                     });
                 }
@@ -88,19 +92,21 @@ public class StorageLocations {
             });
             defaultAssets = required(storage.defaultLocation(), "storage.default-location");
             defaultReception = reception.location().orElse(null);
-            legacyAssets = storage.legacyAssetLocation().orElse(null);
-            legacyReception = storage.legacyReceptionLocation().orElse(null);
+            legacyAssets = storage.legacyAssetLocations().orElseGet(List::of);
+            legacyReceptions = storage.legacyReceptionLocations().orElseGet(List::of);
+            legacyCandidates = storage.legacyCandidateLocation()
+                    .orElseGet(() -> legacyAssets.size() == 1 ? legacyAssets.getFirst() : null);
         }
         require(defaultAssets, Role.ASSET);
         if (defaultReception != null || reception.enabled()) {
             require(defaultReception, Role.RECEPTION);
         }
-        if (legacyAssets != null) {
-            require(legacyAssets, Role.ASSET);
+        validateLegacyMappings(legacyAssets, Role.ASSET);
+        validateLegacyMappings(legacyReceptions, Role.RECEPTION);
+        if (legacyCandidates != null) {
+            require(legacyCandidates, Role.ASSET);
         }
-        if (legacyReception != null) {
-            require(legacyReception, Role.RECEPTION);
-        }
+        validateWorkspace();
     }
 
     void initialize(@Observes StartupEvent ignored) {
@@ -121,12 +127,27 @@ public class StorageLocations {
         return require(defaultReception, Role.RECEPTION);
     }
 
-    public String legacyAssets() {
-        return legacyAssets;
+    public List<Location> legacyAssets() {
+        return legacyAssets.stream().map(id -> require(id, Role.ASSET)).toList();
     }
 
-    public String legacyReception() {
-        return legacyReception;
+    public List<Location> legacyReceptions() {
+        return legacyReceptions.stream().map(id -> require(id, Role.RECEPTION)).toList();
+    }
+
+    public String legacyCandidates() {
+        return legacyCandidates;
+    }
+
+    private void validateLegacyMappings(List<String> ids, Role role) {
+        record LegacyKey(String type, String bucket) { }
+        var used = new java.util.HashSet<LegacyKey>();
+        for (String id : ids) {
+            Location location = require(id, role);
+            if (!used.add(new LegacyKey(location.type(), location.bucket()))) {
+                throw configuration("ambiguous legacy " + role.name().toLowerCase(Locale.ROOT) + " mapping for " + id);
+            }
+        }
     }
 
     public Location require(String id, Role role) {
@@ -149,7 +170,7 @@ public class StorageLocations {
         }
     }
 
-    void validateWorkspace() {
+    private void validateWorkspace() {
         Path workspace = canonicalPath(config.storage().tempDir());
         for (Binding binding : bindings.values()) {
             Path root = binding.localRoot();
@@ -182,6 +203,10 @@ public class StorageLocations {
         for (Binding binding : bindings.values()) {
             if (Objects.equals(namespace, binding.namespace())) {
                 throw configuration("shared S3 namespace for locations " + binding.location().id() + " and " + id);
+            }
+            // Different endpoint names can reach the same S3 service through different gateways.
+            if (role != binding.location().role() && bucket.equals(binding.location().bucket())) {
+                throw configuration("asset and reception locations must use distinct S3 bucket names: " + bucket);
             }
         }
         var backend = new S3StorageBackend(endpoint, required(config.accessKey(), "access-key for " + id),

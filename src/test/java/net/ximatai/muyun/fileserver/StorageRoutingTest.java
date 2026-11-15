@@ -95,11 +95,18 @@ class StorageRoutingTest {
                                 'local','old-preview',14,'legacy','2025-01-01T00:00:00Z','2025-01-01T00:00:00Z')
                             """);
                 }
+                // An unused binding left by a failed startup must not prevent correcting its configuration.
+                Flyway.configure().dataSource(url, null, null).locations("classpath:db/migration").load().migrate();
+                try (var connection = DriverManager.getConnection(url); var sql = connection.createStatement()) {
+                    sql.executeUpdate("""
+                            insert into storage_location_binding values ('new','local:/wrong-initial-path','ASSET')
+                            """);
+                }
                 return Map.of(
                         "mfs.database.path", db.toString(),
                         "mfs.storage.temp-dir", directory.resolve("workspace").toString(),
                         "mfs.storage.default-location", "new",
-                        "mfs.storage.legacy-asset-location", "old",
+                        "mfs.storage.legacy-asset-locations", "old",
                         "mfs.storage.locations.old.type", "local",
                         "mfs.storage.locations.old.root-dir", oldRoot.toString(),
                         "mfs.storage.locations.new.type", "local",

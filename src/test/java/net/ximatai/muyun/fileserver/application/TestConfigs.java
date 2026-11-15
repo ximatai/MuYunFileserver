@@ -19,7 +19,14 @@ public final class TestConfigs {
 
     public static FileServiceConfig fileServiceConfigWithRenderedPdfCommand(String command) {
         Path renderedPdfProfileRoot = Path.of(System.getProperty("user.dir"), "build", "test-config-libreoffice-profile");
+        Path testTemp = renderedPdfProfileRoot.resolveSibling("test-config-tmp");
+        ensureDirectory(testTemp);
         ensureDirectory(renderedPdfProfileRoot);
+
+        FileServiceConfig.Storage storage = proxy(FileServiceConfig.Storage.class, methodName -> switch (methodName) {
+            case "tempDir" -> testTemp;
+            default -> throw new UnsupportedOperationException(methodName);
+        });
 
         FileServiceConfig.Upload upload = proxy(FileServiceConfig.Upload.class, methodName -> switch (methodName) {
             case "maxFileSizeBytes" -> 1024L * 1024;
@@ -84,6 +91,7 @@ public final class TestConfigs {
         });
 
         return proxy(FileServiceConfig.class, methodName -> switch (methodName) {
+            case "storage" -> storage;
             case "upload" -> upload;
             case "database" -> database;
             case "cleanup" -> cleanup;
