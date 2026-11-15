@@ -2,7 +2,6 @@ package net.ximatai.muyun.fileserver.application;
 
 import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
-import net.ximatai.muyun.fileserver.domain.file.StoredObject;
 import net.ximatai.muyun.fileserver.domain.file.FileStatus;
 
 import java.nio.file.Path;
@@ -24,10 +23,6 @@ record PreparedUpload(
         Integer imageWidth,
         Integer imageHeight
 ) {
-    StoredObject storedObject() {
-        return storageLocation.object(storageKey);
-    }
-
     FileMetadata toMetadata(String remark, String uploadedBy) {
         return new FileMetadata(
                 fileId,

@@ -34,6 +34,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -501,6 +503,54 @@ class FileResourceTest {
                 .statusCode(409)
                 .body("success", equalTo(false))
                 .body("message", equalTo("file_id already exists"));
+    }
+
+    @Test
+    void concurrentUploadsWithSameExplicitIdPreserveTheWinningBytes() throws Exception {
+        String fileId = ULID_GENERATOR.nextULID();
+        String tenant = "upload-race-" + fileId;
+        var start = new CyclicBarrier(2);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> uploadAfterBarrier(start, tenant, fileId, "first payload"));
+            var second = executor.submit(() -> uploadAfterBarrier(start, tenant, fileId, "second payload"));
+            int firstStatus = first.get(15, TimeUnit.SECONDS);
+            int secondStatus = second.get(15, TimeUnit.SECONDS);
+            org.junit.jupiter.api.Assertions.assertEquals(List.of(200, 409),
+                    java.util.stream.Stream.of(firstStatus, secondStatus).sorted().toList());
+
+            given().header("X-Tenant-Id", tenant).header("X-User-Id", USER_ID)
+                    .get("/api/v1/files/{id}/download", fileId).then().statusCode(200)
+                    .body(equalTo(firstStatus == 200 ? "first payload" : "second payload"));
+            try (var paths = Files.walk(STORAGE_ROOT.resolve(tenant))) {
+                org.junit.jupiter.api.Assertions.assertEquals(1L, paths.filter(Files::isRegularFile).count());
+            }
+        }
+    }
+
+    private int uploadAfterBarrier(CyclicBarrier start, String tenant, String fileId, String payload) throws Exception {
+        start.await(5, TimeUnit.SECONDS);
+        return given().header("X-Tenant-Id", tenant).header("X-User-Id", USER_ID)
+                .multiPart("files", "race.txt", payload.getBytes(StandardCharsets.UTF_8), "text/plain")
+                .multiPart("file_ids", fileId)
+                .post("/api/v1/files").statusCode();
+    }
+
+    @Test
+    void repeatedIdInOneBatchRollsBackMetadataAndObjects() throws Exception {
+        String fileId = ULID_GENERATOR.nextULID();
+        String tenant = "upload-batch-" + fileId;
+        given().header("X-Tenant-Id", tenant).header("X-User-Id", USER_ID)
+                .multiPart("files", "first.txt", "first".getBytes(StandardCharsets.UTF_8), "text/plain")
+                .multiPart("files", "second.txt", "second".getBytes(StandardCharsets.UTF_8), "text/plain")
+                .multiPart("file_ids", fileId)
+                .multiPart("file_ids", fileId)
+                .post("/api/v1/files").then().statusCode(409).body("message", equalTo("file_id already exists"));
+
+        given().header("X-Tenant-Id", tenant).header("X-User-Id", USER_ID)
+                .get("/api/v1/files/{id}", fileId).then().statusCode(404);
+        try (var paths = Files.walk(STORAGE_ROOT.resolve(tenant))) {
+            org.junit.jupiter.api.Assertions.assertEquals(0L, paths.filter(Files::isRegularFile).count());
+        }
     }
 
     @Test

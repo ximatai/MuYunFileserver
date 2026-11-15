@@ -4,14 +4,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import net.ximatai.muyun.fileserver.api.dto.UploadFileItemResponse;
 import net.ximatai.muyun.fileserver.api.dto.UploadFilesResponse;
+import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
+import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
 import net.ximatai.muyun.fileserver.common.context.RequestContext;
 import net.ximatai.muyun.fileserver.common.context.RequestContextHolder;
+import net.ximatai.muyun.fileserver.common.exception.ConflictException;
 import net.ximatai.muyun.fileserver.common.log.OperationLog;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
-import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
-import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
-import net.ximatai.muyun.fileserver.domain.file.StoredObject;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput;
 
@@ -63,19 +63,20 @@ public class UploadService {
     private UploadFilesResponse upload(UploadRequest uploadRequest, RequestContext requestContext) {
 
         List<PreparedUpload> preparedUploads = new ArrayList<>();
-        List<FileMetadata> insertedMetadata = new ArrayList<>();
-        List<StoredObject> writtenObjects = new ArrayList<>();
+        List<FileMetadata> writtenFiles = new ArrayList<>();
+        boolean publicationStarted = false;
 
         try {
             preparedUploads.addAll(uploadFilePreparer.prepare(uploadRequest, requestContext));
 
-            List<UploadFileItemResponse> responseItems = persistUploads(
-                    preparedUploads,
-                    uploadRequest.remark(),
-                    requestContext,
-                    insertedMetadata,
-                    writtenObjects
-            );
+            for (PreparedUpload prepared : preparedUploads) {
+                FileMetadata metadata = prepared.toMetadata(uploadRequest.remark(), requestContext.userId());
+                assetStorage.write(prepared.tempFile(), metadata.storedObject());
+                writtenFiles.add(metadata);
+            }
+            publicationStarted = true;
+            repository.insertAll(writtenFiles);
+            var responseItems = writtenFiles.stream().map(UploadService::toResponseItem).toList();
 
             LOG.info(OperationLog.format(
                     "upload",
@@ -86,9 +87,9 @@ public class UploadService {
                     "storage_provider", assetStorage.writeLocation().type(),
                     "file_count", String.valueOf(responseItems.size())
             ));
-            return new UploadFilesResponse(List.copyOf(responseItems));
+            return new UploadFilesResponse(responseItems);
         } catch (RuntimeException exception) {
-            rollback(insertedMetadata, writtenObjects);
+            rollback(writtenFiles, publicationStarted && !(exception instanceof ConflictException));
             LOG.warn(OperationLog.format(
                     "upload",
                     "failure",
@@ -104,57 +105,27 @@ public class UploadService {
         }
     }
 
-    private List<UploadFileItemResponse> persistUploads(
-            List<PreparedUpload> preparedUploads,
-            String remark,
-            RequestContext requestContext,
-            List<FileMetadata> insertedMetadata,
-            List<StoredObject> writtenObjects
-    ) {
-        List<UploadFileItemResponse> responseItems = new ArrayList<>();
-        for (PreparedUpload preparedUpload : preparedUploads) {
-            assetStorage.write(preparedUpload.tempFile(), preparedUpload.storedObject());
-            writtenObjects.add(preparedUpload.storedObject());
-
-            FileMetadata metadata = preparedUpload.toMetadata(remark, requestContext.userId());
-            repository.insert(metadata);
-            insertedMetadata.add(metadata);
-
-            responseItems.add(new UploadFileItemResponse(
-                    metadata.id(),
-                    metadata.originalFilename(),
-                    metadata.mimeType(),
-                    metadata.sizeBytes(),
-                    metadata.uploadedAt(),
-                    metadata.temporary()
-            ));
-        }
-        return responseItems;
+    private static UploadFileItemResponse toResponseItem(FileMetadata metadata) {
+        return new UploadFileItemResponse(metadata.id(), metadata.originalFilename(), metadata.mimeType(),
+                metadata.sizeBytes(), metadata.uploadedAt(), metadata.temporary());
     }
 
-    private void rollback(List<FileMetadata> insertedMetadata, List<StoredObject> writtenObjects) {
-        for (int index = insertedMetadata.size() - 1; index >= 0; index--) {
+    private void rollback(List<FileMetadata> writtenFiles, boolean publicationUncertain) {
+        for (FileMetadata metadata : writtenFiles.reversed()) {
+            var object = metadata.storedObject();
             try {
-                repository.deleteById(insertedMetadata.get(index).id());
-            } catch (RuntimeException exception) {
-                LOG.error(OperationLog.format(
-                        "upload_rollback_metadata",
-                        "failure",
-                        "file_id", insertedMetadata.get(index).id(),
-                        "reason", exception.getMessage()
-                ), exception);
-            }
-        }
-
-        for (int index = writtenObjects.size() - 1; index >= 0; index--) {
-            try {
-                assetStorage.deleteIfExists(writtenObjects.get(index));
+                // A database error can be reported after commit. Preserve objects referenced by that commit.
+                if (publicationUncertain && repository.findById(metadata.id())
+                        .map(FileMetadata::storedObject).filter(object::equals).isPresent()) {
+                    continue;
+                }
+                assetStorage.deleteIfExists(object);
             } catch (RuntimeException exception) {
                 LOG.error(OperationLog.format(
                         "upload_rollback_storage",
                         "failure",
-                        "storage_key", writtenObjects.get(index).key(),
-                        "storage_location", writtenObjects.get(index).locationId(),
+                        "storage_key", object.key(),
+                        "storage_location", object.locationId(),
                         "reason", exception.getMessage()
                 ), exception);
             }

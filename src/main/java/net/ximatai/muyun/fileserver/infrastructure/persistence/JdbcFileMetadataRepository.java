@@ -2,6 +2,7 @@ package net.ximatai.muyun.fileserver.infrastructure.persistence;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import net.ximatai.muyun.fileserver.common.exception.ConflictException;
 import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.domain.file.FileStatus;
 
@@ -34,9 +35,23 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
     }
 
     @Override
-    public void insert(FileMetadata metadata) {
+    public void insertAll(List<FileMetadata> files) {
         try (var connection = dataSource.getConnection()) {
-            insert(connection, metadata);
+            connection.setAutoCommit(false);
+            try {
+                for (FileMetadata metadata : files) {
+                    insert(connection, metadata);
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException failure) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackFailure) {
+                    rollbackFailure.addSuppressed(failure);
+                    throw rollbackFailure;
+                }
+                throw failure;
+            }
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to insert file metadata", exception);
         }
@@ -50,6 +65,7 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
                     storage_provider, storage_bucket, storage_key, status, temporary, uploaded_by, uploaded_at,
                     deleted_at, delete_marked_by, remark, image_width, image_height, storage_location_id
                 ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict(id) do nothing
                 """;
         try (var statement = connection.prepareStatement(sql)) {
             statement.setString(1, metadata.id());
@@ -72,7 +88,9 @@ public class JdbcFileMetadataRepository implements FileMetadataRepository {
             statement.setObject(18, metadata.imageWidth(), java.sql.Types.INTEGER);
             statement.setObject(19, metadata.imageHeight(), java.sql.Types.INTEGER);
             statement.setString(20, metadata.storageLocationId());
-            statement.executeUpdate();
+            if (statement.executeUpdate() == 0) {
+                throw new ConflictException("file_id already exists");
+            }
         }
     }
 

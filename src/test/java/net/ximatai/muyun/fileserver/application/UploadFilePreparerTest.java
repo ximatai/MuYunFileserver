@@ -13,10 +13,12 @@ import net.ximatai.muyun.fileserver.application.storage.StorageKeyFactory;
 import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
 import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
 import net.ximatai.muyun.fileserver.domain.file.StoredObject;
+import net.ximatai.muyun.fileserver.infrastructure.ulid.SulkyUlidGenerator;
 import net.ximatai.muyun.fileserver.infrastructure.ulid.UlidGenerator;
 import org.jboss.resteasy.reactive.server.multipart.FileItem;
 import org.jboss.resteasy.reactive.server.multipart.FormValue;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -29,6 +31,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -92,6 +95,30 @@ class UploadFilePreparerTest {
             assertEquals(0, files.count());
         }
         Files.delete(temporary);
+    }
+
+    @Test
+    void attemptsWithSameExplicitIdHaveSeparateStorageKeysBeforeEitherPublishes(@TempDir Path workspace) {
+        var preparer = new UploadFilePreparer();
+        preparer.config = TestConfigs.fileServiceConfig();
+        preparer.repository = new InMemoryRepository(Set.of());
+        preparer.assetStorage = new TestAssets();
+        preparer.workspace = new TestWorkspace(workspace);
+        preparer.storageKeyFactory = new StorageKeyFactory();
+        preparer.ulidGenerator = new SulkyUlidGenerator();
+        preparer.supportedFileTypes = new SupportedFileTypes();
+        preparer.uploadMimePolicy = new UploadMimePolicy(preparer.supportedFileTypes, null);
+
+        String fileId = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+        var context = new RequestContext("tenant-a", "user-1", "req-1", "client-1");
+        var request = new UploadRequest(List.of(TestFormValue.file("hello.txt", "hello".getBytes(), "text/plain")),
+                List.of(fileId), null, false);
+
+        var first = preparer.prepare(request, context).getFirst();
+        var second = preparer.prepare(request, context).getFirst();
+        assertEquals(fileId, first.fileId());
+        assertEquals(fileId, second.fileId());
+        assertNotEquals(first.storageKey(), second.storageKey());
     }
 
     @Test
@@ -217,7 +244,7 @@ class UploadFilePreparerTest {
         }
 
         @Override
-        public void insert(FileMetadata metadata) {
+        public void insertAll(List<FileMetadata> files) {
         }
 
         @Override
