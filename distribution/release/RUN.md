@@ -10,6 +10,7 @@
 - `application.yml`：默认配置
 - `application.local.example.yml`：本地文件系统示例配置
 - `application.minio.example.yml`：MinIO 示例配置
+- `minio-recorder-policy.example.json`：MinIO 录制身份示例政策
 - `compose.yaml`：单容器 Docker 运行模板
 
 ## 统一版本与默认部署
@@ -56,8 +57,9 @@ java -Dquarkus.config.locations=/etc/muyun-fileserver/application.yml \
   -jar "$release_dir/quarkus-app/quarkus-run.jar"
 ```
 
-MinIO/S3 模式改为复制 `application.minio.example.yml` 或 `application.seaweedfs.example.yml`
-到外置配置目录，准备独立的存储凭据和桶；存储示例见包内 `compose.seaweedfs.yaml`。
+S3 模式改为复制 `application.minio.example.yml` 或 `application.seaweedfs.example.yml`
+到外置配置目录，事先创建正式桶，并通过运行环境提供 `MFS_S3_ACCESS_KEY` 和 `MFS_S3_SECRET_KEY`。
+按部署填写 `MFS_S3_ENDPOINT` 和 `MFS_S3_BUCKET`，SeaweedFS 启动示例见包内 `compose.seaweedfs.yaml`。
 配置与数据目录由运行账号管理，环境凭据不放入版本目录。容器部署也须保持相同的外置边界。
 
 ## 验证
@@ -196,12 +198,19 @@ docker run -d \
 ```sh
 docker compose -f distribution/release/compose.yaml up -d
 ```
+## MinIO 录制接收
+
+普通文件只需正式桶。启用录制接收时创建独立接收桶，使用 `application.minio.example.yml` 并启用接收 API。
+为外部录制端创建独立用户，仅授予接收桶的 S3 权限，示例见 `minio-recorder-policy.example.json`。
+使用自定义桶名时，更新示例政策里的两条 Resource。FileServer 的 S3 身份需要自己管理的正式桶和接收桶权限。
+后端支持范围和录制供应商验收边界见 `docs/design/storage-backends.md`。
+
 ## SeaweedFS 存储
 
 可用 `compose.seaweedfs.yaml` 启动自有 S3 存储，配置参考
 `application.seaweedfs.example.yml`，详细步骤和生产边界见
 `docs/design/seaweed-storage.md`。需要自行生成环境凭证；示例入口仅绑定回环地址。
-FileServer 使用既有 `minio` 客户端适配，不自动迁移历史文件。
+FileServer 使用统一 `s3` 适配。已有数据的切换步骤见 `docs/design/storage-platform.md`。
 若 FileServer 与存储均在容器中运行，须加入同一内部网络并使用服务地址，
 不能使用 `127.0.0.1` 互访。
 

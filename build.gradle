@@ -29,6 +29,7 @@ dependencies {
     testImplementation 'io.quarkus:quarkus-junit5'
     testImplementation 'io.rest-assured:rest-assured'
     testImplementation 'org.testcontainers:testcontainers-minio:2.0.4'
+    testImplementation 'io.minio:minio-admin:8.6.0'
 }
 
 group = 'net.ximatai'
@@ -105,6 +106,7 @@ tasks.named('clean') {
 tasks.withType(Test).configureEach {
     testLogging { exceptionFormat = 'full' }
     inputs.files(fileTree("workers/media-worker") { include "*.py" })
+    inputs.file("distribution/release/minio-recorder-policy.example.json")
     if (Os.isFamily(Os.FAMILY_WINDOWS)) {
         environment 'MFS_VIEWER_PDF_RENDERING_LIBREOFFICE_COMMAND', file('src/test/resources/fake-soffice.cmd').absolutePath
     }

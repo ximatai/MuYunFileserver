@@ -1,4 +1,4 @@
-"""Executed by the isolated SeaweedFS/Quarkus acceptance test; never contacts real business services."""
+"""Run media acceptance against a local FileServer backed by an isolated S3 service."""
 import hashlib
 import hmac
 import base64
@@ -29,6 +29,7 @@ log = (directory / "worker.log").open("wb")
 process = subprocess.Popen([sys.executable, str(Path(__file__).with_name("worker.py")), "--port", str(port),
                             "--root", str(directory / "queue")], env=environment, stdout=log, stderr=log)
 worker_url = "http://127.0.0.1:" + str(port)
+http = request.build_opener(request.ProxyHandler({}))
 
 current_tenant = "tenant-seaweed"
 completed = []
@@ -40,20 +41,20 @@ def api(method, path, body=None, tenant=None):
     if scope:
         headers["X-Tenant-Id"] = scope
     req = request.Request(worker_url + path, data=raw, method=method, headers=headers)
-    with request.urlopen(req, timeout=5) as response:
+    with http.open(req, timeout=5) as response:
         return json.load(response)
 
 try:
     deadline = time.monotonic() + 15
     while True:
         try:
-            request.urlopen(worker_url + "/jobs/missing", timeout=1)
+            http.open(worker_url + "/jobs/missing", timeout=1)
         except error.HTTPError as exc:
             assert exc.code == 401
             break
         except error.URLError:
             if process.poll() is not None or time.monotonic() > deadline:
-                raise AssertionError("worker HTTP service did not start")
+                raise AssertionError("worker HTTP service did not start: " + (directory / "worker.log").read_text())
             time.sleep(0.1)
     def rejected(method, path, expected, body=None, tenant=None):
         try:
@@ -116,13 +117,13 @@ try:
                 encode = lambda raw: base64.urlsafe_b64encode(raw).decode().rstrip("=")
                 return encode(payload)+"."+encode(hmac.new(b"test-token-secret",payload,hashlib.sha256).digest())
             url = base+"/api/v1/public/files/"+asset+"/view/content/"+token(current_tenant,now+300)
-            with request.urlopen(request.Request(url, headers={"Range":"bytes=0-31"}),timeout=5) as response:
+            with http.open(request.Request(url, headers={"Range":"bytes=0-31"}),timeout=5) as response:
                 assert response.status == 206 and response.headers["Content-Range"].startswith("bytes 0-31/")
                 assert len(response.read()) == 32
                 assert response.headers["Content-Type"].startswith(("audio/", "video/")), response.headers
             for bad in (token("other-tenant",now+300), token(current_tenant,now-60)):
                 try:
-                    request.urlopen(base+"/api/v1/public/files/"+asset+"/view/content/"+bad,timeout=5)
+                    http.open(base+"/api/v1/public/files/"+asset+"/view/content/"+bad,timeout=5)
                     raise AssertionError("invalid playback capability was accepted")
                 except error.HTTPError as exc:
                     assert exc.code in (401,403,404), exc.code

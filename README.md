@@ -13,7 +13,7 @@ FileServer 与可选媒体 Worker 在同一仓库维护，通过版本化 HTTP �
 
 - 业务系统需要一个独立的文件服务
 - 需要基础的多租户隔离
-- 需要本地文件系统或 `MinIO` 对象存储
+- 需要本地文件系统或 S3 对象存储
 - 需要清晰、可控的 `SQLite + JDBC` 实现，而不是重型基础设施
 
 ## 能力边界
@@ -27,11 +27,10 @@ FileServer 与可选媒体 Worker 在同一仓库维护，通过版本化 HTTP �
 - 文件软删
 - 定时物理清理
 - `liveness / readiness` 健康检查
-- `local` 和 `minio` 两种存储模式
+- 本地磁盘与 S3 存储，S3 后端可选 MinIO 或 SeaweedFS
 
-自部署 SeaweedFS 的 S3 兼容基线、组件边界及受控接收能力见
-[自有音视频存储设计](docs/design/seaweed-storage.md)。目前沿用既有 `minio`
-客户端配置，不代表必须部署 MinIO。已提供内部受控接收任务、对象校验与正式资产登记；独立媒体 Worker 可将确认后的录制素材派生为音频／视频资产。
+存储位置、旧版配置兼容及后端验收见 [文件存储平台设计](docs/design/storage-platform.md) 和
+[S3 后端支持范围](docs/design/storage-backends.md)。接收任务确认后可登记为正式资产，独立媒体 Worker 可将确认后的素材派生为音频或视频资产。
 
 当前明确不包含：
 
@@ -324,9 +323,9 @@ mfs:
 ```yaml
 mfs:
   storage:
-    type: minio
+    type: s3
     temp-dir: ${user.dir}/var/tmp
-    minio:
+    s3:
       endpoint: http://127.0.0.1:9000
       access-key: minioadmin
       secret-key: minioadmin
@@ -351,12 +350,12 @@ docker run -d \
 如果你想直接用环境变量启动服务：
 
 ```sh
-MFS_STORAGE_TYPE=minio \
+MFS_STORAGE_TYPE=s3 \
 MFS_STORAGE_TEMP_DIR=$(pwd)/var/tmp \
-MFS_STORAGE_MINIO_ENDPOINT=http://127.0.0.1:9000 \
-MFS_STORAGE_MINIO_ACCESS_KEY=minioadmin \
-MFS_STORAGE_MINIO_SECRET_KEY=minioadmin \
-MFS_STORAGE_MINIO_BUCKET=muyun-files \
+MFS_STORAGE_S3_ENDPOINT=http://127.0.0.1:9000 \
+MFS_STORAGE_S3_ACCESS_KEY=minioadmin \
+MFS_STORAGE_S3_SECRET_KEY=minioadmin \
+MFS_STORAGE_S3_BUCKET=muyun-files \
 ./gradlew quarkusDev
 ```
 
@@ -365,7 +364,7 @@ MFS_STORAGE_MINIO_BUCKET=muyun-files \
 Readiness 在两种模式下的行为：
 
 - `local`：检查数据库、正式目录和临时目录
-- `minio`：检查数据库、临时目录和对象桶可访问性
+- `s3`：检查数据库、临时目录和正式对象桶可访问性
 
 ## 关键配置
 
@@ -379,13 +378,13 @@ Readiness 在两种模式下的行为：
 - `mfs.viewer.pdf-rendering.enabled`
 - `mfs.viewer.pdf-rendering.office-enabled`
 
-切换到 `minio` 时，再额外配置：
+使用 `s3` 时，再额外配置：
 
-- `mfs.storage.minio.endpoint`
-- `mfs.storage.minio.access-key`
-- `mfs.storage.minio.secret-key`
-- `mfs.storage.minio.bucket`
-- `mfs.storage.minio.auto-create-bucket`
+- `mfs.storage.s3.endpoint`
+- `mfs.storage.s3.access-key`
+- `mfs.storage.s3.secret-key`
+- `mfs.storage.s3.bucket`
+- `mfs.storage.s3.auto-create-bucket`
 
 完整默认值见 [application.yml](./src/main/resources/application.yml)。
 
@@ -587,8 +586,8 @@ curl http://127.0.0.1:8080/api/v1/files/<fileId>/view \
 
 - `local` 模式先看 `var/storage`、`var/tmp`、`var/data` 是否存在且可写
 - 检查 `mfs.database.path` 指向的目录是否可写
-- `minio` 模式先确认 `docker compose up -d minio` 已成功启动
-- 检查 `mfs.storage.minio.endpoint`、`access-key`、`secret-key`、`bucket` 是否匹配
+- 使用 MinIO 时先确认 `docker compose up -d minio` 已成功启动
+- 检查 `mfs.storage.s3.endpoint`、`access-key`、`secret-key`、`bucket` 是否匹配
 - 若 `readiness` 为 `DOWN`，先看 `/q/health/ready` 返回的具体字段
 - 若上传失败，优先查看服务日志中的 `operation=upload`
 
@@ -622,15 +621,15 @@ Office 预览常见错误：
 - `Quarkus REST`
 - `SQLite + Flyway`
 - `JDBC + 手写 SQL`
-- `StorageProvider` 抽象
-- 本地文件系统 / `MinIO`
+- `AssetStorage`、`ReceptionStorage` 和 `LocalWorkspace` 接口
+- 本地文件系统 / S3
 - `Apache Tika`
 - `Testcontainers`
 
 当前实现特点：
 
 - 上传链路已完成第一轮职责拆分
-- 默认存储为 `local`，`minio` 通过配置切换
+- 默认存储为 `local`，S3 通过配置启用
 - 上传在两种模式下都先走本地临时目录
 - `storageKey` 规则统一为 `{tenantId}/yyyy/MM/{ulid}`
 
