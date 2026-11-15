@@ -107,15 +107,33 @@ abstract class S3ReceptionContract {
                 "sha256", sha256)), 200).path("data.assets.'recording.ts'");
         assertNotNull(asset);
         String formalObject = files.findById(asset).orElseThrow().storageKey();
-        var readRejected = assertThrows(io.minio.errors.ErrorResponseException.class, () -> client.getObject(
-                GetObjectArgs.builder().region("us-east-1").bucket(formalBucket()).object(formalObject).build()));
-        assertEquals(403, readRejected.response().code());
-        var writeRejected = assertThrows(io.minio.errors.ErrorResponseException.class, () -> client.putObject(
-                PutObjectArgs.builder().region("us-east-1").bucket(formalBucket()).object(formalObject)
-                        .stream(new ByteArrayInputStream(raw), raw.length, -1).build()));
-        assertEquals(403, writeRejected.response().code());
-        assertThrows(io.minio.errors.ErrorResponseException.class, () -> client.listObjects(
-                ListObjectsArgs.builder().region("us-east-1").bucket(formalBucket()).build()).iterator().next().get());
+        var formal = GetObjectArgs.builder().region("us-east-1").bucket(formalBucket()).object(formalObject).build();
+        var fileServer = s3Client(false);
+        try (var actual = fileServer.getObject(formal)) {
+            assertArrayEquals(raw, actual.readAllBytes());
+        }
+        assertAccessDenied(assertThrows(io.minio.errors.ErrorResponseException.class, () -> client.getObject(formal)));
+        String overwrite = client.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                .method(io.minio.http.Method.PUT).region("us-east-1").bucket(formalBucket())
+                .object(formalObject).build());
+        var overwriteRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create(overwrite))
+                .timeout(java.time.Duration.ofSeconds(10))
+                .PUT(java.net.http.HttpRequest.BodyPublishers.ofString("different bytes")).build();
+        try (var http = java.net.http.HttpClient.newHttpClient()) {
+            var result = http.send(overwriteRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertEquals(403, result.statusCode());
+            assertTrue(result.body().contains("<Code>AccessDenied</Code>"));
+        }
+        assertAccessDenied(assertThrows(io.minio.errors.ErrorResponseException.class, () -> s3Client(true).listObjects(
+                ListObjectsArgs.builder().region("us-east-1").bucket(formalBucket()).build()).iterator().next().get()));
+        try (var actual = fileServer.getObject(formal)) {
+            assertArrayEquals(raw, actual.readAllBytes());
+        }
+    }
+
+    private void assertAccessDenied(io.minio.errors.ErrorResponseException failure) {
+        assertEquals(403, failure.response().code());
+        assertEquals("AccessDenied", failure.errorResponse().code());
     }
 
     @Test void shouldArchiveMultipleObjectsIdempotentlyAndFreezeBytes() throws Exception {
