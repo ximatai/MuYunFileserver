@@ -95,6 +95,8 @@ class UploadFilePreparer {
             validateMimeType(mimeType);
             ImageFileFacts image = ImageFileFacts.read(tempFile, mimeType);
 
+            // A caller can reuse a file ID concurrently. Its storage object must belong to this attempt.
+            String objectId = requestedFileId == null ? fileId : ulidGenerator.nextUlid();
             return new PreparedUpload(
                     fileId,
                     requestContext.tenantId(),
@@ -104,7 +106,7 @@ class UploadFilePreparer {
                     fileDigest.sizeBytes(),
                     fileDigest.sha256(),
                     assetStorage.writeLocation(),
-                    storageKeyFactory.build(requestContext.tenantId(), fileId),
+                    storageKeyFactory.build(requestContext.tenantId(), objectId),
                     Instant.now(),
                     temporary,
                     tempFile,

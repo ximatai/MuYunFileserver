@@ -10,7 +10,7 @@ public interface FileMetadataRepository {
 
     boolean existsById(String fileId);
 
-    void insert(FileMetadata metadata);
+    void insertAll(List<FileMetadata> files);
 
     Optional<FileMetadata> findById(String fileId);
 

@@ -217,7 +217,7 @@ class UploadFilePreparerTest {
         }
 
         @Override
-        public void insert(FileMetadata metadata) {
+        public void insertAll(List<FileMetadata> files) {
         }
 
         @Override

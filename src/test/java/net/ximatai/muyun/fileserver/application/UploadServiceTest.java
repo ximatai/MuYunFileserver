@@ -4,6 +4,7 @@ import net.ximatai.muyun.fileserver.common.context.RequestContext;
 import net.ximatai.muyun.fileserver.infrastructure.persistence.FileMetadataRepository;
 import net.ximatai.muyun.fileserver.application.storage.AssetStorage;
 import net.ximatai.muyun.fileserver.application.storage.LocalWorkspace;
+import net.ximatai.muyun.fileserver.domain.file.FileMetadata;
 import net.ximatai.muyun.fileserver.domain.file.StoredObject;
 import org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput;
 import org.junit.jupiter.api.Test;
@@ -20,18 +21,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class UploadServiceTest {
     private final RequestContext context = new RequestContext("tenant-a", "user-1", "req-1", "client-1");
-    private final List<String> inserted = new ArrayList<>();
-    private final List<String> deleted = new ArrayList<>();
+    private final List<FileMetadata> published = new ArrayList<>();
     private final List<String> removedStorage = new ArrayList<>();
     private final List<Path> cleaned = new ArrayList<>();
 
     @Test
     void cleanupFailureMustNotTurnPersistedUploadIntoFailureOrSkipRemainingCleanup() {
-        var response = service(null).upload(null, context, true);
+        var response = service(null, false).upload(null, context, true);
 
         assertEquals(List.of("first", "second"), response.items().stream().map(item -> item.id()).toList());
-        assertEquals(List.of("first", "second"), inserted);
-        assertEquals(List.of(), deleted);
+        assertEquals(List.of("first", "second"), published.stream().map(FileMetadata::id).toList());
         assertEquals(List.of(), removedStorage);
         assertEquals(List.of(Path.of("first.tmp"), Path.of("second.tmp")), cleaned);
     }
@@ -41,15 +40,25 @@ class UploadServiceTest {
         RuntimeException failure = new IllegalStateException("database unavailable");
 
         assertSame(failure, assertThrows(IllegalStateException.class,
-                () -> service(failure).upload(null, context, true)));
+                () -> service(failure, false).upload(null, context, true)));
 
-        assertEquals(List.of("first"), inserted);
-        assertEquals(List.of("first"), deleted);
+        assertEquals(List.of(), published);
         assertEquals(List.of("second", "first"), removedStorage);
         assertEquals(List.of(Path.of("first.tmp"), Path.of("second.tmp")), cleaned);
     }
 
-    private UploadService service(RuntimeException insertFailure) {
+    @Test
+    void ambiguousPublicationFailureDoesNotDeleteReferencedObjects() {
+        RuntimeException failure = new IllegalStateException("database connection closed after commit");
+
+        assertSame(failure, assertThrows(IllegalStateException.class,
+                () -> service(failure, true).upload(null, context, true)));
+
+        assertEquals(List.of("first", "second"), published.stream().map(FileMetadata::id).toList());
+        assertEquals(List.of(), removedStorage);
+    }
+
+    private UploadService service(RuntimeException insertFailure, boolean committedDespiteFailure) {
         UploadService service = new UploadService();
         service.uploadRequestParser = new UploadRequestParser() {
             @Override
@@ -66,12 +75,17 @@ class UploadServiceTest {
         service.repository = (FileMetadataRepository) Proxy.newProxyInstance(
                 getClass().getClassLoader(), new Class<?>[]{FileMetadataRepository.class}, (proxy, method, args) -> {
                     switch (method.getName()) {
-                        case "insert" -> {
-                            var metadata = (net.ximatai.muyun.fileserver.domain.file.FileMetadata) args[0];
-                            if (insertFailure != null && metadata.id().equals("second")) throw insertFailure;
-                            inserted.add(metadata.id());
+                        case "insertAll" -> {
+                            if (insertFailure == null || committedDespiteFailure) {
+                                for (Object item : (List<?>) args[0]) {
+                                    published.add((FileMetadata) item);
+                                }
+                            }
+                            if (insertFailure != null) throw insertFailure;
                         }
-                        case "deleteById" -> deleted.add((String) args[0]);
+                        case "findById" -> {
+                            return published.stream().filter(item -> item.id().equals(args[0])).findFirst();
+                        }
                         default -> throw new UnsupportedOperationException(method.getName());
                     }
                     return null;
